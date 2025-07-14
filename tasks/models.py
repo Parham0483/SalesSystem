@@ -1,3 +1,4 @@
+from django.contrib.auth.hashers import make_password, check_password
 from django.db import models
 from django.utils import timezone
 from decimal import Decimal
@@ -17,8 +18,23 @@ class Customer(models.Model):
     def __str__(self):
         return f"{self.name} ({self.email})"
 
-    class Meta:
-        db_table = 'customers'
+    def set_password(self, raw_password):
+        self.password =  make_password(raw_password)
+
+    def check_password(self, raw_password):
+        """
+        Return a boolean of whether the raw_password was correct.
+        """
+        return check_password(raw_password, self.password)
+
+    @property
+    def username(self):
+        """Required for JWT token generation"""
+        return self.email
+
+    @property
+    def is_authenticated(self):
+        return True
 
 
 # Product model

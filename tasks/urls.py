@@ -1,9 +1,7 @@
-# urls.py (in your app)
 from django.urls import path
-from . import views
+from . import api_views
 
 urlpatterns = [
-    # API Endpoints
-    path('api/products/<int:product_id>/', views.get_product_info, name='get_product_info'),
+    path('csrf/', api_views.get_csrf_token, name='csrf_token'),
+    path('login/', api_views.customer_login, name='customer_login'),
 ]
-

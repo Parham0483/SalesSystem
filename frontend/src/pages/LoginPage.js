@@ -8,18 +8,66 @@ const LoginPage = () => {
     const [error, setError] = useState("");
     const navigate = useNavigate();
 
+    const getCookie = (name) => {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    };
+
     const handleLogin = async (e) => {
         e.preventDefault();
+
         try {
-            const response = await axios.post("http://localhost:8000/api/login/", {
-                email,
-                password,
+            // First, get CSRF token
+            await axios.get(`${process.env.REACT_APP_API_URL}csrf/`, {
+                withCredentials: true
             });
+
+            const csrftoken = getCookie('csrftoken');
+
+            const response = await axios.post(
+                `${process.env.REACT_APP_API_URL}auth/login/`,
+                {
+                    email,
+                    password
+                },
+                {
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/json',
+                    },
+                    withCredentials: true
+                }
+            );
+
             if (response.status === 200) {
-                navigate("/dashboard");
-            }
+            localStorage.setItem('userData', JSON.stringify({
+                 id: response.data.id,
+                 email: response.data.email,
+                 name: response.data.name
+            }));
+        localStorage.setItem('token', response.data.token);           // access token
+        localStorage.setItem('refreshToken', response.data.refresh);  // refresh token
+
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        navigate("/dashboard");
+        }
+
+
         } catch (err) {
+            console.error("Login error:", err);
             setError("Invalid email or password");
+            localStorage.removeItem('userData');
+            localStorage.removeItem('token');
         }
     };
 
@@ -53,4 +101,6 @@ const LoginPage = () => {
             </form>
         </div>
     );
-}
+};
+
+export default LoginPage;

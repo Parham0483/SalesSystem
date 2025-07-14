@@ -2,10 +2,25 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
-import OrderDetailPage from './pages/OrderDetailPage';
-import CreateOrderPage from './pages/CreateOrderPage';
+import OrderDetailPage from './component/OrderDetailPage';
+import CreateOrderPage from './component/CreateOrderPage';
+import { useEffect } from 'react';
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_API_URL;
 
 function App() {
+  useEffect(() => {
+    axios.get(`${API_URL}csrf/`, { withCredentials: true })
+      .catch(err => console.error('CSRF fetch failed:', err));
+
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+  }, []);
+
   return (
     <Router>
       <Routes>

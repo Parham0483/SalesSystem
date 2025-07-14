@@ -1,27 +1,36 @@
 # forms.py
 from django import forms
+from django.contrib.auth.hashers import make_password
 from django.forms import inlineformset_factory
 from .models import Customer, Order, OrderItem, Product, Payment
 
 
 class CustomerRegistrationForm(forms.ModelForm):
-    password_confirm = forms.CharField(widget=forms.PasswordInput(), label="Confirm Password")
-    
+    password = forms.CharField(widget=forms.PasswordInput())
+    password_confirm = forms.CharField(widget=forms.PasswordInput())  # Match the existing field name
+
     class Meta:
         model = Customer
         fields = ['name', 'email', 'phone', 'password', 'company_name']
         widgets = {
             'password': forms.PasswordInput(),
         }
-    
+
     def clean(self):
         cleaned_data = super().clean()
         password = cleaned_data.get('password')
         password_confirm = cleaned_data.get('password_confirm')
-        
+
         if password and password_confirm and password != password_confirm:
             raise forms.ValidationError("Passwords don't match")
         return cleaned_data
+
+    def save(self, commit=True):
+        customer = super().save(commit=False)
+        customer.password = make_password(self.cleaned_data['password'])  # Hash the password
+        if commit:
+            customer.save()
+        return customer
 
 
 class CustomerLoginForm(forms.Form):
