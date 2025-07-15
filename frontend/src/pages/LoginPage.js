@@ -72,33 +72,53 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="login-container">
-            <h2>Login</h2>
-            {error && <p className="error">{error}</p>}
-            <form onSubmit={handleLogin}>
+        <div className="login-container" id="loginPageContainer">
+            <h2 className="login-title" id="loginTitle">Login</h2>
+            {error && (
+                <p className="error-message" id="loginError" style={{ color: "red" }}>
+                    {error}
+                </p>
+            )}
+            <form className="login-form" id="loginForm" onSubmit={handleLogin}>
                 <input
+                    className="input-email"
+                    id="emailInput"
                     type="email"
                     placeholder="Email"
+                    required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
                 />
                 <input
+                    className="input-password"
+                    id="passwordInput"
                     type="password"
                     placeholder="Password"
+                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    required
                 />
-                <button type="submit">Login</button>
+                <button className="btn-submit" id="loginSubmitButton" type="submit">
+                    Login
+                </button>
+            </form>
+            <p className="login-register-text" id="loginRegisterText">
+                Don't have an account?{" "}
                 <button
-                    type="button"
+                    className="btn-link-register"
+                    id="goToRegisterButton"
                     onClick={() => navigate("/register")}
-                    style={{ marginLeft: "10px" }}
                 >
                     Register
                 </button>
-            </form>
+            </p>
+            <button
+                className="btn-back-main"
+                id="backToMainButton"
+                onClick={() => navigate("/")}
+            >
+                Back to Main
+            </button>
         </div>
     );
 };

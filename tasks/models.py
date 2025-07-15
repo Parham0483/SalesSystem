@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 from decimal import Decimal
 import uuid
+from django.conf import settings
 
 
 class CustomerManager(BaseUserManager):
@@ -83,10 +84,14 @@ class Order(models.Model):
     # Pricing fields (filled by admin)
     quoted_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Total quoted by admin")
     pricing_date = models.DateTimeField(blank=True, null=True, help_text="When admin provided pricing")
-    
+    priced_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                  related_name='priced_orders')
+    admin_feedback_date = models.DateTimeField(blank=True, null=True)
+
     # Customer response
     customer_response_date = models.DateTimeField(blank=True, null=True)
     customer_rejection_reason = models.TextField(blank=True, null=True)
+
 
     def __str__(self):
         return f"Order {self.id} - {self.customer.name} - {self.status}"

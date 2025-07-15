@@ -34,7 +34,7 @@ const RegisterPage = () => {
                 }
             );
             if (response.status === 201) {
-                navigate("/");
+                navigate("/login");
             }
         } catch (err) {
             setError("Registration failed. Please try again.");

@@ -6,6 +6,7 @@ import OrderDetailPage from './component/OrderDetailPage';
 import CreateOrderPage from './component/CreateOrderPage';
 import { useEffect } from 'react';
 import axios from 'axios';
+import MainPage from "./pages/MainPage";
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -24,7 +25,8 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<MainPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/orders/create" element={<CreateOrderPage />} />
