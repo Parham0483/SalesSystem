@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Modal from '../component/Modal';
-import API from '../component/api'
+import API from '../component/api';
+import CreateOrderPage from '../component/CreateOrderPage';
+import OrderDetailPage from '../component/OrderDetailPage';
 
 const DashboardPage = () => {
     const [orders, setOrders] = useState([]);
@@ -10,48 +12,33 @@ const DashboardPage = () => {
     const [message, setMessage] = useState('');
     const navigate = useNavigate();
 
-    // Setup axios configuration and check authentication
     useEffect(() => {
-    fetchOrders();
-}, [navigate]);
+        fetchOrders();
+    }, [navigate]);
 
-const fetchOrders = async () => {
-    try {
-        const response = await API.get('orders/');
-        setOrders(response.data);
-    } catch (error) {
-        console.error("Fetch orders error:", error);
-        if (error.response?.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('userData');
-            navigate('/login');
-        } else {
-            setMessage('Error loading orders');
+    const fetchOrders = async () => {
+        try {
+            const response = await API.get('orders/');
+            setOrders(response.data);
+        } catch (error) {
+            if (error.response?.status === 401) {
+                navigate('/');
+            } else {
+                setMessage('Error loading orders');
+            }
         }
-    }
-};
+    };
 
-const handleCreateOrder = async (orderData) => {
-    try {
-        await API.post('orders/', orderData);
+    const handleOrderCreated = () => {
         setMessage('Order submitted successfully! We will provide the pricing soon.');
         setShowCreateOrder(false);
-        fetchOrders(); // Refresh orders list
-    } catch (error) {
-        if (error.response && error.response.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('userData');
-            navigate('/login');
-        } else {
-            setMessage('Error creating order');
-        }
-    }
-};
+        fetchOrders();
+    };
 
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('userData');
-        navigate('/login');
+        navigate('/');
     };
 
     const getUserInfo = () => {
@@ -65,19 +52,13 @@ const handleCreateOrder = async (orderData) => {
                 <div className="user-info">
                     <h1>My Orders</h1>
                     <span>Welcome, {getUserInfo()?.name}</span>
+                    <button className="logout-button" onClick={handleLogout}>
+                        Logout
+                    </button>
                 </div>
                 <div className="header-actions">
-                    <button
-                        className="create-order-button"
-                        onClick={() => setShowCreateOrder(true)}
-                    >
+                    <button className="create-order-button" onClick={() => setShowCreateOrder(true)}>
                         Create New Order
-                    </button>
-                    <button
-                        className="logout-button"
-                        onClick={handleLogout}
-                    >
-                        Logout
                     </button>
                 </div>
             </div>
@@ -112,23 +93,22 @@ const handleCreateOrder = async (orderData) => {
 
             {showCreateOrder && (
                 <Modal onClose={() => setShowCreateOrder(false)}>
-                    {/* Your Create Order Form Component */}
+                    <CreateOrderPage onOrderCreated={handleOrderCreated} />
                 </Modal>
             )}
 
             {selectedOrder && (
                 <Modal onClose={() => setSelectedOrder(null)}>
-                    {/* Your Order Details Component */}
+                 <OrderDetailPage
+                     orderId={selectedOrder.id}
+                     onOrderUpdated={handleOrderCreated} />
                 </Modal>
             )}
         </div>
     );
 };
 
-const formatStatus = (status) => {
-    return status.split('_').map(word =>
-        word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-};
+const formatStatus = (status) =>
+    status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
 export default DashboardPage;

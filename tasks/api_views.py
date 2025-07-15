@@ -1,3 +1,4 @@
+from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status, viewsets
@@ -59,7 +60,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Order.objects.filter(customer_id=self.request.user.id)
 
     def perform_create(self, serializer):
-        serializer.save(customer_id=self.request.user.id)
+        serializer.save()
 
 
 class OrderItemViewSet(viewsets.ModelViewSet):
@@ -130,23 +131,20 @@ def customer_login(request):
     email = request.data.get('email')
     password = request.data.get('password')
 
-    try:
-        customer = Customer.objects.get(email=email)
-        if check_password(password, customer.password):
-            refresh = RefreshToken.for_user(customer)
-            return Response({
-                'id': customer.id,
-                'email': customer.email,
-                'name': customer.name,
-                'token': str(refresh.access_token),
-                'refresh': str(refresh)
-            })
-        return Response(
-            {'error': 'Invalid credentials'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
-    except Customer.DoesNotExist:
-        return Response(
-            {'error': 'Invalid credentials'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+    if not email or not password:
+        return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Use Django's authenticate function
+    user = authenticate(request, username=email, password=password)
+
+    if user is not None:
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'id': user.id,
+            'email': user.email,
+            'name': user.name,
+            'token': str(refresh.access_token),
+            'refresh': str(refresh)
+        })
+    else:
+        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)

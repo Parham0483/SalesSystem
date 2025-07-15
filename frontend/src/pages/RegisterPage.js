@@ -9,6 +9,7 @@ const RegisterPage = () => {
     const [name, setName] = useState("");
     const [password, setPassword] = useState("");
     const [companyName, setCompanyName] = useState("");
+    const [phone, setPhone] = useState("");
     const [error, setError] = useState("");
     const navigate = useNavigate();
 
@@ -22,6 +23,7 @@ const RegisterPage = () => {
                     email,
                     name,
                     password,
+                    phone,
                     company_name: companyName,
                 },
                 {
@@ -82,6 +84,20 @@ const RegisterPage = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                 />
+                <input
+                type="tel"
+                placeholder="Phone"
+                value={phone}
+                minLength={10}
+                maxLength={13}
+                onChange={(e) => {
+                    const value = e.target.value;
+                    // Allow only digits
+                    if (/^\d*$/.test(value)) {
+                        setPhone(value);
+                    }
+                }}
+                required/>
                 <input
                     type="text"
                     placeholder="Company Name"

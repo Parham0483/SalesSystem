@@ -21,6 +21,7 @@ class ProductAdmin(admin.ModelAdmin):
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
+
     fields = ['product', 'requested_quantity', 'quoted_unit_price', 'final_quantity', 'customer_notes', 'admin_notes']
     readonly_fields = ['customer_notes']  # Admin shouldn't edit customer notes
 
