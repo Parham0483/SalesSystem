@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from .api_views import (
-    CustomerViewSet, ProductViewSet, OrderViewSet,
-    OrderItemViewSet, InvoiceViewSet, PaymentViewSet,
-    get_csrf_token, customer_login, customer_register
-)
+from tasks.views.customers import CustomerViewSet
+from tasks.views.products import ProductViewSet
+from tasks.views.orders import OrderViewSet, OrderItemViewSet
+from tasks.views.invoices import InvoiceViewSet, PaymentViewSet
+from tasks.views.auth import get_csrf_token, customer_register, customer_login
+
 
 # Create router and register viewsets
 router = DefaultRouter()

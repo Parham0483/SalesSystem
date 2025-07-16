@@ -53,13 +53,18 @@ const LoginPage = () => {
             localStorage.setItem('userData', JSON.stringify({
                  id: response.data.id,
                  email: response.data.email,
-                 name: response.data.name
+                 name: response.data.name,
+                 is_staff: response.data.is_staff
             }));
         localStorage.setItem('token', response.data.token);           // access token
         localStorage.setItem('refreshToken', response.data.refresh);  // refresh token
 
         axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        if (response.data.is_staff === true) {
+            navigate("/admin")
+        }else {
         navigate("/dashboard");
+        }
         }
 
 
