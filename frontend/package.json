@@ -12,6 +12,8 @@
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.3",
     "react-scripts": "5.0.1",
+    "three": "^0.178.0",
+    "unicornstudio-react": "^1.4.27",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
