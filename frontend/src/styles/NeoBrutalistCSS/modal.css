@@ -1,0 +1,73 @@
+.neo-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.neo-modal-container {
+    position: relative;
+    width: 100%;
+    border-width: 4px;
+    box-shadow: 8px 8px 0 #000;
+    background-color: white;
+    transition: all 0.3s ease-in-out;
+    animation: modalSlideIn 0.3s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.neo-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    background-color: var(--yellow-400);
+    border-bottom: 4px solid black;
+}
+
+.neo-modal-title {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: black;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.neo-modal-close-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: black;
+    background-color: var(--red-400, #f87171);
+    border: 2px solid black;
+    box-shadow: 4px 4px 0 #000;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.neo-modal-close-btn:hover {
+    box-shadow: 2px 2px 0 #000;
+    transform: translate(2px, 2px);
+}
+
+.neo-modal-body {
+    padding: 1.5rem;
+}
+
+@keyframes modalSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateY(-30px) scale(0.98);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}

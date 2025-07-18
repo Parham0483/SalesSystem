@@ -60,6 +60,7 @@ const RegisterPage = () => {
     }
 
     return (
+
         <div className="register-container">
             <div className="register-card">
                 <h2>سامانه ثبت سفارش</h2>
