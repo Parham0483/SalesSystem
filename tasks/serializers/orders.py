@@ -1,3 +1,5 @@
+# Update your tasks/serializers/orders.py
+
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -26,19 +28,23 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items')
 
         with transaction.atomic():
-            order = Order.objects.create( **validated_data)
+            # FIX: Add customer to the order creation
+            order = Order.objects.create(
+                customer=customer,  # <- This was missing!
+                **validated_data
+            )
             for item_data in items_data:
                 OrderItem.objects.create(
                     order=order,
                     product=item_data['product'],
                     requested_quantity=item_data['requested_quantity'],
-                    customer_notes=item_data['customer_notes']
+                    customer_notes=item_data.get('customer_notes', '')  # Use .get() to avoid KeyError
                 )
         return order
 
 
 class OrderItemAdminUpdateSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)  # add this line
+    product_name = serializers.CharField(source='product.name', read_only=True)
     id = serializers.IntegerField()
     quoted_unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
     final_quantity = serializers.IntegerField()
@@ -95,8 +101,9 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
 
         return instance
 
+
 class OrderDetailSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(source='customer.name', read_only=True)  # add this
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
     items = OrderItemAdminUpdateSerializer(many=True)
 
     class Meta:
@@ -107,4 +114,3 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = fields
-

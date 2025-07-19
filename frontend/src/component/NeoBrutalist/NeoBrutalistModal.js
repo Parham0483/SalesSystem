@@ -1,5 +1,5 @@
 import React from 'react';
-import '../../styles/CreateOrder.css';
+import '../../styles/NeoBrutalistCSS/modal.css';
 
 const NeoBrutalistModal = ({
                                isOpen,
@@ -19,8 +19,7 @@ const NeoBrutalistModal = ({
     };
 
     return (
-        <div className="neo-modal-overlay" onClick={handleOverlayClick}
-        style={{zIndex}}>
+        <div className="neo-modal-overlay" onClick={handleOverlayClick} style={{zIndex}}>
             <div className={`neo-modal ${size} ${className}`}>
                 <div className="neo-modal-header">
                     <h2 className="neo-modal-title">{title}</h2>

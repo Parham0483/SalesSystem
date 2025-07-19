@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Modal from '../component/Modal';
 import API from '../component/api';
-import NeoBrutalistCreateOrderPage from '../component/CreateOrderPage';
-import NeoBrutalistOrderDetailPage from '../component/OrderDetailPage';
+import NeoBrutalistModal from "../component/NeoBrutalist/NeoBrutalistModal";
+import CreateOrderPage from '../component/CreateOrderPage';
+import OrderDetailPage from '../component/OrderDetailPage';
 import NeoBrutalistCard from "../component/NeoBrutalist/NeoBrutalistCard";
 import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
 import '../styles/dashboard.css';
@@ -193,18 +193,18 @@ const DashboardPage = () => {
             )}
 
             {showCreateOrder && (
-                <Modal onClose={() => setShowCreateOrder(false)}>
-                    <NeoBrutalistCreateOrderPage onOrderCreated={handleOrderCreated} />
-                </Modal>
+                <NeoBrutalistModal onClose={() => setShowCreateOrder(false)}>
+                    <CreateOrderPage onOrderCreated={handleOrderCreated} />
+                </NeoBrutalistModal>
             )}
 
             {selectedOrder && (
-                <Modal onClose={() => setSelectedOrder(null)}>
-                    <NeoBrutalistOrderDetailPage
+                <NeoBrutalistModal onClose={() => setSelectedOrder(null)}>
+                    <OrderDetailPage
                         orderId={selectedOrder.id}
                         onOrderUpdated={handleOrderCreated}
                     />
-                </Modal>
+                </NeoBrutalistModal>
             )}
         </div>
     );

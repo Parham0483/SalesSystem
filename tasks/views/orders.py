@@ -40,11 +40,13 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(customer=self.request.user)
 
+
     def create(self, request, *args, **kwargs):
         try:
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
-                order = serializer.save(customer=request.user)
+                # Remove the redundant customer=request.user since it's handled in serializer
+                order = serializer.save()  # <- Removed customer=request.user
                 return Response({
                     'message': 'Order created successfully',
                     'order_id': order.id,
