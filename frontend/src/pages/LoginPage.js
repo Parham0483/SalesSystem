@@ -9,43 +9,23 @@ const LoginPage = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-
-    const getCookie = (name) => {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setLoading(true);
+        setError("");
 
         try {
-            // First, get CSRF token
-            await axios.get(`${process.env.REACT_APP_API_URL}csrf/`, {
-                withCredentials: true
-            });
-
-            const csrftoken = getCookie('csrftoken');
-
             const response = await axios.post(
-                `${process.env.REACT_APP_API_URL}auth/login/`,
+                `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/'}auth/login/`,
                 {
                     email,
                     password
                 },
                 {
                     headers: {
-                        'X-CSRFToken': csrftoken,
                         'Content-Type': 'application/json',
                     },
                     withCredentials: true
@@ -53,18 +33,27 @@ const LoginPage = () => {
             );
 
             if (response.status === 200) {
-                localStorage.setItem('userData', JSON.stringify({
-                    id: response.data.id,
-                    email: response.data.email,
-                    name: response.data.name,
-                    is_staff: response.data.is_staff
-                }));
-                localStorage.setItem('token', response.data.token);           // access token
-                localStorage.setItem('refreshToken', response.data.refresh);  // refresh token
+                const { user, tokens } = response.data;
 
-                axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
-                if (response.data.is_staff === true) {
-                    navigate("/admin")
+                // Store user data and tokens with updated structure
+                localStorage.setItem('userData', JSON.stringify({
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    is_staff: user.is_staff,
+                    company_name: user.company_name
+                }));
+
+                // Store tokens with correct keys
+                localStorage.setItem('access_token', tokens.access);
+                localStorage.setItem('refresh_token', tokens.refresh);
+
+                // Set default authorization header
+                axios.defaults.headers.common['Authorization'] = `Bearer ${tokens.access}`;
+
+                // Navigate based on user role
+                if (user.is_staff) {
+                    navigate("/admin");
                 } else {
                     navigate("/dashboard");
                 }
@@ -72,14 +61,25 @@ const LoginPage = () => {
 
         } catch (err) {
             console.error("Login error:", err);
-            setError("ایمیل یا پسورد را اشتباه وارد کردید");
+
+            if (err.response?.data?.error) {
+                setError(err.response.data.error);
+            } else if (err.response?.status === 401) {
+                setError("ایمیل یا پسورد را اشتباه وارد کردید");
+            } else {
+                setError("خطا در ورود به سیستم. لطفاً دوباره تلاش کنید.");
+            }
+
+            // Clear any existing tokens on login failure
             localStorage.removeItem('userData');
-            localStorage.removeItem('token');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-
         <div className="login-container" id="loginPageContainer">
             <div className="login-box">
                 <h2 className="login-title" id="loginTitle">سامانه ثبت سفارش</h2>
@@ -98,6 +98,7 @@ const LoginPage = () => {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            disabled={loading}
                         />
                     </div>
 
@@ -108,16 +109,18 @@ const LoginPage = () => {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
+                            disabled={loading}
                         />
                     </div>
 
                     <div className="button-group">
                         <NeoBrutalistButton
-                            text="ورود"
+                            text={loading ? "در حال ورود..." : "ورود"}
                             color="yellow-400"
                             textColor="black"
                             type="submit"
                             className="submit-btn"
+                            disabled={loading}
                         />
                     </div>
                 </form>
@@ -130,6 +133,7 @@ const LoginPage = () => {
                             textColor="black"
                             className="btn-link-register"
                             onClick={() => navigate("/register")}
+                            disabled={loading}
                         />
                         حساب کاربری ندارید؟{" "}
                     </p>
@@ -140,6 +144,7 @@ const LoginPage = () => {
                         textColor="black"
                         className="btn-back-main"
                         onClick={() => navigate("/")}
+                        disabled={loading}
                     />
                 </div>
             </div>

@@ -1,0 +1,229 @@
+/* Neo Brutalist Dropdown Styles */
+.neo-dropdown-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.neo-dropdown-label {
+    font-size: 16px;
+    font-weight: 900;
+    color: black;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.neo-required {
+    color: #ff4444;
+    margin-left: 4px;
+}
+
+.neo-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.neo-dropdown-trigger {
+    width: 100%;
+    padding: 12px 16px;
+    background: white;
+    border: 4px solid black;
+    box-shadow: 4px 4px 0px black;
+    font-size: 16px;
+    font-weight: 700;
+    color: black;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.1s ease;
+    text-align: left;
+}
+
+.neo-dropdown-trigger:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px black;
+    background: #f8f8f8;
+}
+
+.neo-dropdown-trigger:active,
+.neo-dropdown.open .neo-dropdown-trigger {
+    transform: translate(4px, 4px);
+    box-shadow: none;
+    background: #f0f0f0;
+}
+
+.neo-dropdown-trigger:disabled {
+    background: #e0e0e0;
+    color: #999;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 4px 4px 0px black;
+}
+
+.neo-dropdown-trigger:disabled:hover {
+    transform: none;
+    box-shadow: 4px 4px 0px black;
+    background: #e0e0e0;
+}
+
+.neo-dropdown.error .neo-dropdown-trigger {
+    border-color: #ff4444;
+    box-shadow: 4px 4px 0px #ff4444;
+}
+
+.neo-dropdown.error .neo-dropdown-trigger:hover {
+    box-shadow: 2px 2px 0px #ff4444;
+}
+
+.neo-dropdown.error .neo-dropdown-trigger:active,
+.neo-dropdown.error.open .neo-dropdown-trigger {
+    box-shadow: none;
+}
+
+.neo-dropdown-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.neo-dropdown-text.placeholder {
+    color: #666;
+    font-style: italic;
+    font-weight: 400;
+}
+
+.neo-dropdown-arrow {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.neo-dropdown-arrow.rotated {
+    transform: rotate(180deg);
+}
+
+.neo-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 4px solid black;
+    border-top: none;
+    box-shadow: 4px 4px 0px black;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.neo-dropdown-option {
+    padding: 12px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    color: black;
+    cursor: pointer;
+    border-bottom: 2px solid black;
+    transition: all 0.1s ease;
+    background: white;
+}
+
+.neo-dropdown-option:last-child {
+    border-bottom: none;
+}
+
+.neo-dropdown-option:hover {
+    background: #ffeb3b;
+    transform: translateX(4px);
+}
+
+.neo-dropdown-option.selected {
+    background: #4caf50;
+    color: white;
+    font-weight: 900;
+}
+
+.neo-dropdown-option.selected:hover {
+    background: #45a049;
+}
+
+.neo-dropdown-option.disabled {
+    background: #f0f0f0;
+    color: #999;
+    cursor: not-allowed;
+}
+
+.neo-dropdown-option.disabled:hover {
+    background: #f0f0f0;
+    transform: none;
+}
+
+/* Scrollbar styling for dropdown menu */
+.neo-dropdown-menu::-webkit-scrollbar {
+    width: 8px;
+}
+
+.neo-dropdown-menu::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-left: 2px solid black;
+}
+
+.neo-dropdown-menu::-webkit-scrollbar-thumb {
+    background: black;
+    border-left: 2px solid white;
+}
+
+.neo-dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: #333;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .neo-dropdown-trigger {
+        padding: 10px 12px;
+        font-size: 14px;
+        box-shadow: 2px 2px 0px black;
+    }
+
+    .neo-dropdown-trigger:hover {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0px black;
+    }
+
+    .neo-dropdown-trigger:active,
+    .neo-dropdown.open .neo-dropdown-trigger {
+        transform: translate(2px, 2px);
+        box-shadow: none;
+    }
+
+    .neo-dropdown-menu {
+        box-shadow: 2px 2px 0px black;
+    }
+
+    .neo-dropdown-option {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    .neo-dropdown-option:hover {
+        transform: translateX(2px);
+    }
+}

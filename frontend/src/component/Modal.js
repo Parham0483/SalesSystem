@@ -1,5 +1,5 @@
 import React from 'react';
-import '../styles/Modal.css';
+import '../styles/CreateOrder.css';
 
 const Modal = ({ children, onClose }) => {
     return (
