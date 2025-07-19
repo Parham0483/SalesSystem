@@ -36,6 +36,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=15)
     company_name = models.CharField(max_length=100, blank=True, null=True)
     date_joined = models.DateTimeField(default=timezone.now)
+    last_login = models.DateTimeField(null=True, blank=True)  # Added this field
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
@@ -47,11 +48,15 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
+    class Meta:
+        db_table = 'customers'
+
+
 # Product model
 class Product(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
-    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0 ,help_text="Base price for reference")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, help_text="Base price for reference")
     stock = models.IntegerField(default=0)
     image_url = models.URLField(blank=True, null=True, help_text="URL to product image")
     is_active = models.BooleanField(default=True)
@@ -66,12 +71,13 @@ class Product(models.Model):
 
 # Order model - Updated for your workflow
 STATUS_CHOICES = [
-    ('pending_pricing', 'Pending Pricing'),           # Customer submitted, waiting for admin to price
+    ('pending_pricing', 'Pending Pricing'),  # Customer submitted, waiting for admin to price
     ('waiting_customer_approval', 'Waiting Customer Approval'),  # Admin priced, waiting for customer
-    ('confirmed', 'Confirmed'),                       # Customer approved the pricing
-    ('rejected', 'Rejected'),                         # Customer rejected the pricing
-    ('cancelled', 'Cancelled'),                       # Order cancelled
+    ('confirmed', 'Confirmed'),  # Customer approved the pricing
+    ('rejected', 'Rejected'),  # Customer rejected the pricing
+    ('cancelled', 'Cancelled'),  # Order cancelled
 ]
+
 
 class Order(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
@@ -80,7 +86,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     customer_comment = models.TextField(blank=True, null=True, help_text="Customer's initial request/comments")
     admin_comment = models.TextField(blank=True, null=True, help_text="Admin's pricing notes")
-    
+
     # Pricing fields (filled by admin)
     quoted_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Total quoted by admin")
     pricing_date = models.DateTimeField(blank=True, null=True, help_text="When admin provided pricing")
@@ -91,7 +97,6 @@ class Order(models.Model):
     # Customer response
     customer_response_date = models.DateTimeField(blank=True, null=True)
     customer_rejection_reason = models.TextField(blank=True, null=True)
-
 
     def __str__(self):
         return f"Order {self.id} - {self.customer.name} - {self.status}"
@@ -151,9 +156,10 @@ class OrderItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     requested_quantity = models.IntegerField(default=1, help_text="Quantity requested by customer")
     customer_notes = models.TextField(blank=True, null=True, help_text="Special requirements from customer")
-    
+
     # Admin pricing fields
-    quoted_unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Price quoted by admin")
+    quoted_unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+                                            help_text="Price quoted by admin")
     final_quantity = models.IntegerField(default=0, help_text="Final quantity confirmed by admin")
     admin_notes = models.TextField(blank=True, null=True, help_text="Admin notes about pricing/availability")
 
@@ -177,27 +183,27 @@ class OrderItem(models.Model):
 # Invoice class - Updated for pre-invoice vs final invoice
 class Invoice(models.Model):
     INVOICE_TYPE_CHOICES = [
-        ('pre_invoice', 'Pre-Invoice'),      # Before customer approval
+        ('pre_invoice', 'Pre-Invoice'),  # Before customer approval
         ('final_invoice', 'Final Invoice'),  # After customer approval
     ]
 
     order = models.OneToOneField(Order, on_delete=models.CASCADE)
     invoice_number = models.CharField(max_length=20, unique=True)
     invoice_type = models.CharField(max_length=15, choices=INVOICE_TYPE_CHOICES, default='pre_invoice')
-    
+
     # Financial fields
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Tax rate as percentage")
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     payable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # Fixed decimal places
-    
+
     # Status fields
     issued_at = models.DateTimeField(auto_now_add=True)
     due_date = models.DateTimeField(blank=True, null=True)
     is_finalized = models.BooleanField(default=False)
     is_paid = models.BooleanField(default=False)
-    
+
     # File storage
     pdf_file = models.FileField(upload_to='invoices/', blank=True, null=True)
 
@@ -266,6 +272,7 @@ PAYMENT_METHOD_CHOICES = [
     ('check', 'Check'),
 ]
 
+
 class Payment(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -274,7 +281,7 @@ class Payment(models.Model):
     transaction_id = models.CharField(max_length=100, unique=True)
     is_successful = models.BooleanField(default=False)
     notes = models.TextField(blank=True, null=True)
-    
+
     # Reference fields
     reference_number = models.CharField(max_length=100, blank=True, null=True)
     processed_by = models.CharField(max_length=100, blank=True, null=True)

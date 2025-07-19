@@ -1,0 +1,338 @@
+/* NeoBrutalist Create Order Page Styles */
+.neo-create-order {
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #f5f5f5;
+    min-height: 100vh;
+    z-index: 1000;
+}
+
+.neo-create-order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px #000;
+}
+
+.neo-create-order-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    letter-spacing: 3px;
+    margin: 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.neo-customer-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+}
+
+.neo-customer-label {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.neo-customer-name {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    color: #1a1a1a;
+    font-weight: bold;
+}
+
+.neo-error-card {
+    margin-bottom: 2rem;
+    background-color: #fef2f2;
+    border-color: #ef4444 !important;
+    box-shadow: 6px 6px 0px #ef4444 !important;
+}
+
+.neo-error-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.neo-error-icon {
+    font-size: 1.5rem;
+    color: #ef4444;
+}
+
+.neo-error-text {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.95rem;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.neo-order-form {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.neo-comment-section {
+    background-color: #fff;
+}
+
+.neo-items-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.neo-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0;
+}
+
+.neo-section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2rem;
+    letter-spacing: 2px;
+    margin: 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.neo-add-item-btn {
+    padding: 12px 20px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+}
+
+.neo-items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.neo-item-card {
+    background-color: #fff;
+    position: relative;
+}
+
+.neo-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 3px solid #000;
+}
+
+.neo-item-number {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    margin: 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.neo-remove-btn {
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+}
+
+.neo-item-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.neo-field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.neo-form-actions {
+    display: flex;
+    justify-content: center;
+    padding: 2rem 0;
+}
+
+.neo-submit-btn {
+    padding: 16px 32px !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    min-width: 200px;
+}
+
+.neo-submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 6px 6px 0px #000 !important;
+}
+
+/* Color variants */
+:root {
+    --yellow-400: #facc15;
+    --blue-400: #60a5fa;
+    --green-400: #4ade80;
+    --red-400: #f87171;
+    --gray-400: #9ca3af;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .neo-create-order {
+        max-width: 700px;
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .neo-create-order {
+        padding: 1rem;
+        max-width: 100%;
+    }
+
+    .neo-create-order-header {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+        text-align: center;
+    }
+
+    .neo-create-order-title {
+        font-size: 2rem;
+    }
+
+    .neo-customer-info {
+        align-items: center;
+    }
+
+    .neo-section-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .neo-section-title {
+        font-size: 1.75rem;
+        text-align: center;
+    }
+
+    .neo-add-item-btn {
+        width: 100%;
+        padding: 14px 20px !important;
+    }
+
+    .neo-item-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .neo-remove-btn {
+        align-self: flex-start;
+        padding: 10px 18px !important;
+    }
+
+    .neo-submit-btn {
+        width: 100%;
+        padding: 18px 32px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .neo-create-order {
+        padding: 0.75rem;
+    }
+
+    .neo-create-order-header {
+        padding: 0.75rem;
+    }
+
+    .neo-create-order-title {
+        font-size: 1.75rem;
+        letter-spacing: 2px;
+    }
+
+    .neo-customer-name {
+        font-size: 1.25rem;
+    }
+
+    .neo-section-title {
+        font-size: 1.5rem;
+    }
+
+    .neo-item-number {
+        font-size: 1.25rem;
+    }
+
+    .neo-error-content {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+
+    .neo-form-actions {
+        padding: 1.5rem 0;
+    }
+}
+
+/* Modal specific adjustments when used inside modal */
+.modal .neo-create-order {
+    padding: 0;
+    margin: 0;
+    max-width: 100%;
+    min-height: auto;
+    background-color: transparent;
+}
+
+.modal .neo-create-order-header {
+    margin-bottom: 1.5rem;
+}
+
+.modal .neo-form-actions {
+    padding: 1.5rem 0 0 0;
+}
+
+/* Animation for form submission */
+@keyframes pulse-submit {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.neo-submit-btn:not(:disabled):active {
+    animation: pulse-submit 0.2s ease-in-out;
+}
+
+/* Focus states for accessibility */
+.neo-item-card:focus-within {
+    outline: 3px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+/* Loading state animation */
+@keyframes loading-dots {
+    0%, 20% { content: "Creating Order."; }
+    40% { content: "Creating Order.."; }
+    60%, 100% { content: "Creating Order..."; }
+}
+
+.neo-submit-btn:disabled::after {
+    content: "";
+    animation: loading-dots 1.5s infinite;
+}
