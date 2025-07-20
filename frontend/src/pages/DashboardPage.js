@@ -1,3 +1,5 @@
+// Enhanced DashboardPage.js with completed orders section
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
@@ -15,22 +17,15 @@ const DashboardPage = () => {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState('active'); // 'active', 'completed', 'rejected'
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Check authentication first
         const checkAuth = () => {
             const token = localStorage.getItem('access_token');
             const userData = localStorage.getItem('userData');
 
-            console.log('🔍 Dashboard - Auth check:', {
-                hasToken: !!token,
-                hasUserData: !!userData,
-                token: token ? `${token.substring(0, 20)}...` : null
-            });
-
             if (!token || !userData) {
-                console.log('❌ No authentication data found, redirecting to login');
                 handleLogout();
                 return false;
             }
@@ -46,33 +41,36 @@ const DashboardPage = () => {
         setLoading(true);
         setError('');
 
-        console.log('📤 Fetching orders...');
-
         try {
             const response = await API.get('/orders/');
-            console.log('✅ Orders fetched successfully:', response.data);
             setOrders(response.data);
         } catch (error) {
-            console.error('❌ Error fetching orders:', {
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-                data: error.response?.data,
-                message: error.message
-            });
-
             if (error.response?.status === 401) {
-                console.log('🔄 401 Unauthorized - clearing auth and redirecting');
                 setError('جلسه شما منقضی شده است. لطفاً دوباره وارد شوید.');
-                setTimeout(() => {
-                    handleLogout();
-                }, 2000);
-            } else if (error.response?.status === 403) {
-                setError('دسترسی غیرمجاز');
+                setTimeout(() => handleLogout(), 2000);
             } else {
                 setError('خطا در بارگیری سفارشات. لطفاً دوباره تلاش کنید.');
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Filter orders by status
+    const getFilteredOrders = () => {
+        switch (activeTab) {
+            case 'active':
+                return orders.filter(order =>
+                    ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(order.status)
+                );
+            case 'completed':
+                return orders.filter(order => order.status === 'completed');
+            case 'rejected':
+                return orders.filter(order =>
+                    ['rejected', 'cancelled'].includes(order.status)
+                );
+            default:
+                return orders;
         }
     };
 
@@ -83,17 +81,10 @@ const DashboardPage = () => {
     };
 
     const handleLogout = () => {
-        console.log('🚪 Logging out...');
-
-        // Clear all authentication data
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('userData');
-
-        // Clear axios default headers
         delete API.defaults.headers.common['Authorization'];
-
-        console.log('✅ Auth data cleared, navigating to home');
         navigate('/');
     };
 
@@ -110,6 +101,8 @@ const DashboardPage = () => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
+            case 'completed':  // ✅ Add completed status
+                return 'green-600';
             case 'rejected':
                 return 'red-400';
             case 'cancelled':
@@ -124,11 +117,41 @@ const DashboardPage = () => {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید',
             'confirmed': 'تأیید شده',
+            'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
         };
         return statusMap[status] || status;
     };
+
+    // Download PDF function for completed orders
+    const handleDownloadPDF = async (order, e) => {
+        e.stopPropagation();
+        try {
+            if (!order.invoice_id) {
+                setError('فاکتور برای این سفارش موجود نیست');
+                return;
+            }
+
+            const response = await API.get(`/invoices/${order.invoice_id}/download-pdf/`, {
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `invoice_${order.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            setError('خطا در دانلود فاکتور');
+        }
+    };
+
+    const filteredOrders = getFilteredOrders();
 
     if (loading) {
         return (
@@ -142,6 +165,7 @@ const DashboardPage = () => {
 
     return (
         <div className="dashboard-container">
+            {/* Header */}
             <div className="dashboard-header">
                 <div className="user-info">
                     <h1>داشبورد</h1>
@@ -152,11 +176,7 @@ const DashboardPage = () => {
                         text="ایجاد سفارش"
                         color="yellow-400"
                         textColor="black"
-                        onClick={() => {
-                            console.log('🔘 Create Order button clicked');
-                            setShowCreateOrder(true);
-                            console.log('📝 showCreateOrder set to true');
-                        }}
+                        onClick={() => setShowCreateOrder(true)}
                         className="create-order-btn"
                     />
                     <NeoBrutalistButton
@@ -169,6 +189,7 @@ const DashboardPage = () => {
                 </div>
             </div>
 
+            {/* Messages */}
             {message && (
                 <div className="message-banner">
                     <span>{message}</span>
@@ -195,8 +216,34 @@ const DashboardPage = () => {
                 </div>
             )}
 
+            {/* Order Tabs */}
+            <div className="dashboard-tabs">
+                <NeoBrutalistButton
+                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(o.status)).length})`}
+                    color={activeTab === 'active' ? 'yellow-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('active')}
+                    className="tab-btn"
+                />
+                <NeoBrutalistButton
+                    text={`تکمیل شده (${orders.filter(o => o.status === 'completed').length})`}
+                    color={activeTab === 'completed' ? 'green-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('completed')}
+                    className="tab-btn"
+                />
+                <NeoBrutalistButton
+                    text={`رد شده (${orders.filter(o => ['rejected', 'cancelled'].includes(o.status)).length})`}
+                    color={activeTab === 'rejected' ? 'red-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('rejected')}
+                    className="tab-btn"
+                />
+            </div>
+
+            {/* Orders Grid */}
             <div className="orders-grid">
-                {orders.map((order) => (
+                {filteredOrders.map((order) => (
                     <NeoBrutalistCard
                         key={order.id}
                         className="order-card"
@@ -213,9 +260,13 @@ const DashboardPage = () => {
                         </div>
                         <div className="order-card-info">
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
-                            <p><strong>جمع:</strong> {order.quoted_total ? `$${order.quoted_total}` : 'در انتظار قیمت‌گذاری'}</p>
+                            <p><strong>جمع:</strong> {order.quoted_total ? `${order.quoted_total.toLocaleString('fa-IR')} ریال` : 'در انتظار قیمت‌گذاری'}</p>
                             {order.customer_comment && (
                                 <p><strong>توضیحات:</strong> {order.customer_comment.substring(0, 50)}...</p>
+                            )}
+                            {/* Show completion date for completed orders */}
+                            {order.status === 'completed' && order.completion_date && (
+                                <p><strong>تاریخ تکمیل:</strong> {new Date(order.completion_date).toLocaleDateString('fa-IR')}</p>
                             )}
                         </div>
                         <div className="order-card-footer">
@@ -225,34 +276,53 @@ const DashboardPage = () => {
                                 textColor="white"
                                 className="view-details-btn"
                                 onClick={(e) => {
-                                    console.log('🔘 View Details button clicked for order:', order.id);
                                     e.stopPropagation();
                                     setSelectedOrder(order);
-                                    console.log('📄 selectedOrder set to:', order);
                                 }}
                             />
+                            {/* Download PDF button for completed orders */}
+                            {order.status === 'completed' && order.invoice_id && (
+                                <NeoBrutalistButton
+                                    text="دانلود فاکتور"
+                                    color="green-400"
+                                    textColor="white"
+                                    className="download-btn"
+                                    onClick={(e) => handleDownloadPDF(order, e)}
+                                />
+                            )}
                         </div>
                     </NeoBrutalistCard>
                 ))}
             </div>
 
-            {orders.length === 0 && !error && (
+            {/* Empty State */}
+            {filteredOrders.length === 0 && !error && (
                 <div className="empty-state">
                     <NeoBrutalistCard className="empty-card">
-                        <h3>هنوز سفارشی ندارید</h3>
-                        <p>شما هنوز هیچ سفارشی ثبت نکرده‌اید. برای شروع روی "ایجاد سفارش" کلیک کنید!</p>
-                        <NeoBrutalistButton
-                            text="ثبت اولین سفارش"
-                            color="yellow-400"
-                            textColor="black"
-                            onClick={() => setShowCreateOrder(true)}
-                            className="first-order-btn"
-                        />
+                        <h3>
+                            {activeTab === 'active' && 'هیچ سفارش فعالی ندارید'}
+                            {activeTab === 'completed' && 'هیچ سفارش تکمیل شده‌ای ندارید'}
+                            {activeTab === 'rejected' && 'هیچ سفارش رد شده‌ای ندارید'}
+                        </h3>
+                        <p>
+                            {activeTab === 'active' && 'برای شروع روی "ایجاد سفارش" کلیک کنید!'}
+                            {activeTab === 'completed' && 'سفارشات تکمیل شده شما در اینجا نمایش داده می‌شود.'}
+                            {activeTab === 'rejected' && 'سفارشات رد شده یا لغو شده شما در اینجا نمایش داده می‌شود.'}
+                        </p>
+                        {activeTab === 'active' && (
+                            <NeoBrutalistButton
+                                text="ثبت اولین سفارش"
+                                color="yellow-400"
+                                textColor="black"
+                                onClick={() => setShowCreateOrder(true)}
+                                className="first-order-btn"
+                            />
+                        )}
                     </NeoBrutalistCard>
                 </div>
             )}
 
-            {/* FIXED: Added isOpen prop and title to NeoBrutalistModal */}
+            {/* Modals */}
             <NeoBrutalistModal
                 isOpen={showCreateOrder}
                 onClose={() => setShowCreateOrder(false)}

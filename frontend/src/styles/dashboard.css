@@ -255,3 +255,179 @@
         text-align: center;
     }
 }
+
+/* Add these styles to your existing dashboard.css */
+
+/* Dashboard Tabs */
+.dashboard-tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px #000;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.tab-btn {
+    padding: 12px 24px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 0;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.tab-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0px #000;
+}
+
+.tab-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0px #000;
+}
+
+/* Enhanced Order Card for Completed Orders */
+.order-card-footer {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: auto;
+    flex-wrap: wrap;
+}
+
+.download-btn {
+    padding: 8px 16px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+}
+
+/* Enhanced status colors */
+:root {
+    --yellow-400: #facc15;
+    --blue-400: #60a5fa;
+    --green-400: #4ade80;
+    --green-600: #16a34a;  /* Darker green for completed */
+    --red-400: #f87171;
+    --gray-400: #9ca3af;
+}
+
+/* Order count in tabs */
+.tab-btn .count {
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    margin-left: 8px;
+}
+
+/* Responsive tabs */
+@media (max-width: 768px) {
+    .dashboard-tabs {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 1rem;
+    }
+
+    .tab-btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .order-card-footer {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .view-details-btn,
+    .download-btn {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .tab-btn {
+        font-size: 12px !important;
+        padding: 10px 16px !important;
+    }
+}
+
+/* Enhanced empty state for different tabs */
+.empty-card {
+    text-align: center;
+    max-width: 500px;
+    cursor: default;
+    padding: 3rem;
+}
+
+.empty-card:hover {
+    transform: none;
+    box-shadow: 6px 6px 0px #000;
+}
+
+.empty-card:active {
+    transform: none;
+    box-shadow: 6px 6px 0px #000;
+}
+
+/* Completed order special styling */
+.order-card[data-status="completed"] {
+    border-left: 6px solid var(--green-600);
+    background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+.order-card[data-status="completed"]:hover {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+/* Rejected order special styling */
+.order-card[data-status="rejected"],
+.order-card[data-status="cancelled"] {
+    border-left: 6px solid var(--red-400);
+    background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
+    opacity: 0.8;
+}
+
+/* Active tab highlighting */
+.tab-btn[data-active="true"] {
+    position: relative;
+    z-index: 2;
+}
+
+.tab-btn[data-active="true"]::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #000;
+}
+
+/* Completion date styling */
+.completion-date {
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* PDF download success animation */
+@keyframes downloadSuccess {
+    0% { background-color: var(--green-400); }
+    50% { background-color: var(--green-600); }
+    100% { background-color: var(--green-400); }
+}
+
+.download-btn.downloading {
+    animation: downloadSuccess 1s ease-in-out;
+}

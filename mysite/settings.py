@@ -1,7 +1,4 @@
-"""
-Django settings for mysite project.
-"""
-
+import os
 from pathlib import Path
 from datetime import timedelta
 
@@ -188,3 +185,19 @@ LOGGING = {
         },
     },
 }
+
+#Media
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+#Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'parham.g1383@gmail.com'
+EMAIL_HOST_PASSWORD = 'hxhabmcfltseioto'  # This is your Gmail App Password
+DEFAULT_FROM_EMAIL = 'parham.g1383@gmail.com'
+ADMIN_EMAIL_LIST = ['admin@company.com']
+FRONTEND_URL = 'http://localhost:3000'
+SUPPORT_EMAIL = 'support@company.com'

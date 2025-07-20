@@ -41,6 +41,14 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
+    const handleCompleteOrder = async () => {
+        try {
+            if (onOrderUpdated) onOrderUpdated();
+        } catch (err) {
+            setError('Error competeing the order');
+        }
+    };
+
     // Smart text sizing function
     const applySmartTextSizing = () => {
         const productCells = tableRef.current?.querySelectorAll('.admin-table-cell:nth-child(1)');
@@ -132,6 +140,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید مشتری',
             'confirmed': 'تأیید شده',
+            'completed':'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
         };
@@ -336,6 +345,16 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             disabled={submitting}
                             className="admin-submit-btn"
                         />
+
+                        {order.status === 'confirmed' && (
+                            <NeoBrutalistButton
+                                text="تکمیل سفارش"
+                                color="green-400"
+                                textColor="black"
+                                onClick={handleCompleteOrder}
+                                className="complete-order-btn"
+                            />
+                        )}
                     </div>
                 </form>
             </NeoBrutalistCard>

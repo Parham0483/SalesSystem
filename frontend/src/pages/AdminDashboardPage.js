@@ -11,6 +11,7 @@ const AdminDashboardPage = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState('active');
     const navigate = useNavigate();
 
     useEffect(() => {
