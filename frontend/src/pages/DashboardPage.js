@@ -14,24 +14,62 @@ const DashboardPage = () => {
     const [showCreateOrder, setShowCreateOrder] = useState(false);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchOrders();
+        // Check authentication first
+        const checkAuth = () => {
+            const token = localStorage.getItem('access_token');
+            const userData = localStorage.getItem('userData');
+
+            console.log('🔍 Dashboard - Auth check:', {
+                hasToken: !!token,
+                hasUserData: !!userData,
+                token: token ? `${token.substring(0, 20)}...` : null
+            });
+
+            if (!token || !userData) {
+                console.log('❌ No authentication data found, redirecting to login');
+                handleLogout();
+                return false;
+            }
+            return true;
+        };
+
+        if (checkAuth()) {
+            fetchOrders();
+        }
     }, [navigate]);
 
     const fetchOrders = async () => {
         setLoading(true);
+        setError('');
+
+        console.log('📤 Fetching orders...');
+
         try {
             const response = await API.get('/orders/');
+            console.log('✅ Orders fetched successfully:', response.data);
             setOrders(response.data);
         } catch (error) {
-            console.error('Error fetching orders:', error);
+            console.error('❌ Error fetching orders:', {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+                message: error.message
+            });
+
             if (error.response?.status === 401) {
-                // Token expired or invalid, redirect to login
-                handleLogout();
+                console.log('🔄 401 Unauthorized - clearing auth and redirecting');
+                setError('جلسه شما منقضی شده است. لطفاً دوباره وارد شوید.');
+                setTimeout(() => {
+                    handleLogout();
+                }, 2000);
+            } else if (error.response?.status === 403) {
+                setError('دسترسی غیرمجاز');
             } else {
-                setMessage('خطا در بارگیری سفارشات!!');
+                setError('خطا در بارگیری سفارشات. لطفاً دوباره تلاش کنید.');
             }
         } finally {
             setLoading(false);
@@ -45,6 +83,8 @@ const DashboardPage = () => {
     };
 
     const handleLogout = () => {
+        console.log('🚪 Logging out...');
+
         // Clear all authentication data
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -53,6 +93,7 @@ const DashboardPage = () => {
         // Clear axios default headers
         delete API.defaults.headers.common['Authorization'];
 
+        console.log('✅ Auth data cleared, navigating to home');
         navigate('/');
     };
 
@@ -111,7 +152,11 @@ const DashboardPage = () => {
                         text="ایجاد سفارش"
                         color="yellow-400"
                         textColor="black"
-                        onClick={() => setShowCreateOrder(true)}
+                        onClick={() => {
+                            console.log('🔘 Create Order button clicked');
+                            setShowCreateOrder(true);
+                            console.log('📝 showCreateOrder set to true');
+                        }}
                         className="create-order-btn"
                     />
                     <NeoBrutalistButton
@@ -132,6 +177,19 @@ const DashboardPage = () => {
                         color="white"
                         textColor="black"
                         onClick={() => setMessage('')}
+                        className="close-message-btn"
+                    />
+                </div>
+            )}
+
+            {error && (
+                <div className="message-banner" style={{ backgroundColor: '#fef2f2', borderColor: '#ef4444', color: '#dc2626' }}>
+                    <span>{error}</span>
+                    <NeoBrutalistButton
+                        text="×"
+                        color="white"
+                        textColor="black"
+                        onClick={() => setError('')}
                         className="close-message-btn"
                     />
                 </div>
@@ -167,8 +225,10 @@ const DashboardPage = () => {
                                 textColor="white"
                                 className="view-details-btn"
                                 onClick={(e) => {
+                                    console.log('🔘 View Details button clicked for order:', order.id);
                                     e.stopPropagation();
                                     setSelectedOrder(order);
+                                    console.log('📄 selectedOrder set to:', order);
                                 }}
                             />
                         </div>
@@ -176,7 +236,7 @@ const DashboardPage = () => {
                 ))}
             </div>
 
-            {orders.length === 0 && (
+            {orders.length === 0 && !error && (
                 <div className="empty-state">
                     <NeoBrutalistCard className="empty-card">
                         <h3>هنوز سفارشی ندارید</h3>
@@ -192,20 +252,29 @@ const DashboardPage = () => {
                 </div>
             )}
 
-            {showCreateOrder && (
-                <NeoBrutalistModal onClose={() => setShowCreateOrder(false)}>
-                    <CreateOrderPage onOrderCreated={handleOrderCreated} />
-                </NeoBrutalistModal>
-            )}
+            {/* FIXED: Added isOpen prop and title to NeoBrutalistModal */}
+            <NeoBrutalistModal
+                isOpen={showCreateOrder}
+                onClose={() => setShowCreateOrder(false)}
+                title=""
+                size="large"
+            >
+                <CreateOrderPage onOrderCreated={handleOrderCreated} />
+            </NeoBrutalistModal>
 
-            {selectedOrder && (
-                <NeoBrutalistModal onClose={() => setSelectedOrder(null)}>
+            <NeoBrutalistModal
+                isOpen={!!selectedOrder}
+                onClose={() => setSelectedOrder(null)}
+                title={selectedOrder ? `جزئیات سفارش #${selectedOrder.id}` : ""}
+                size="large"
+            >
+                {selectedOrder && (
                     <OrderDetailPage
                         orderId={selectedOrder.id}
                         onOrderUpdated={handleOrderCreated}
                     />
-                </NeoBrutalistModal>
-            )}
+                )}
+            </NeoBrutalistModal>
         </div>
     );
 };

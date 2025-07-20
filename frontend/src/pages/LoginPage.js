@@ -17,13 +17,16 @@ const LoginPage = () => {
         setLoading(true);
         setError("");
 
+        console.log('🚀 Starting login process...');
+
         try {
+            const loginData = { email, password };
+
+            console.log('📤 Sending login request for:', email);
+
             const response = await axios.post(
                 `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/'}auth/login/`,
-                {
-                    email,
-                    password
-                },
+                loginData,
                 {
                     headers: {
                         'Content-Type': 'application/json',
@@ -32,10 +35,19 @@ const LoginPage = () => {
                 }
             );
 
+            console.log('✅ Login response:', response.data);
+
             if (response.status === 200) {
                 const { user, tokens } = response.data;
 
-                // Store user data and tokens with updated structure
+                console.log('🔑 Storing authentication data:', {
+                    user: user,
+                    hasTokens: !!tokens,
+                    accessToken: tokens?.access ? `${tokens.access.substring(0, 20)}...` : null,
+                    refreshToken: tokens?.refresh ? `${tokens.refresh.substring(0, 20)}...` : null
+                });
+
+                // Store user data
                 localStorage.setItem('userData', JSON.stringify({
                     id: user.id,
                     email: user.email,
@@ -44,23 +56,35 @@ const LoginPage = () => {
                     company_name: user.company_name
                 }));
 
-                // Store tokens with correct keys
+                // Store tokens
                 localStorage.setItem('access_token', tokens.access);
                 localStorage.setItem('refresh_token', tokens.refresh);
 
-                // Set default authorization header
+                // CRITICAL: Set the authorization header for future requests
                 axios.defaults.headers.common['Authorization'] = `Bearer ${tokens.access}`;
 
+                console.log('✅ Authentication data stored successfully');
+                console.log('🔍 Verification - localStorage check:', {
+                    userData: !!localStorage.getItem('userData'),
+                    accessToken: !!localStorage.getItem('access_token'),
+                    refreshToken: !!localStorage.getItem('refresh_token'),
+                    axiosHeader: axios.defaults.headers.common['Authorization']
+                });
+
                 // Navigate based on user role
-                if (user.is_staff) {
-                    navigate("/admin");
-                } else {
-                    navigate("/dashboard");
-                }
+                setTimeout(() => {
+                    if (user.is_staff) {
+                        console.log('🔄 Navigating to admin dashboard...');
+                        navigate("/admin");
+                    } else {
+                        console.log('🔄 Navigating to dashboard...');
+                        navigate("/dashboard");
+                    }
+                }, 100);
             }
 
         } catch (err) {
-            console.error("Login error:", err);
+            console.error("❌ Login error:", err);
 
             if (err.response?.data?.error) {
                 setError(err.response.data.error);
@@ -74,6 +98,7 @@ const LoginPage = () => {
             localStorage.removeItem('userData');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
+            delete axios.defaults.headers.common['Authorization'];
         } finally {
             setLoading(false);
         }

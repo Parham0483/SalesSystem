@@ -11,7 +11,7 @@ SECRET_KEY = 'django-insecure-ggs@f%*u5l%^k%#--3lc!ww$ujs+(pe^d38@mqf(!)7k6qz15l
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
 
 # Custom user model
 AUTH_USER_MODEL = 'tasks.Customer'

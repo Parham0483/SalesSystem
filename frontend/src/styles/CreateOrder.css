@@ -1,4 +1,4 @@
-/* NeoBrutalist Create Order Page Styles */
+
 .neo-create-order {
     padding: 2rem;
     max-width: 800px;
@@ -84,6 +84,14 @@
 
 .neo-comment-section {
     background-color: #fff;
+}
+
+.neo-comment-input{
+    max-width: 95%;
+}
+
+.neo-comment-input{
+    max-width: 95%;
 }
 
 .neo-items-section {
