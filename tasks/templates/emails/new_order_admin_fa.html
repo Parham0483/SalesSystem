@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سفارش جدید</title>
+    <style>
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border: 4px solid #000;
+            padding: 30px;
+        }
+        .header {
+            background-color: #facc15;
+            padding: 20px;
+            margin: -30px -30px 20px -30px;
+            border-bottom: 4px solid #000;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #000;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border: 2px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .info-item {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #374151;
+        }
+        .info-value {
+            color: #1a1a1a;
+        }
+        .button {
+            display: inline-block;
+            background-color: #60a5fa;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border: 4px solid #000;
+            font-weight: bold;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+        .button:hover {
+            background-color: #3b82f6;
+        }
+        .footer {
+            border-top: 2px solid #000;
+            padding-top: 15px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 سفارش جدید دریافت شد</h1>
+        </div>
+
+        <p>سفارش جدیدی در سیستم ثبت شده است که نیاز به قیمت‌گذاری دارد.</p>
+
+        <div class="info-box">
+            <div class="info-item">
+                <span class="info-label">شماره سفارش:</span>
+                <span class="info-value">#{{ order.id }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">نام مشتری:</span>
+                <span class="info-value">{{ customer.name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">ایمیل مشتری:</span>
+                <span class="info-value">{{ customer.email }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">شرکت:</span>
+                <span class="info-value">{{ customer.company_name|default:"ندارد" }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">تاریخ ثبت:</span>
+                <span class="info-value">{{ order.created_at|date:"Y/m/d H:i" }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">تعداد اقلام:</span>
+                <span class="info-value">{{ items_count }} محصول</span>
+            </div>
+        </div>
+
+        {% if order.customer_comment %}
+        <div class="info-box">
+            <div class="info-item">
+                <span class="info-label">نظر مشتری:</span>
+                <p class="info-value">{{ order.customer_comment }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <a href="{{ dashboard_url }}" class="button">🔗 ورود به پنل مدیریت</a>
+
+        <p>لطفاً در اسرع وقت وارد پنل مدیریت شوید و قیمت‌گذاری این سفارش را انجام دهید.</p>
+
+        <div class="footer">
+            <p>این ایمیل به صورت خودکار ارسال شده است.</p>
+        </div>
+    </div>
+</body>
+</html>

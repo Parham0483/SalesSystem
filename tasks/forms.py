@@ -2,7 +2,7 @@
 from django import forms
 from django.contrib.auth.hashers import make_password
 from django.forms import inlineformset_factory
-from .models import Customer, Order, OrderItem, Product, Payment
+from .models import Customer, Order, OrderItem, Product
 
 
 class CustomerRegistrationForm(forms.ModelForm):
@@ -106,10 +106,3 @@ class OrderApprovalForm(forms.Form):
         return cleaned_data
 
 
-class PaymentForm(forms.ModelForm):
-    class Meta:
-        model = Payment
-        fields = ['payment_method', 'reference_number', 'notes']
-        widgets = {
-            'notes': forms.Textarea(attrs={'rows': 3})
-        }

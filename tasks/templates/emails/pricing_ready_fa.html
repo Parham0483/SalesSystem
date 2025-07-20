@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قیمت‌گذاری آماده است</title>
+    <style>
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border: 4px solid #000;
+            padding: 30px;
+        }
+        .header {
+            background-color: #60a5fa;
+            color: white;
+            padding: 20px;
+            margin: -30px -30px 20px -30px;
+            border-bottom: 4px solid #000;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .price-box {
+            background-color: #dcfce7;
+            border: 4px solid #16a34a;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .price-amount {
+            font-size: 28px;
+            font-weight: bold;
+            color: #166534;
+            margin: 10px 0;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border: 2px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #facc15;
+            color: black;
+            padding: 15px 30px;
+            text-decoration: none;
+            border: 4px solid #000;
+            font-weight: bold;
+            margin: 20px 0;
+            text-transform: uppercase;
+            font-size: 16px;
+        }
+        .button:hover {
+            background-color: #eab308;
+        }
+        .warning {
+            background-color: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 قیمت‌گذاری آماده است</h1>
+        </div>
+
+        <p>{{ customer.name }} عزیز،</p>
+        <p>قیمت‌گذاری سفارش شماره <strong>{{ order.id }}</strong> توسط تیم ما انجام شده و آماده بررسی شماست.</p>
+
+        <div class="price-box">
+            <h3>مبلغ کل سفارش</h3>
+            <div class="price-amount">{{ total_amount|floatformat:0 }} ریال</div>
+        </div>
+
+        <div class="info-box">
+            <p><strong>مراحل بعدی:</strong></p>
+            <ol>
+                <li>وارد پنل کاربری خود شوید</li>
+                <li>جزئیات قیمت‌گذاری را بررسی کنید</li>
+                <li>سفارش را تأیید یا رد کنید</li>
+            </ol>
+        </div>
+
+        <div class="warning">
+            ⚠️ لطفاً ظرف مدت ۴۸ ساعت نسبت به تأیید یا رد سفارش اقدام کنید.
+        </div>
+
+        <a href="{{ order_url }}" class="button">🔗 مشاهده و تأیید سفارش</a>
+
+        <p>در صورت داشتن سؤال، با تیم پشتیبانی تماس بگیرید.</p>
+        <p>با تشکر از اعتماد شما</p>
+    </div>
+</body>
+</html>

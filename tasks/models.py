@@ -1,10 +1,13 @@
+# tasks/models.py - Complete version with PDF and Email features
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from decimal import Decimal
 import uuid
 from django.conf import settings
+import os
 
 
 class CustomerManager(BaseUserManager):
@@ -40,7 +43,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     # Required for AbstractBaseUser
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    is_superuser = models.BooleanField(default=False)  # Added this
+    is_superuser = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(null=True, blank=True)
 
@@ -66,7 +69,6 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = 'Customers'
 
 
-# Product model
 class Product(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
@@ -83,11 +85,12 @@ class Product(models.Model):
         db_table = 'products'
 
 
-# Order model - Updated for your workflow
+# Updated STATUS_CHOICES with completed status
 STATUS_CHOICES = [
     ('pending_pricing', 'Pending Pricing'),  # Customer submitted, waiting for admin to price
     ('waiting_customer_approval', 'Waiting Customer Approval'),  # Admin priced, waiting for customer
     ('confirmed', 'Confirmed'),  # Customer approved the pricing
+    ('completed', 'Completed'),  # Order completed and finalized
     ('rejected', 'Rejected'),  # Customer rejected the pricing
     ('cancelled', 'Cancelled'),  # Order cancelled
 ]
@@ -100,6 +103,16 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     customer_comment = models.TextField(blank=True, null=True, help_text="Customer's initial request/comments")
     admin_comment = models.TextField(blank=True, null=True, help_text="Admin's pricing notes")
+
+    # NEW: Completion tracking fields
+    completion_date = models.DateTimeField(blank=True, null=True, help_text="When order was completed")
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='completed_orders',
+        help_text="Admin who completed the order"
+    )
 
     # Pricing fields (filled by admin)
     quoted_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Total quoted by admin")
@@ -144,6 +157,34 @@ class Order(models.Model):
             self.customer_rejection_reason = reason
         self.save()
 
+    def mark_as_completed(self, admin_user):
+        """Mark order as completed"""
+        if self.status != 'confirmed':
+            raise ValueError("Order must be confirmed before completion")
+
+        self.status = 'completed'
+        self.completion_date = timezone.now()
+        self.completed_by = admin_user
+        self.save()
+
+        # Create final invoice if not exists and generate PDF
+        invoice, created = Invoice.objects.get_or_create(
+            order=self,
+            defaults={
+                'invoice_type': 'final_invoice',
+                'total_amount': self.quoted_total,
+                'is_finalized': True,
+                'invoice_number': self.generate_invoice_number() if not hasattr(self,
+                                                                                'invoice') else self.invoice.invoice_number
+            }
+        )
+
+        # Generate PDF if not exists
+        if created or not invoice.pdf_file:
+            invoice.generate_pdf()
+
+        return self, invoice
+
     def create_final_invoice(self):
         """Create finalized invoice after customer approval"""
         if self.status == 'confirmed' and not hasattr(self, 'invoice'):
@@ -164,7 +205,6 @@ class Order(models.Model):
         ordering = ['-created_at']
 
 
-# Order item model - Updated for your workflow
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -194,7 +234,6 @@ class OrderItem(models.Model):
         db_table = 'order_items'
 
 
-# Invoice class - Updated for pre-invoice vs final invoice
 class Invoice(models.Model):
     INVOICE_TYPE_CHOICES = [
         ('pre_invoice', 'Pre-Invoice'),  # Before customer approval
@@ -210,7 +249,7 @@ class Invoice(models.Model):
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Tax rate as percentage")
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    payable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)  # Fixed decimal places
+    payable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     # Status fields
     issued_at = models.DateTimeField(auto_now_add=True)
@@ -240,6 +279,26 @@ class Invoice(models.Model):
             self.calculate_payable_amount()
             self.save()
 
+    # NEW: PDF generation methods
+    def generate_pdf(self):
+        """Generate PDF for this invoice"""
+        from .services.persian_pdf_generator import PersianInvoicePDFGenerator
+
+        generator = PersianInvoicePDFGenerator(self)
+        pdf_buffer = generator.generate_pdf()
+
+        # Save PDF to file field
+        filename = f"invoice_{self.invoice_number}.pdf"
+        self.pdf_file.save(filename, ContentFile(pdf_buffer.getvalue()))
+        return self.pdf_file
+
+    def download_pdf_response(self):
+        """Get HTTP response for PDF download"""
+        from .services.persian_pdf_generator import PersianInvoicePDFGenerator
+
+        generator = PersianInvoicePDFGenerator(self)
+        return generator.get_http_response()
+
     def save(self, *args, **kwargs):
         # Auto-calculate payable amount
         if self.total_amount:
@@ -251,63 +310,91 @@ class Invoice(models.Model):
         ordering = ['-issued_at']
 
 
-# Wallet class
-class Wallet(models.Model):
-    customer = models.OneToOneField(Customer, on_delete=models.CASCADE)
-    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    last_updated = models.DateTimeField(auto_now=True)
+# NEW: Template system for customizable invoices
+class InvoiceTemplate(models.Model):
+    """Template configuration for invoices"""
+    name = models.CharField(max_length=100, unique=True)
+    language = models.CharField(max_length=10, choices=[('fa', 'Persian'), ('en', 'English')], default='fa')
+    is_active = models.BooleanField(default=True)
+    company_info = models.JSONField(default=dict, help_text="Store company details")
+    font_family = models.CharField(max_length=50, default='Vazir')
+    page_size = models.CharField(max_length=10, default='A4')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Wallet for {self.customer.name} - Balance: {self.balance}"
-
-    def add_funds(self, amount):
-        """Add funds to wallet"""
-        self.balance += Decimal(str(amount))
-        self.save()
-
-    def deduct_funds(self, amount):
-        """Deduct funds from wallet"""
-        if self.balance >= Decimal(str(amount)):
-            self.balance -= Decimal(str(amount))
-            self.save()
-            return True
-        return False
+        return f"{self.name} ({self.get_language_display()})"
 
     class Meta:
-        db_table = 'wallets'
+        db_table = 'invoice_templates'
+        verbose_name = 'Invoice Template'
+        verbose_name_plural = 'Invoice Templates'
 
 
-# Payment class
-PAYMENT_METHOD_CHOICES = [
-    ('wallet', 'Wallet Payment'),
-    ('credit_card', 'Credit Card'),
-    ('bank_transfer', 'Bank Transfer'),
-    ('cash', 'Cash'),
-    ('check', 'Check'),
-]
+class InvoiceTemplateField(models.Model):
+    """Define fields and their labels for invoice templates"""
+    template = models.ForeignKey(InvoiceTemplate, on_delete=models.CASCADE, related_name='fields')
+    field_key = models.CharField(max_length=50, help_text="e.g., 'customer_name', 'total_amount'")
+    field_label = models.CharField(max_length=100, help_text="e.g., 'نام مشتری', 'مبلغ کل'")
+    field_type = models.CharField(max_length=20, choices=[
+        ('text', 'Text'),
+        ('number', 'Number'),
+        ('price', 'Price'),
+        ('date', 'Date'),
+        ('email', 'Email')
+    ], default='text')
+    is_required = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+    section = models.CharField(max_length=50, help_text="e.g., 'company', 'customer', 'items', 'totals'")
+
+    def __str__(self):
+        return f"{self.template.name} - {self.field_label}"
+
+    class Meta:
+        db_table = 'invoice_template_fields'
+        ordering = ['section', 'display_order']
+        unique_together = ['template', 'field_key']
 
 
-class Payment(models.Model):
-    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateTimeField(auto_now_add=True)
-    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES)
-    transaction_id = models.CharField(max_length=100, unique=True)
+class InvoiceSection(models.Model):
+    """Define sections and their layout in invoice"""
+    template = models.ForeignKey(InvoiceTemplate, on_delete=models.CASCADE, related_name='sections')
+    section_key = models.CharField(max_length=50)
+    section_title = models.CharField(max_length=100)
+    display_order = models.IntegerField(default=0)
+    is_table = models.BooleanField(default=False, help_text="True for items table")
+    table_columns = models.JSONField(default=list, help_text="Column definitions for tables")
+
+    def __str__(self):
+        return f"{self.template.name} - {self.section_title}"
+
+    class Meta:
+        db_table = 'invoice_sections'
+        ordering = ['display_order']
+        unique_together = ['template', 'section_key']
+
+
+# NEW: Email notification tracking
+class EmailNotification(models.Model):
+    """Track email notifications sent"""
+    EMAIL_TYPES = [
+        ('order_submitted', 'Order Submitted'),
+        ('pricing_ready', 'Pricing Ready'),
+        ('order_confirmed', 'Order Confirmed'),
+        ('order_rejected', 'Order Rejected'),
+        ('order_completed', 'Order Completed'),
+    ]
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications')
+    email_type = models.CharField(max_length=20, choices=EMAIL_TYPES)
+    recipient_email = models.EmailField()
+    subject = models.CharField(max_length=200)
+    sent_at = models.DateTimeField(auto_now_add=True)
     is_successful = models.BooleanField(default=False)
-    notes = models.TextField(blank=True, null=True)
-
-    # Reference fields
-    reference_number = models.CharField(max_length=100, blank=True, null=True)
-    processed_by = models.CharField(max_length=100, blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"Payment {self.transaction_id} - Invoice {self.invoice.invoice_number} - Amount: {self.amount}"
-
-    def save(self, *args, **kwargs):
-        if not self.transaction_id:
-            self.transaction_id = str(uuid.uuid4())[:8].upper()
-        super().save(*args, **kwargs)
+        return f"{self.get_email_type_display()} - {self.recipient_email} - Order #{self.order.id}"
 
     class Meta:
-        db_table = 'payments'
-        ordering = ['-payment_date']
+        db_table = 'email_notifications'
+        ordering = ['-sent_at']

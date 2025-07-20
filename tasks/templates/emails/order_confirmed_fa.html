@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سفارش تأیید شد</title>
+    <style>
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border: 4px solid #000;
+            padding: 30px;
+        }
+        .header {
+            background-color: #4ade80;
+            color: white;
+            padding: 20px;
+            margin: -30px -30px 20px -30px;
+            border-bottom: 4px solid #000;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .success-box {
+            background-color: #dcfce7;
+            border: 4px solid #16a34a;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .attachment-notice {
+            background-color: #dbeafe;
+            border: 2px solid #3b82f6;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .next-steps {
+            background-color: #f8f9fa;
+            border: 2px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ سفارش تأیید شد</h1>
+        </div>
+
+        <div class="success-box">
+            <h2>{{ customer.name }} عزیز</h2>
+            <p>سفارش شماره <strong>{{ order.id }}</strong> با موفقیت تأیید شد!</p>
+            <p><strong>مبلغ نهایی:</strong> {{ total_amount|floatformat:0 }} ریال</p>
+        </div>
+
+        <p>{{ completion_message }}</p>
+
+        <div class="attachment-notice">
+            <h3>📎 فاکتور ضمیمه</h3>
+            <p>فاکتور رسمی سفارش شما به این ایمیل ضمیمه شده است.</p>
+            <p>لطفاً فاکتور را دانلود و نگهداری کنید.</p>
+        </div>
+
+        <div class="next-steps">
+            <h3>📋 مراحل بعدی:</h3>
+            <ol>
+                <li>پردازش و آماده‌سازی سفارش شما آغاز شده است</li>
+                <li>در صورت نیاز به هماهنگی، با شما تماس خواهیم گرفت</li>
+                <li>زمان تحویل از طریق پیامک اطلاع‌رسانی خواهد شد</li>
+            </ol>
+        </div>
+
+        <p>از اعتماد شما سپاسگزاریم.</p>
+        <p><strong>تیم فروش</strong></p>
+    </div>
+</body>
+</html>

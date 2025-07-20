@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سفارش رد شد</title>
+    <style>
+        body {
+            font-family: Tahoma, Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border: 4px solid #000;
+            padding: 30px;
+        }
+        .header {
+            background-color: #f87171;
+            color: white;
+            padding: 20px;
+            margin: -30px -30px 20px -30px;
+            border-bottom: 4px solid #000;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .rejection-box {
+            background-color: #fef2f2;
+            border: 4px solid #ef4444;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .reason-box {
+            background-color: #f8f9fa;
+            border: 2px solid #000;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .contact-box {
+            background-color: #dbeafe;
+            border: 2px solid #3b82f6;
+            padding: 15px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>❌ سفارش رد شد</h1>
+        </div>
+
+        <p>{{ customer.name }} عزیز،</p>
+
+        <div class="rejection-box">
+            <p>متأسفانه سفارش شماره <strong>{{ order.id }}</strong> توسط شما رد شده است.</p>
+        </div>
+
+        <div class="reason-box">
+            <h3>دلیل رد سفارش:</h3>
+            <p>{{ rejection_reason }}</p>
+        </div>
+
+        <div class="contact-box">
+            <h3>📞 نیاز به مشاوره دارید؟</h3>
+            <p>تیم فروش ما آماده پاسخگویی و ارائه راهکارهای مناسب‌تر است.</p>
+            <p><strong>ایمیل پشتیبانی:</strong> {{ support_email }}</p>
+            <p>ما همچنان منتظر همکاری دوباره با شما هستیم.</p>
+        </div>
+
+        <p>با احترام،</p>
+        <p><strong>تیم فروش</strong></p>
+    </div>
+</body>
+</html>
