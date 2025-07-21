@@ -1,8 +1,7 @@
-# Update your tasks/serializers/orders.py
-
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+from decimal import Decimal
 from ..models import Order, OrderItem, Product, STATUS_CHOICES
 
 
@@ -69,7 +68,7 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['id', 'status', 'admin_comment', 'pricing_date', 'quoted_total', 'items']
-        read_only_fields = ['id', 'status', 'pricing_date', 'quoted_total','priced_by']
+        read_only_fields = ['id', 'status', 'pricing_date', 'quoted_total', 'priced_by']
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', [])
@@ -86,15 +85,20 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
                 if item:
                     for attr, value in item_data.items():
                         if attr != 'id':
+                            #Convert to Decimal for price fields
+                            if attr == 'quoted_unit_price' and value is not None:
+                                value = Decimal(str(value))
                             setattr(item, attr, value)
                     item.save()
 
-            # Automatically set pricing_date, quoted_total, and status
+            #Use Decimal for calculations
             instance.pricing_date = timezone.now()
-            instance.quoted_total = sum(
-                (item.quoted_unit_price or 0) * (item.final_quantity or 0)
-                for item in instance.items.all()
-            )
+            total = Decimal('0.00')
+            for item in instance.items.all():
+                if item.quoted_unit_price and item.final_quantity:
+                    total += Decimal(str(item.quoted_unit_price)) * Decimal(str(item.final_quantity))
+
+            instance.quoted_total = total
             instance.status = 'waiting_customer_approval'
             instance.priced_by = self.context['request'].user
             instance.save()
@@ -105,12 +109,36 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     items = OrderItemAdminUpdateSerializer(many=True)
+    #Add invoice fields for completed orders
+    invoice_id = serializers.SerializerMethodField()
+    invoice_number = serializers.SerializerMethodField()
+    invoice_date = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
             'id', 'customer', 'customer_name', 'status', 'customer_comment',
             'admin_comment', 'pricing_date', 'quoted_total', 'items',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'completion_date', 'completed_by',
+            'customer_response_date', 'customer_rejection_reason',
+            'invoice_id', 'invoice_number', 'invoice_date'
         ]
         read_only_fields = fields
+
+    def get_invoice_id(self, obj):
+        """Get invoice ID if exists"""
+        if hasattr(obj, 'invoice'):
+            return obj.invoice.id
+        return None
+
+    def get_invoice_number(self, obj):
+        """Get invoice number if exists"""
+        if hasattr(obj, 'invoice'):
+            return obj.invoice.invoice_number
+        return None
+
+    def get_invoice_date(self, obj):
+        """Get invoice date if exists"""
+        if hasattr(obj, 'invoice'):
+            return obj.invoice.issued_at
+        return None

@@ -12,6 +12,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [completing, setCompleting] = useState(false);
     const tableRef = useRef(null);
 
     useEffect(() => {
@@ -31,10 +32,12 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setLoading(true);
         try {
             const res = await API.get(`/orders/${orderId}/`);
+            console.log('📦 Order data received:', res.data);
             setOrder(res.data);
             setItems(res.data.items || []);
             setAdminComment(res.data.admin_comment || '');
         } catch (err) {
+            console.error('❌ Error fetching order:', err);
             setError('خطا در بارگیری سفارش');
         } finally {
             setLoading(false);
@@ -42,10 +45,37 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const handleCompleteOrder = async () => {
+        if (!window.confirm('آیا مطمئن هستید که می‌خواهید این سفارش را تکمیل کنید؟')) {
+            return;
+        }
+
+        setCompleting(true);
+        setError('');
+
         try {
-            if (onOrderUpdated) onOrderUpdated();
+            console.log('🔄 Completing order:', orderId);
+
+            const response = await API.post(`/orders/${orderId}/complete/`);
+
+            console.log('✅ Order completed successfully:', response.data);
+
+            // Show success message
+            alert('سفارش با موفقیت تکمیل شد!');
+
+            // Update parent component
+            if (onOrderUpdated) {
+                onOrderUpdated();
+            }
+
+            // Refresh order data
+            fetchOrder();
+
         } catch (err) {
-            setError('Error competeing the order');
+            console.error('❌ Error completing order:', err);
+            const errorMessage = err.response?.data?.error || 'خطا در تکمیل سفارش';
+            setError(errorMessage);
+        } finally {
+            setCompleting(false);
         }
     };
 
@@ -83,7 +113,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         try {
             // Validate items
             const hasValidItems = items.some(item =>
-                item.quoted_unit_price && item.final_quantity
+                item.quoted_unit_price && item.quoted_unit_price > 0 &&
+                item.final_quantity && item.final_quantity > 0
             );
 
             if (!hasValidItems) {
@@ -92,21 +123,37 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            await API.post(`/orders/${orderId}/submit_pricing/`, {
+            // Prepare data for submission
+            const submissionData = {
                 admin_comment: adminComment,
-                items: items.map(i => ({
-                    id: i.id,
-                    quoted_unit_price: Number(i.quoted_unit_price) || 0,
-                    final_quantity: Number(i.final_quantity) || 0,
-                    admin_notes: i.admin_notes || '',
+                items: items.map(item => ({
+                    id: item.id,
+                    quoted_unit_price: parseFloat(item.quoted_unit_price) || 0,
+                    final_quantity: parseInt(item.final_quantity) || 0,
+                    admin_notes: item.admin_notes || '',
                 }))
-            });
+            };
+
+            console.log('📤 Submitting pricing data:', submissionData);
+
+            const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
+
+            console.log('✅ Pricing submitted successfully:', response.data);
+
+            // Show success message
+            alert('قیمت‌گذاری با موفقیت ثبت شد!');
 
             if (onOrderUpdated) {
                 onOrderUpdated();
             }
+
+            // Refresh order data
+            fetchOrder();
+
         } catch (err) {
-            setError(err.response?.data?.error || 'خطا در به‌روزرسانی قیمت‌گذاری');
+            console.error('❌ Error submitting pricing:', err);
+            const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی قیمت‌گذاری';
+            setError(errorMessage);
         } finally {
             setSubmitting(false);
         }
@@ -126,6 +173,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
+            case 'completed':
+                return 'green-600';
             case 'rejected':
                 return 'red-400';
             case 'cancelled':
@@ -140,7 +189,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید مشتری',
             'confirmed': 'تأیید شده',
-            'completed':'تکمیل شده',
+            'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
         };
@@ -163,7 +212,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         if (!unitPrice || !quantity || unitPrice === 0 || quantity === 0) {
             return 'در انتظار';
         }
-        const total = unitPrice * quantity;
+        const total = parseFloat(unitPrice) * parseInt(quantity);
         const formattedTotal = new Intl.NumberFormat('fa-IR').format(total);
         return `${formattedTotal} ریال`;
     };
@@ -253,6 +302,18 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             {order.customer_comment || 'هیچ توضیحی ارائه نشده'}
                         </span>
                     </div>
+
+                    {/* Show completion info for completed orders */}
+                    {order.status === 'completed' && order.completion_date && (
+                        <>
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">تاریخ تکمیل</span>
+                                <span className="admin-info-value">
+                                    {new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                                </span>
+                            </div>
+                        </>
+                    )}
                 </div>
             </NeoBrutalistCard>
 
@@ -272,6 +333,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             onChange={e => setAdminComment(e.target.value)}
                             placeholder="نظرات و توضیحات مدیر برای این سفارش..."
                             rows={4}
+                            disabled={order.status !== 'pending_pricing'}
                         />
                     </div>
 
@@ -308,6 +370,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             placeholder="قیمت"
                                             min="0"
                                             step="1000"
+                                            disabled={order.status !== 'pending_pricing'}
                                         />
                                     </div>
                                     <div className="admin-table-cell admin-input-cell">
@@ -317,6 +380,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             onChange={e => updateItem(idx, 'final_quantity', e.target.value)}
                                             placeholder="تعداد"
                                             min="0"
+                                            disabled={order.status !== 'pending_pricing'}
                                         />
                                     </div>
                                     <div className="admin-table-cell admin-input-cell">
@@ -325,6 +389,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             value={item.admin_notes || ''}
                                             onChange={e => updateItem(idx, 'admin_notes', e.target.value)}
                                             placeholder="نظر مدیر"
+                                            disabled={order.status !== 'pending_pricing'}
                                         />
                                     </div>
                                     <div className="admin-table-cell admin-total-cell">
@@ -337,21 +402,24 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
                     {/* Submit Section */}
                     <div className="admin-submit-section">
-                        <NeoBrutalistButton
-                            text={submitting ? "در حال ارسال..." : "ثبت قیمت‌گذاری"}
-                            color="yellow-400"
-                            textColor="black"
-                            type="submit"
-                            disabled={submitting}
-                            className="admin-submit-btn"
-                        />
+                        {order.status === 'pending_pricing' && (
+                            <NeoBrutalistButton
+                                text={submitting ? "در حال ارسال..." : "ثبت قیمت‌گذاری"}
+                                color="yellow-400"
+                                textColor="black"
+                                type="submit"
+                                disabled={submitting}
+                                className="admin-submit-btn"
+                            />
+                        )}
 
                         {order.status === 'confirmed' && (
                             <NeoBrutalistButton
-                                text="تکمیل سفارش"
+                                text={completing ? "در حال تکمیل..." : "تکمیل سفارش"}
                                 color="green-400"
                                 textColor="black"
                                 onClick={handleCompleteOrder}
+                                disabled={completing}
                                 className="complete-order-btn"
                             />
                         )}
@@ -360,11 +428,65 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             </NeoBrutalistCard>
 
             {/* Success Message */}
-            {!error && submitting && (
+            {!error && (submitting || completing) && (
                 <div className="admin-status-message admin-success">
                     <span className="admin-status-icon">✅</span>
-                    <span>قیمت‌گذاری با موفقیت ثبت شد!</span>
+                    <span>
+                        {submitting && "قیمت‌گذاری در حال ثبت..."}
+                        {completing && "سفارش در حال تکمیل..."}
+                    </span>
                 </div>
+            )}
+
+            {/* Order Status Info */}
+            {order.status === 'waiting_customer_approval' && (
+                <NeoBrutalistCard className="admin-order-info-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">⏰ منتظر پاسخ مشتری</h2>
+                    </div>
+                    <div className="admin-order-info-grid">
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">قیمت‌گذاری انجام شده</span>
+                            <span className="admin-info-value">
+                                {order.pricing_date && new Date(order.pricing_date).toLocaleDateString('fa-IR')}
+                            </span>
+                        </div>
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">مبلغ کل ارائه شده</span>
+                            <span className="admin-info-value">
+                                {formatPrice(order.quoted_total)} ریال
+                            </span>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {order.status === 'completed' && (
+                <NeoBrutalistCard className="admin-order-info-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">✅ سفارش تکمیل شده</h2>
+                    </div>
+                    <div className="admin-order-info-grid">
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">تاریخ تکمیل</span>
+                            <span className="admin-info-value">
+                                {order.completion_date && new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                            </span>
+                        </div>
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">مبلغ نهایی</span>
+                            <span className="admin-info-value">
+                                {formatPrice(order.quoted_total)} ریال
+                            </span>
+                        </div>
+                        {order.invoice_number && (
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">شماره فاکتور</span>
+                                <span className="admin-info-value">{order.invoice_number}</span>
+                            </div>
+                        )}
+                    </div>
+                </NeoBrutalistCard>
             )}
         </div>
     );

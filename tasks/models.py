@@ -1,10 +1,11 @@
-# tasks/models.py - Complete version with PDF and Email features
+# tasks/models.py
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from django.utils import timezone
 from django.core.files.base import ContentFile
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+from .services.simple_persian_pdf import SimpleInvoicePDFGenerator
 import uuid
 from django.conf import settings
 import os
@@ -72,7 +73,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
 class Product(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
-    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, help_text="Base price for reference")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text="Base price for reference")
     stock = models.IntegerField(default=0)
     image_url = models.URLField(blank=True, null=True, help_text="URL to product image")
     is_active = models.BooleanField(default=True)
@@ -114,8 +115,8 @@ class Order(models.Model):
         help_text="Admin who completed the order"
     )
 
-    # Pricing fields (filled by admin)
-    quoted_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Total quoted by admin")
+    # Pricing fields
+    quoted_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), help_text="Total quoted by admin")
     pricing_date = models.DateTimeField(blank=True, null=True, help_text="When admin provided pricing")
     priced_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name='priced_orders')
@@ -129,8 +130,11 @@ class Order(models.Model):
         return f"Order {self.id} - {self.customer.name} - {self.status}"
 
     def calculate_total_from_items(self):
-        """Calculate total from order items (after admin pricing)"""
-        return sum(item.total_price for item in self.items.all())
+        """Calculate total from order items (after admin pricing) """
+        total = Decimal('0.00')
+        for item in self.items.all():
+            total += item.total_price
+        return total
 
     def mark_as_priced_by_admin(self, admin_comment=None):
         """Admin marks order as priced and ready for customer approval"""
@@ -211,8 +215,8 @@ class OrderItem(models.Model):
     requested_quantity = models.IntegerField(default=1, help_text="Quantity requested by customer")
     customer_notes = models.TextField(blank=True, null=True, help_text="Special requirements from customer")
 
-    # Admin pricing fields
-    quoted_unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00,
+    # Admin pricing fields: Use Decimal consistently
+    quoted_unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'),
                                             help_text="Price quoted by admin")
     final_quantity = models.IntegerField(default=0, help_text="Final quantity confirmed by admin")
     admin_notes = models.TextField(blank=True, null=True, help_text="Admin notes about pricing/availability")
@@ -222,13 +226,15 @@ class OrderItem(models.Model):
 
     @property
     def total_price(self):
-        """Calculate total price for this item"""
-        return self.final_quantity * self.quoted_unit_price
+        """Calculate total price for this item: Use Decimal"""
+        if self.final_quantity and self.quoted_unit_price:
+            return Decimal(str(self.final_quantity)) * self.quoted_unit_price
+        return Decimal('0.00')
 
     @property
     def is_priced(self):
         """Check if admin has provided pricing"""
-        return self.quoted_unit_price > 0
+        return self.quoted_unit_price > Decimal('0.00')
 
     class Meta:
         db_table = 'order_items'
@@ -244,12 +250,12 @@ class Invoice(models.Model):
     invoice_number = models.CharField(max_length=20, unique=True)
     invoice_type = models.CharField(max_length=15, choices=INVOICE_TYPE_CHOICES, default='pre_invoice')
 
-    # Financial fields
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Tax rate as percentage")
-    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    payable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    # Financial fields : Use Decimal consistently
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), help_text="Tax rate as percentage")
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    payable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     # Status fields
     issued_at = models.DateTimeField(auto_now_add=True)
@@ -264,11 +270,11 @@ class Invoice(models.Model):
         return f"Invoice {self.invoice_number} - Order {self.order.id} - {self.invoice_type}"
 
     def calculate_payable_amount(self):
-        """Calculate final payable amount"""
+        """Calculate final payable amount: Use Decimal"""
         subtotal = self.total_amount - self.discount
-        tax_amount = subtotal * (self.tax_rate / 100)
-        self.tax_amount = tax_amount
-        self.payable_amount = subtotal + tax_amount
+        tax_amount = subtotal * (self.tax_rate / Decimal('100'))
+        self.tax_amount = tax_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        self.payable_amount = (subtotal + tax_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         return self.payable_amount
 
     def finalize_invoice(self):
@@ -282,9 +288,7 @@ class Invoice(models.Model):
     # NEW: PDF generation methods
     def generate_pdf(self):
         """Generate PDF for this invoice"""
-        from .services.persian_pdf_generator import PersianInvoicePDFGenerator
-
-        generator = PersianInvoicePDFGenerator(self)
+        generator = SimpleInvoicePDFGenerator(self)
         pdf_buffer = generator.generate_pdf()
 
         # Save PDF to file field
@@ -294,9 +298,8 @@ class Invoice(models.Model):
 
     def download_pdf_response(self):
         """Get HTTP response for PDF download"""
-        from .services.persian_pdf_generator import PersianInvoicePDFGenerator
 
-        generator = PersianInvoicePDFGenerator(self)
+        generator = SimpleInvoicePDFGenerator(self)
         return generator.get_http_response()
 
     def save(self, *args, **kwargs):

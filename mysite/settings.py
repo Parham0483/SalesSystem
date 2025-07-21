@@ -1,4 +1,8 @@
+# mysite/settings.py - Updated email settings
+
 import os
+import ssl
+import certifi
 from pathlib import Path
 from datetime import timedelta
 
@@ -190,14 +194,26 @@ LOGGING = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-#Email settings
+#EMAIL SETTINGS
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
 EMAIL_HOST_USER = 'parham.g1383@gmail.com'
-EMAIL_HOST_PASSWORD = 'hxhabmcfltseioto'  # This is your Gmail App Password
+EMAIL_HOST_PASSWORD = 'hxhabmcfltseioto'
 DEFAULT_FROM_EMAIL = 'parham.g1383@gmail.com'
-ADMIN_EMAIL_LIST = ['admin@company.com']
+
+# Email Configuration
+ADMIN_EMAIL_LIST = ['parham.g1383@gmail.com']
 FRONTEND_URL = 'http://localhost:3000'
-SUPPORT_EMAIL = 'support@company.com'
+SUPPORT_EMAIL = 'parham.g1383@gmail.com'
+
+# For development - disable SSL certificate verification
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+if DEBUG:
+    import ssl
+    ssl._create_default_https_context = ssl._create_unverified_context
+    os.environ['SSL_CERT_FILE'] = certifi.where()
