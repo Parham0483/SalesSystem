@@ -109,7 +109,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'error': f'Pricing submission failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # UPDATED approve_order method with email notification
+
     @action(detail=True, methods=['POST'], url_path='approve')
     def approve_order(self, request, *args, **kwargs):
         """Customer approves the order pricing"""

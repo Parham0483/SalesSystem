@@ -91,7 +91,7 @@ class PersianInvoicePDFGenerator:
             fontName=self.persian_font,
             fontSize=20,
             spaceAfter=20,
-            alignment=2,  # Right alignment for RTL
+            alignment=2,
             rightIndent=0,
             leftIndent=0
         )
