@@ -1,4 +1,4 @@
-// frontend/src/component/DealerAssignmentComponent.js - ENHANCED VERSION
+// frontend/src/component/DealerAssignmentComponent.js - ENHANCED with commission field
 import React, { useState, useEffect } from 'react';
 import API from './api';
 import NeoBrutalistDropdown from './NeoBrutalist/NeoBrutalistDropdown';
@@ -10,12 +10,13 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
     const [dealers, setDealers] = useState([]);
     const [selectedDealer, setSelectedDealer] = useState('');
     const [selectedDealerInfo, setSelectedDealerInfo] = useState(null);
+    const [customCommissionRate, setCustomCommissionRate] = useState('');
+    const [useCustomRate, setUseCustomRate] = useState(false);
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        // Only fetch dealers if user wants to assign one
         if (wantDealer === 'yes') {
             fetchDealers();
         }
@@ -37,7 +38,19 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
         setSelectedDealer(dealerId);
         const dealer = dealers.find(d => d.id.toString() === dealerId);
         setSelectedDealerInfo(dealer || null);
+
+        // Reset custom commission when dealer changes
+        setCustomCommissionRate('');
+        setUseCustomRate(false);
+
         console.log('🎯 Selected dealer:', dealer);
+    };
+
+    const getEffectiveCommissionRate = () => {
+        if (useCustomRate && customCommissionRate) {
+            return parseFloat(customCommissionRate);
+        }
+        return selectedDealerInfo?.commission_rate || 0;
     };
 
     const handleAssignDealer = async () => {
@@ -46,9 +59,14 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
             return;
         }
 
-        // Validate commission rate
-        if (!selectedDealerInfo || selectedDealerInfo.commission_rate <= 0) {
-            setError('نماینده انتخابی نرخ کمیسیون معتبری ندارد. لطفاً ابتدا نرخ کمیسیون را تنظیم کنید.');
+        const effectiveRate = getEffectiveCommissionRate();
+        if (effectiveRate <= 0) {
+            setError('نرخ کمیسیون باید بیشتر از صفر باشد');
+            return;
+        }
+
+        if (effectiveRate > 50) {
+            setError('نرخ کمیسیون نمی‌تواند بیشتر از ۵۰٪ باشد');
             return;
         }
 
@@ -56,27 +74,35 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
         setError('');
 
         try {
-            console.log('📤 Assigning dealer to order:', {
-                orderId,
-                dealer_id: parseInt(selectedDealer),
-                dealer_notes: notes,
-                commission_rate: selectedDealerInfo.commission_rate
-            });
-
-            const response = await API.post(`/orders/${orderId}/assign-dealer/`, {
+            const assignmentData = {
                 dealer_id: parseInt(selectedDealer),
                 dealer_notes: notes
+            };
+
+            // Add custom commission rate if specified
+            if (useCustomRate && customCommissionRate) {
+                assignmentData.custom_commission_rate = parseFloat(customCommissionRate);
+            }
+
+            console.log('📤 Assigning dealer to order:', {
+                orderId,
+                ...assignmentData,
+                effective_commission_rate: effectiveRate
             });
+
+            const response = await API.post(`/orders/${orderId}/assign-dealer/`, assignmentData);
 
             console.log('✅ Dealer assigned successfully:', response.data);
 
-            const successMessage = `نماینده ${selectedDealerInfo.name} با موفقیت تخصیص داده شد!\nنرخ کمیسیون: ${selectedDealerInfo.commission_rate}%`;
+            const successMessage = `نماینده ${selectedDealerInfo.name} با موفقیت تخصیص داده شد!\nنرخ کمیسیون: ${effectiveRate}%`;
             alert(successMessage);
 
             // Reset form
             setWantDealer('no');
             setSelectedDealer('');
             setSelectedDealerInfo(null);
+            setCustomCommissionRate('');
+            setUseCustomRate(false);
             setNotes('');
 
             // Notify parent component
@@ -97,7 +123,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
 
     const dealerOptions = dealers.map(dealer => ({
         value: dealer.id.toString(),
-        label: `${dealer.name} - ${dealer.email} (${dealer.assigned_orders_count || 0} سفارش) - کمیسیون: ${dealer.commission_rate}%`
+        label: `${dealer.name} - ${dealer.email} (${dealer.assigned_orders_count || 0} سفارش) - کمیسیون پیش‌فرض: ${dealer.commission_rate}%`
     }));
 
     return (
@@ -151,6 +177,8 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                                 setWantDealer(e.target.value);
                                 setSelectedDealer('');
                                 setSelectedDealerInfo(null);
+                                setCustomCommissionRate('');
+                                setUseCustomRate(false);
                                 setNotes('');
                                 setError('');
                             }}
@@ -246,7 +274,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                                         <div><strong>نام:</strong> {selectedDealerInfo.name}</div>
                                         <div><strong>ایمیل:</strong> {selectedDealerInfo.email}</div>
                                         <div><strong>کد نماینده:</strong> {selectedDealerInfo.dealer_code || 'ندارد'}</div>
-                                        <div><strong>نرخ کمیسیون:</strong>
+                                        <div><strong>نرخ کمیسیون پیش‌فرض:</strong>
                                             <span style={{
                                                 color: selectedDealerInfo.commission_rate > 0 ? '#2e7d32' : '#d32f2f',
                                                 fontWeight: 'bold',
@@ -258,19 +286,85 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                                         <div><strong>سفارشات فعال:</strong> {selectedDealerInfo.active_orders_count || 0}</div>
                                         <div><strong>مجموع سفارشات:</strong> {selectedDealerInfo.assigned_orders_count || 0}</div>
                                     </div>
+                                </div>
+                            )}
 
-                                    {selectedDealerInfo.commission_rate <= 0 && (
-                                        <div style={{
-                                            backgroundColor: '#ffebee',
-                                            border: '1px solid #f44336',
-                                            padding: '0.5rem',
-                                            marginTop: '0.5rem',
-                                            color: '#c62828',
-                                            fontSize: '0.85rem'
+                            {/* Commission Rate Setting */}
+                            {selectedDealerInfo && (
+                                <div className="commission-settings" style={{
+                                    backgroundColor: '#fff3cd',
+                                    border: '2px solid #ffc107',
+                                    padding: '1rem',
+                                    marginBottom: '1rem'
+                                }}>
+                                    <h6 style={{ margin: '0 0 1rem 0', color: '#856404' }}>
+                                        💰 تنظیمات کمیسیون:
+                                    </h6>
+
+                                    <div className="commission-options" style={{ marginBottom: '1rem' }}>
+                                        <label style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            cursor: 'pointer',
+                                            marginBottom: '0.5rem'
                                         }}>
-                                            ⚠️ هشدار: این نماینده نرخ کمیسیون معتبری ندارد
+                                            <input
+                                                type="radio"
+                                                name="commissionType"
+                                                checked={!useCustomRate}
+                                                onChange={() => {
+                                                    setUseCustomRate(false);
+                                                    setCustomCommissionRate('');
+                                                }}
+                                                style={{ marginLeft: '0.5rem' }}
+                                            />
+                                            استفاده از نرخ پیش‌فرض ({selectedDealerInfo.commission_rate}%)
+                                        </label>
+
+                                        <label style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            cursor: 'pointer'
+                                        }}>
+                                            <input
+                                                type="radio"
+                                                name="commissionType"
+                                                checked={useCustomRate}
+                                                onChange={() => setUseCustomRate(true)}
+                                                style={{ marginLeft: '0.5rem' }}
+                                            />
+                                            تعیین نرخ سفارشی
+                                        </label>
+                                    </div>
+
+                                    {useCustomRate && (
+                                        <div className="custom-commission" style={{ marginTop: '1rem' }}>
+                                            <NeoBrutalistInput
+                                                type="number"
+                                                value={customCommissionRate}
+                                                onChange={(e) => setCustomCommissionRate(e.target.value)}
+                                                placeholder="نرخ کمیسیون (درصد)"
+                                                min="0"
+                                                max="50"
+                                                step="0.1"
+                                            />
+                                            <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+                                                نرخ کمیسیون بین ۰ تا ۵۰ درصد
+                                            </div>
                                         </div>
                                     )}
+
+                                    <div style={{
+                                        backgroundColor: '#d4edda',
+                                        border: '1px solid #c3e6cb',
+                                        padding: '0.75rem',
+                                        marginTop: '1rem',
+                                        fontSize: '0.9rem'
+                                    }}>
+                                        <strong>نرخ نهایی کمیسیون:</strong> {getEffectiveCommissionRate()}%
+                                    </div>
                                 </div>
                             )}
 
@@ -293,11 +387,11 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                             </div>
 
                             <NeoBrutalistButton
-                                text={loading ? "در حال تخصیص..." : "تخصیص نماینده"}
+                                text={loading ? "در حال تخصیص..." : `تخصیص نماینده (${getEffectiveCommissionRate()}% کمیسیون)`}
                                 color="blue-400"
                                 textColor="white"
                                 onClick={handleAssignDealer}
-                                disabled={loading || !selectedDealer || (selectedDealerInfo && selectedDealerInfo.commission_rate <= 0)}
+                                disabled={loading || !selectedDealer || getEffectiveCommissionRate() <= 0}
                                 className="assign-dealer-btn"
                             />
                         </>

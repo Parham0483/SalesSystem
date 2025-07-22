@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import OrderDetailPage from '../component/OrderDetailPage';
+import DealerOrderDetailPage from '../component/DealerOrderDetailPage'; // Changed from OrderDetailPage
 import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
 
 const DealerDashboard = () => {
@@ -169,7 +169,7 @@ const DealerDashboard = () => {
                 </div>
             </div>
 
-            {/* Stats Cards */}
+            {/* Stats Cards - Removed commission rate as requested */}
             {dealerStats?.stats && (
                 <div className="stats-grid" style={{
                     display: 'grid',
@@ -192,11 +192,6 @@ const DealerDashboard = () => {
                         <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                             {dealerStats.stats.total_commission_earned.toLocaleString('fa-IR')} ریال
                         </div>
-                    </NeoBrutalistCard>
-
-                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#fff3e0' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>نرخ کمیسیون</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.commission_rate}%</div>
                     </NeoBrutalistCard>
                 </div>
             )}
@@ -250,16 +245,43 @@ const DealerDashboard = () => {
                         <div className="order-card-info" style={{ marginBottom: '1rem' }}>
                             <p><strong>مشتری:</strong> {order.customer_name}</p>
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
+
+                            {/* Show who priced the order */}
+                            {order.priced_by_name && (
+                                <p><strong>قیمت‌گذاری توسط:</strong> {order.priced_by_name}</p>
+                            )}
+
                             {order.quoted_total > 0 && (
                                 <p><strong>مبلغ:</strong> {order.quoted_total.toLocaleString('fa-IR')} ریال</p>
                             )}
                             {order.dealer_assigned_at && (
                                 <p><strong>تاریخ تخصیص:</strong> {new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}</p>
                             )}
-                            {order.dealer_commission_amount > 0 && (
-                                <p style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                                    <strong>کمیسیون:</strong> {order.dealer_commission_amount.toLocaleString('fa-IR')} ریال
-                                </p>
+
+                            {/* Enhanced commission info - shows per-order commission rate */}
+                            {order.effective_commission_rate > 0 && (
+                                <div style={{
+                                    backgroundColor: '#f0f9ff',
+                                    border: '1px solid #0284c7',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.9rem'
+                                }}>
+                                    <div style={{ color: '#0369a1', fontWeight: 'bold' }}>
+                                        💰 اطلاعات کمیسیون:
+                                    </div>
+                                    <div>
+                                        <strong>نرخ:</strong> {order.effective_commission_rate}%
+                                        {order.has_custom_commission && (
+                                            <span style={{ color: '#dc2626', fontSize: '0.8rem' }}> (سفارشی)</span>
+                                        )}
+                                    </div>
+                                    {order.dealer_commission_amount > 0 && (
+                                        <div style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                                            <strong>مبلغ کمیسیون:</strong> {order.dealer_commission_amount.toLocaleString('fa-IR')} ریال
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
 
@@ -305,7 +327,7 @@ const DealerDashboard = () => {
                 </div>
             )}
 
-            {/* Order Detail Modal */}
+            {/* Order Detail Modal - Now using DealerOrderDetailPage */}
             <NeoBrutalistModal
                 isOpen={!!selectedOrder}
                 onClose={() => setSelectedOrder(null)}
@@ -321,14 +343,14 @@ const DealerDashboard = () => {
                             border: '2px solid #1976d2'
                         }}>
                             <h4 style={{ margin: 0, color: '#1976d2' }}>
-                                📋 نمایش به عنوان نماینده فروش
+                                🏢 نمایش نماینده فروش
                             </h4>
                             <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-                                شما نماینده تخصیص داده شده به این سفارش هستید
+                                جزئیات کامل سفارش با اطلاعات کمیسیون و قیمت‌گذار
                             </p>
                         </div>
 
-                        <OrderDetailPage
+                        <DealerOrderDetailPage
                             orderId={selectedOrder.id}
                             onOrderUpdated={() => {
                                 fetchAssignedOrders();

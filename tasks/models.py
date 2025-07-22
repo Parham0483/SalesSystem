@@ -136,6 +136,12 @@ class Order(models.Model):
     dealer_assigned_at = models.DateTimeField(null=True, blank=True, help_text="When dealer was assigned")
     dealer_notes = models.TextField(blank=True, null=True, help_text="Notes from assigned dealer")
 
+    custom_commission_rate = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        null=True, blank=True,
+        help_text="Custom commission rate for this order (overrides dealer's default rate)"
+    )
+
     # Completion tracking fields
     completion_date = models.DateTimeField(blank=True, null=True, help_text="When order was completed")
     completed_by = models.ForeignKey(
@@ -237,22 +243,30 @@ class Order(models.Model):
         return f"INV-{timezone.now().year}-{self.id:06d}"
 
     # DEALER MANAGEMENT METHODS
-    def assign_dealer(self, dealer, assigned_by):
-        """Assign a dealer to this order"""
+    def assign_dealer(self, dealer, assigned_by, custom_commission_rate=None):
+        """Assign a dealer to this order with optional custom commission rate"""
         if not dealer.is_dealer:
             raise ValueError("User is not a dealer")
 
         old_dealer = self.assigned_dealer
         self.assigned_dealer = dealer
         self.dealer_assigned_at = timezone.now()
+
+        # Set custom commission rate if provided
+        if custom_commission_rate is not None:
+            self.custom_commission_rate = custom_commission_rate
+
         self.save()
+
+
 
         # Log the assignment
         OrderLog.objects.create(
             order=self,
             action='dealer_assigned',
             description=f"Dealer {dealer.name} assigned by {assigned_by.name}" +
-                        (f" (replaced {old_dealer.name})" if old_dealer else ""),
+                        (f" (replaced {old_dealer.name})" if old_dealer else "") +
+                        (f" with custom commission rate {custom_commission_rate}%" if custom_commission_rate else ""),
             performed_by=assigned_by
         )
 
@@ -304,7 +318,9 @@ class Order(models.Model):
     def dealer_commission_amount(self):
         """Calculate dealer commission amount if applicable"""
         if self.assigned_dealer and self.status == 'completed' and self.quoted_total:
-            commission_rate = self.assigned_dealer.dealer_commission_rate
+            # Use custom commission rate if set, otherwise use dealer's default rate
+            commission_rate = self.custom_commission_rate or self.assigned_dealer.dealer_commission_rate
+
             if commission_rate > 0:
                 return (self.quoted_total * commission_rate / Decimal('100')).quantize(
                     Decimal('0.01'), rounding=ROUND_HALF_UP
@@ -315,6 +331,14 @@ class Order(models.Model):
         db_table = 'orders'
         ordering = ['-created_at']
 
+    @property
+    def effective_commission_rate(self):
+        """Get the effective commission rate (custom or dealer default)"""
+        if self.custom_commission_rate is not None:
+            return self.custom_commission_rate
+        elif self.assigned_dealer:
+            return self.assigned_dealer.dealer_commission_rate
+        return Decimal('0.00')
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)

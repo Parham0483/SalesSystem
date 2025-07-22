@@ -3,7 +3,7 @@ import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
-import '../styles/OrderDetail.css';
+import '../styles/component/OrderDetail.css';
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);

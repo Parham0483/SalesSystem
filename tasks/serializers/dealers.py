@@ -1,4 +1,4 @@
-
+# tasks/serializers/dealers.py - Updated with custom commission rate
 from rest_framework import serializers
 from django.db.models import Sum
 from decimal import Decimal
@@ -41,13 +41,22 @@ class DealerSerializer(serializers.ModelSerializer):
 
 
 class DealerAssignmentSerializer(serializers.Serializer):
-    """Serializer for assigning dealer to order - FIXED VERSION"""
+    """Serializer for assigning dealer to order - ENHANCED with custom commission"""
     dealer_id = serializers.IntegerField(required=True)
     dealer_notes = serializers.CharField(
         required=False,
         allow_blank=True,
         max_length=1000,
         default=''
+    )
+    custom_commission_rate = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=Decimal('0.00'),
+        max_value=Decimal('50.00'),
+        help_text="Custom commission rate for this specific order assignment"
     )
 
     def validate_dealer_id(self, value):
@@ -69,9 +78,19 @@ class DealerAssignmentSerializer(serializers.Serializer):
                 "Valid active dealer not found with this ID"
             )
 
+    def validate_custom_commission_rate(self, value):
+        """Validate custom commission rate"""
+        if value is not None:
+            if value < 0:
+                raise serializers.ValidationError("Commission rate cannot be negative")
+            if value > 50:
+                raise serializers.ValidationError("Commission rate cannot exceed 50%")
+        return value
+
     def validate(self, attrs):
         """Additional validation"""
         dealer_id = attrs.get('dealer_id')
+        custom_rate = attrs.get('custom_commission_rate')
 
         # Check if order context is provided
         order = self.context.get('order')
@@ -79,6 +98,17 @@ class DealerAssignmentSerializer(serializers.Serializer):
             if order.assigned_dealer.id == dealer_id:
                 raise serializers.ValidationError(
                     "This dealer is already assigned to this order"
+                )
+
+        # Get dealer from context (set in validate_dealer_id)
+        dealer = self.context.get('dealer')
+
+        # If no custom rate provided, check dealer's default rate
+        if custom_rate is None and dealer:
+            if dealer.dealer_commission_rate <= 0:
+                raise serializers.ValidationError(
+                    f"Dealer {dealer.name} has no default commission rate set. "
+                    "Please provide a custom commission rate or set dealer's default rate."
                 )
 
         return attrs

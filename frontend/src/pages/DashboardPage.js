@@ -1,5 +1,3 @@
-// Enhanced DashboardPage.js with completed orders section
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
@@ -8,7 +6,7 @@ import CreateOrderPage from '../component/CreateOrderPage';
 import OrderDetailPage from '../component/OrderDetailPage';
 import NeoBrutalistCard from "../component/NeoBrutalist/NeoBrutalistCard";
 import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
-import '../styles/dashboard.css';
+import '../styles/Main/dashboard.css';
 
 const DashboardPage = () => {
     const [orders, setOrders] = useState([]);
@@ -43,8 +41,10 @@ const DashboardPage = () => {
 
         try {
             const response = await API.get('/orders/');
+            console.log('📦 Orders fetched:', response.data);
             setOrders(response.data);
         } catch (error) {
+            console.error('❌ Error fetching orders:', error);
             if (error.response?.status === 401) {
                 setError('جلسه شما منقضی شده است. لطفاً دوباره وارد شوید.');
                 setTimeout(() => handleLogout(), 2000);
@@ -101,7 +101,7 @@ const DashboardPage = () => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
-            case 'completed':  // ✅ Add completed status
+            case 'completed':
                 return 'green-600';
             case 'rejected':
                 return 'red-400';
@@ -258,17 +258,95 @@ const DashboardPage = () => {
                                 className="status-badge"
                             />
                         </div>
+
                         <div className="order-card-info">
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
-                            <p><strong>جمع:</strong> {order.quoted_total ? `${order.quoted_total.toLocaleString('fa-IR')} ریال` : 'در انتظار قیمت‌گذاری'}</p>
+
+                            {/* 🎯 NEW: Show who priced the order */}
+                            {order.priced_by_name && (
+                                <div style={{
+                                    backgroundColor: '#e0f2fe',
+                                    border: '1px solid #0284c7',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#0369a1', fontWeight: 'bold' }}>
+                                        💼 قیمت‌گذاری توسط: {order.priced_by_name}
+                                    </div>
+                                    {order.pricing_date && (
+                                        <div style={{ fontSize: '0.8rem', color: '#0284c7' }}>
+                                            تاریخ: {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 🎯 NEW: Show dealer info if assigned */}
+                            {order.assigned_dealer_name && (
+                                <div style={{
+                                    backgroundColor: '#f3e8ff',
+                                    border: '1px solid #8b5cf6',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#7c3aed', fontWeight: 'bold' }}>
+                                        👤 نماینده فروش: {order.assigned_dealer_name}
+                                    </div>
+                                    {order.dealer_assigned_at && (
+                                        <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
+                                            تاریخ تخصیص: {new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}
+                                        </div>
+                                    )}
+                                    {order.assigned_dealer_code && (
+                                        <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
+                                            کد نماینده: {order.assigned_dealer_code}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <p style={{ marginTop: '0.5rem' }}>
+                                <strong>جمع:</strong> {order.quoted_total ? `${order.quoted_total.toLocaleString('fa-IR')} ریال` : 'در انتظار قیمت‌گذاری'}
+                            </p>
+
                             {order.customer_comment && (
                                 <p><strong>توضیحات:</strong> {order.customer_comment.substring(0, 50)}...</p>
                             )}
+
                             {/* Show completion date for completed orders */}
                             {order.status === 'completed' && order.completion_date && (
-                                <p><strong>تاریخ تکمیل:</strong> {new Date(order.completion_date).toLocaleDateString('fa-IR')}</p>
+                                <p style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                                    <strong>تاریخ تکمیل:</strong> {new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                                </p>
+                            )}
+
+                            {/* 🎯 NEW: Show admin comments for customer transparency */}
+                            {order.admin_comment && order.status !== 'pending_pricing' && (
+                                <div style={{
+                                    backgroundColor: '#fff7ed',
+                                    border: '1px solid #f97316',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#c2410c', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                                        📝 نظر مدیر:
+                                    </div>
+                                    <div style={{ color: '#9a3412' }}>
+                                        {order.admin_comment.length > 60
+                                            ? `${order.admin_comment.substring(0, 60)}...`
+                                            : order.admin_comment
+                                        }
+                                    </div>
+                                </div>
                             )}
                         </div>
+
                         <div className="order-card-footer">
                             <NeoBrutalistButton
                                 text="مشاهده جزئیات"

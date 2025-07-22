@@ -1,4 +1,4 @@
-# tasks/views/orders.py - FIXED VERSION with proper dealer access
+# tasks/views/orders.py - COMPLETE FIXED VERSION
 from django.db.models import Sum, Q
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
@@ -239,7 +239,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='assign-dealer')
     def assign_dealer(self, request, *args, **kwargs):
-        """ENHANCED: Admin assigns a dealer with commission rate validation"""
+        """ENHANCED: Admin assigns a dealer with custom commission rate support"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -251,35 +251,40 @@ class OrderViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             dealer_id = serializer.validated_data['dealer_id']
             dealer_notes = serializer.validated_data.get('dealer_notes', '')
+            custom_commission_rate = serializer.validated_data.get('custom_commission_rate')
 
             try:
                 dealer = Customer.objects.get(id=dealer_id, is_dealer=True, is_active=True)
 
-                # Validate commission rate
-                if dealer.dealer_commission_rate <= 0:
-                    return Response({
-                        'error': f'Dealer {dealer.name} has no commission rate set. Please set a commission rate first.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                # Determine effective commission rate
+                if custom_commission_rate is not None:
+                    effective_rate = custom_commission_rate
+                else:
+                    effective_rate = dealer.dealer_commission_rate
+                    if effective_rate <= 0:
+                        return Response({
+                            'error': f'Dealer {dealer.name} has no default commission rate set. Please provide a custom commission rate.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
 
-                # Assign dealer
-                success = order.assign_dealer(dealer, request.user)
+                # Assign dealer with custom commission rate
+                success = order.assign_dealer(dealer, request.user, custom_commission_rate)
 
                 if success:
                     if dealer_notes:
                         order.dealer_notes = dealer_notes
                         order.save()
 
-                    print(
-                        f"✅ Dealer {dealer.name} assigned to Order #{order.id} with {dealer.dealer_commission_rate}% commission")
+                    print(f"✅ Dealer {dealer.name} assigned to Order #{order.id} with {effective_rate}% commission")
 
                     return Response({
-                        'message': f'Dealer {dealer.name} assigned successfully with {dealer.dealer_commission_rate}% commission',
+                        'message': f'Dealer {dealer.name} assigned successfully with {effective_rate}% commission',
                         'order': OrderDetailSerializer(order).data,
                         'dealer_info': {
                             'name': dealer.name,
                             'email': dealer.email,
-                            'commission_rate': float(dealer.dealer_commission_rate),
-                            'dealer_code': dealer.dealer_code
+                            'commission_rate': float(effective_rate),
+                            'dealer_code': dealer.dealer_code,
+                            'is_custom_rate': custom_commission_rate is not None
                         }
                     }, status=status.HTTP_200_OK)
                 else:

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import NeoBrutalistInput from "../component/NeoBrutalist/NeoBrutalistInput";
 import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
-import "../styles/login.css";
+import "../styles/Main/login.css";
 
 const LoginPage = () => {
     const [email, setEmail] = useState("");

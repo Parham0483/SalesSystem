@@ -106,14 +106,23 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
-    priced_by_name = serializers.CharField(source='priced_by.name', read_only=True)
 
-    # DEALER FIELDS - NEW
+    # ENHANCED: Pricing information
+    priced_by_name = serializers.CharField(source='priced_by.name', read_only=True)
+    priced_by_email = serializers.CharField(source='priced_by.email', read_only=True)
+
+    # ENHANCED: Dealer fields with commission details
     assigned_dealer_name = serializers.CharField(source='assigned_dealer.name', read_only=True)
     assigned_dealer_email = serializers.CharField(source='assigned_dealer.email', read_only=True)
     assigned_dealer_id = serializers.IntegerField(source='assigned_dealer.id', read_only=True)
     assigned_dealer_code = serializers.CharField(source='assigned_dealer.dealer_code', read_only=True)
+
+    # Commission information
     dealer_commission_amount = serializers.ReadOnlyField()
+    effective_commission_rate = serializers.ReadOnlyField()
+    has_custom_commission = serializers.SerializerMethodField()
+    dealer_default_rate = serializers.SerializerMethodField()
+
     has_dealer = serializers.ReadOnlyField()
 
     items = OrderItemAdminUpdateSerializer(many=True)
@@ -130,15 +139,31 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'admin_comment', 'pricing_date', 'quoted_total', 'items',
             'created_at', 'updated_at', 'completion_date', 'completed_by',
             'customer_response_date', 'customer_rejection_reason',
-            'priced_by_name',  # WHO PRICED
-            # DEALER FIELDS
+
+            # ENHANCED: Pricing info
+            'priced_by_name', 'priced_by_email',
+
+            # ENHANCED: Dealer fields with commission
             'assigned_dealer_name', 'assigned_dealer_email', 'assigned_dealer_id',
             'assigned_dealer_code', 'dealer_assigned_at', 'dealer_notes',
-            'dealer_commission_amount', 'has_dealer',
-            # INVOICE
+            'dealer_commission_amount', 'effective_commission_rate',
+            'has_custom_commission', 'dealer_default_rate',
+            'custom_commission_rate', 'has_dealer',
+
+            # Invoice
             'invoice_id', 'invoice_number', 'invoice_date'
         ]
         read_only_fields = fields
+
+    def get_has_custom_commission(self, obj):
+        """Check if this order has a custom commission rate"""
+        return obj.custom_commission_rate is not None
+
+    def get_dealer_default_rate(self, obj):
+        """Get dealer's default commission rate"""
+        if obj.assigned_dealer:
+            return float(obj.assigned_dealer.dealer_commission_rate)
+        return None
 
     def get_invoice_id(self, obj):
         if hasattr(obj, 'invoice'):

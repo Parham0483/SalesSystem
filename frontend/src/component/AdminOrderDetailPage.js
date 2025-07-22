@@ -4,7 +4,7 @@ import DealerAssignmentComponent from './DealerAssignmentComponent';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from '../component/NeoBrutalist/NeoBrutalistInput';
-import '../styles/AdminOrderDetail.css';
+import '../styles/component/AdminOrderDetail.css';
 
 const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
