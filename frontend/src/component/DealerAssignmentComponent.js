@@ -1,4 +1,4 @@
-// frontend/src/component/DealerAssignmentComponent.js - IMPROVED VERSION
+// frontend/src/component/DealerAssignmentComponent.js - ENHANCED VERSION
 import React, { useState, useEffect } from 'react';
 import API from './api';
 import NeoBrutalistDropdown from './NeoBrutalist/NeoBrutalistDropdown';
@@ -9,6 +9,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
     const [wantDealer, setWantDealer] = useState('no'); // 'no' | 'yes'
     const [dealers, setDealers] = useState([]);
     const [selectedDealer, setSelectedDealer] = useState('');
+    const [selectedDealerInfo, setSelectedDealerInfo] = useState(null);
     const [notes, setNotes] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -32,9 +33,22 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
         }
     };
 
+    const handleDealerSelect = (dealerId) => {
+        setSelectedDealer(dealerId);
+        const dealer = dealers.find(d => d.id.toString() === dealerId);
+        setSelectedDealerInfo(dealer || null);
+        console.log('🎯 Selected dealer:', dealer);
+    };
+
     const handleAssignDealer = async () => {
         if (!selectedDealer) {
             setError('لطفاً نماینده‌ای را انتخاب کنید');
+            return;
+        }
+
+        // Validate commission rate
+        if (!selectedDealerInfo || selectedDealerInfo.commission_rate <= 0) {
+            setError('نماینده انتخابی نرخ کمیسیون معتبری ندارد. لطفاً ابتدا نرخ کمیسیون را تنظیم کنید.');
             return;
         }
 
@@ -45,7 +59,8 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
             console.log('📤 Assigning dealer to order:', {
                 orderId,
                 dealer_id: parseInt(selectedDealer),
-                dealer_notes: notes
+                dealer_notes: notes,
+                commission_rate: selectedDealerInfo.commission_rate
             });
 
             const response = await API.post(`/orders/${orderId}/assign-dealer/`, {
@@ -54,11 +69,14 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
             });
 
             console.log('✅ Dealer assigned successfully:', response.data);
-            alert('نماینده با موفقیت تخصیص داده شد!');
+
+            const successMessage = `نماینده ${selectedDealerInfo.name} با موفقیت تخصیص داده شد!\nنرخ کمیسیون: ${selectedDealerInfo.commission_rate}%`;
+            alert(successMessage);
 
             // Reset form
             setWantDealer('no');
             setSelectedDealer('');
+            setSelectedDealerInfo(null);
             setNotes('');
 
             // Notify parent component
@@ -79,7 +97,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
 
     const dealerOptions = dealers.map(dealer => ({
         value: dealer.id.toString(),
-        label: `${dealer.name} - ${dealer.email} (${dealer.assigned_orders_count || 0} سفارش)`
+        label: `${dealer.name} - ${dealer.email} (${dealer.assigned_orders_count || 0} سفارش) - کمیسیون: ${dealer.commission_rate}%`
     }));
 
     return (
@@ -132,6 +150,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                             onChange={(e) => {
                                 setWantDealer(e.target.value);
                                 setSelectedDealer('');
+                                setSelectedDealerInfo(null);
                                 setNotes('');
                                 setError('');
                             }}
@@ -206,10 +225,54 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                                     label="نماینده فروش"
                                     options={dealerOptions}
                                     value={selectedDealer}
-                                    onChange={setSelectedDealer}
+                                    onChange={handleDealerSelect}
                                     placeholder="نماینده‌ای را انتخاب کنید..."
                                 />
                             </div>
+
+                            {/* Show selected dealer info */}
+                            {selectedDealerInfo && (
+                                <div className="dealer-info-card" style={{
+                                    backgroundColor: '#e0f7fa',
+                                    border: '2px solid #00acc1',
+                                    padding: '1rem',
+                                    marginBottom: '1rem',
+                                    fontFamily: 'Tahoma, sans-serif'
+                                }}>
+                                    <h6 style={{ margin: '0 0 0.5rem 0', color: '#006064' }}>
+                                        📋 اطلاعات نماینده انتخاب شده:
+                                    </h6>
+                                    <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
+                                        <div><strong>نام:</strong> {selectedDealerInfo.name}</div>
+                                        <div><strong>ایمیل:</strong> {selectedDealerInfo.email}</div>
+                                        <div><strong>کد نماینده:</strong> {selectedDealerInfo.dealer_code || 'ندارد'}</div>
+                                        <div><strong>نرخ کمیسیون:</strong>
+                                            <span style={{
+                                                color: selectedDealerInfo.commission_rate > 0 ? '#2e7d32' : '#d32f2f',
+                                                fontWeight: 'bold',
+                                                marginRight: '0.25rem'
+                                            }}>
+                                                {selectedDealerInfo.commission_rate}%
+                                            </span>
+                                        </div>
+                                        <div><strong>سفارشات فعال:</strong> {selectedDealerInfo.active_orders_count || 0}</div>
+                                        <div><strong>مجموع سفارشات:</strong> {selectedDealerInfo.assigned_orders_count || 0}</div>
+                                    </div>
+
+                                    {selectedDealerInfo.commission_rate <= 0 && (
+                                        <div style={{
+                                            backgroundColor: '#ffebee',
+                                            border: '1px solid #f44336',
+                                            padding: '0.5rem',
+                                            marginTop: '0.5rem',
+                                            color: '#c62828',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            ⚠️ هشدار: این نماینده نرخ کمیسیون معتبری ندارد
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                                 <label style={{
@@ -234,7 +297,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                                 color="blue-400"
                                 textColor="white"
                                 onClick={handleAssignDealer}
-                                disabled={loading || !selectedDealer}
+                                disabled={loading || !selectedDealer || (selectedDealerInfo && selectedDealerInfo.commission_rate <= 0)}
                                 className="assign-dealer-btn"
                             />
                         </>

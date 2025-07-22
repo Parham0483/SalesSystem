@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
@@ -12,30 +11,75 @@ const DealerDashboard = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [dealerStats, setDealerStats] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
         const userDataString = localStorage.getItem('userData');
         const user = userDataString ? JSON.parse(userDataString) : null;
 
-        if (!user || !user.is_dealer) {
+        console.log('🔍 Dealer Dashboard - User check:', {
+            hasUser: !!user,
+            isDealer: user?.is_dealer,
+            userName: user?.name
+        });
+
+        if (!user || (!user.is_dealer && !user.is_staff)) {
+            console.log('❌ Access denied - redirecting to login');
             navigate('/login');
             return;
         }
 
         fetchAssignedOrders();
+        fetchDealerStats();
     }, [navigate]);
 
     const fetchAssignedOrders = async () => {
         setLoading(true);
+        setError('');
+
         try {
+            console.log('📤 Fetching assigned orders...');
             const response = await API.get('/orders/my-assigned-orders/');
-            setOrders(response.data.orders);
+            console.log('✅ Assigned orders response:', response.data);
+
+            setOrders(response.data.orders || []);
+
+            if (response.data.summary) {
+                console.log('📊 Order summary:', response.data.summary);
+            }
+
         } catch (err) {
-            console.error('Error fetching assigned orders:', err);
-            setError('خطا در بارگیری سفارشات');
+            console.error('❌ Error fetching assigned orders:', err);
+            console.log('❌ Error details:', {
+                status: err.response?.status,
+                data: err.response?.data,
+                message: err.message
+            });
+
+            if (err.response?.status === 403) {
+                setError('دسترسی رد شد. لطفاً مجدداً وارد شوید.');
+                setTimeout(() => navigate('/login'), 2000);
+            } else if (err.response?.status === 401) {
+                setError('جلسه شما منقضی شده است. در حال انتقال...');
+                setTimeout(() => navigate('/login'), 2000);
+            } else {
+                setError('خطا در بارگیری سفارشات تخصیص داده شده');
+            }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchDealerStats = async () => {
+        try {
+            console.log('📤 Fetching dealer stats...');
+            const response = await API.get('/orders/dealer-dashboard-stats/');
+            console.log('✅ Dealer stats:', response.data);
+            setDealerStats(response.data);
+        } catch (err) {
+            console.error('❌ Error fetching dealer stats:', err);
+            // Stats are optional, don't show error for this
         }
     };
 
@@ -71,23 +115,48 @@ const DealerDashboard = () => {
         return statusMap[status] || status;
     };
 
+    const handleOrderClick = (order) => {
+        console.log('🎯 Order clicked:', {
+            orderId: order.id,
+            status: order.status,
+            hasDealer: order.has_dealer,
+            dealerName: order.assigned_dealer_name
+        });
+        setSelectedOrder(order);
+    };
+
     if (loading) {
         return (
-            <div className="dealer-dashboard">
+            <div className="dealer-dashboard" style={{ padding: '2rem', textAlign: 'center' }}>
                 <div className="dashboard-header">
                     <h1>در حال بارگیری...</h1>
+                    <div style={{ marginTop: '1rem', color: '#666' }}>
+                        🔄 در حال دریافت سفارشات تخصیص داده شده...
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="dealer-dashboard">
+        <div className="dealer-dashboard" style={{ padding: '2rem', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
             {/* Header */}
-            <div className="dashboard-header">
+            <div className="dashboard-header" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '2rem',
+                padding: '2rem',
+                backgroundColor: '#fff',
+                border: '4px solid #000',
+                boxShadow: '6px 6px 0px #000'
+            }}>
                 <div className="user-info">
-                    <h1>پنل نماینده فروش</h1>
-                    <span className="welcome-text">سفارشات تخصیص داده شده</span>
+                    <h1 style={{ margin: 0, fontSize: '2.5rem' }}>پنل نماینده فروش</h1>
+                    <span className="welcome-text" style={{ color: '#666' }}>
+                        سفارشات تخصیص داده شده
+                        {dealerStats?.dealer && ` - ${dealerStats.dealer.name}`}
+                    </span>
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
@@ -100,31 +169,85 @@ const DealerDashboard = () => {
                 </div>
             </div>
 
+            {/* Stats Cards */}
+            {dealerStats?.stats && (
+                <div className="stats-grid" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '1rem',
+                    marginBottom: '2rem'
+                }}>
+                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#e3f2fd' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>مجموع سفارشات</h3>
+                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.total_orders}</div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#f3e5f5' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#7b1fa2' }}>تکمیل شده</h3>
+                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.completed_orders}</div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#e8f5e8' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#388e3c' }}>کمیسیون کل</h3>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
+                            {dealerStats.stats.total_commission_earned.toLocaleString('fa-IR')} ریال
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#fff3e0' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>نرخ کمیسیون</h3>
+                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.commission_rate}%</div>
+                    </NeoBrutalistCard>
+                </div>
+            )}
+
             {error && (
-                <div className="error-banner">
-                    <span>{error}</span>
+                <div className="error-banner" style={{
+                    backgroundColor: '#fef2f2',
+                    border: '4px solid #ef4444',
+                    padding: '1rem',
+                    marginBottom: '2rem',
+                    color: '#dc2626',
+                    fontWeight: 'bold'
+                }}>
+                    <span>⚠️ {error}</span>
                 </div>
             )}
 
             {/* Orders Grid */}
-            <div className="orders-grid">
+            <div className="orders-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                gap: '2rem'
+            }}>
                 {orders.map((order) => (
                     <NeoBrutalistCard
                         key={order.id}
                         className="order-card"
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => handleOrderClick(order)}
+                        style={{ cursor: 'pointer' }}
                     >
-                        <div className="order-card-header">
-                            <h3>سفارش #{order.id}</h3>
+                        <div className="order-card-header" style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '1rem'
+                        }}>
+                            <h3 style={{ margin: 0 }}>سفارش #{order.id}</h3>
                             <NeoBrutalistButton
                                 text={formatStatus(order.status)}
                                 color={getStatusColor(order.status)}
                                 textColor="black"
                                 className="status-badge"
+                                style={{
+                                    padding: '6px 12px',
+                                    fontSize: '12px',
+                                    minWidth: 'auto'
+                                }}
                             />
                         </div>
 
-                        <div className="order-card-info">
+                        <div className="order-card-info" style={{ marginBottom: '1rem' }}>
                             <p><strong>مشتری:</strong> {order.customer_name}</p>
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
                             {order.quoted_total > 0 && (
@@ -132,6 +255,11 @@ const DealerDashboard = () => {
                             )}
                             {order.dealer_assigned_at && (
                                 <p><strong>تاریخ تخصیص:</strong> {new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}</p>
+                            )}
+                            {order.dealer_commission_amount > 0 && (
+                                <p style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                                    <strong>کمیسیون:</strong> {order.dealer_commission_amount.toLocaleString('fa-IR')} ریال
+                                </p>
                             )}
                         </div>
 
@@ -141,6 +269,10 @@ const DealerDashboard = () => {
                                 color="blue-400"
                                 textColor="white"
                                 className="view-details-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOrderClick(order);
+                                }}
                             />
                         </div>
                     </NeoBrutalistCard>
@@ -148,11 +280,27 @@ const DealerDashboard = () => {
             </div>
 
             {/* Empty State */}
-            {orders.length === 0 && (
-                <div className="empty-state">
-                    <NeoBrutalistCard className="empty-card">
+            {orders.length === 0 && !error && (
+                <div className="empty-state" style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    minHeight: '300px'
+                }}>
+                    <NeoBrutalistCard className="empty-card" style={{
+                        textAlign: 'center',
+                        maxWidth: '500px',
+                        cursor: 'default'
+                    }}>
                         <h3>هیچ سفارشی تخصیص نیافته</h3>
                         <p>تا کنون هیچ سفارشی به شما تخصیص داده نشده است.</p>
+                        <NeoBrutalistButton
+                            text="بروزرسانی"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={fetchAssignedOrders}
+                            style={{ marginTop: '1rem' }}
+                        />
                     </NeoBrutalistCard>
                 </div>
             )}
@@ -165,10 +313,29 @@ const DealerDashboard = () => {
                 size="large"
             >
                 {selectedOrder && (
-                    <OrderDetailPage
-                        orderId={selectedOrder.id}
-                        onOrderUpdated={fetchAssignedOrders}
-                    />
+                    <div style={{ direction: 'rtl' }}>
+                        <div style={{
+                            backgroundColor: '#e3f2fd',
+                            padding: '1rem',
+                            marginBottom: '1rem',
+                            border: '2px solid #1976d2'
+                        }}>
+                            <h4 style={{ margin: 0, color: '#1976d2' }}>
+                                📋 نمایش به عنوان نماینده فروش
+                            </h4>
+                            <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+                                شما نماینده تخصیص داده شده به این سفارش هستید
+                            </p>
+                        </div>
+
+                        <OrderDetailPage
+                            orderId={selectedOrder.id}
+                            onOrderUpdated={() => {
+                                fetchAssignedOrders();
+                                setSelectedOrder(null);
+                            }}
+                        />
+                    </div>
                 )}
             </NeoBrutalistModal>
         </div>
