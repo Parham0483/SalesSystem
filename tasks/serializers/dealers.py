@@ -1,8 +1,8 @@
-from rest_framework import serializers
 
-from .. import models
-from ..models import Customer, Order, DealerCommission, OrderLog
+from rest_framework import serializers
+from django.db.models import Sum
 from decimal import Decimal
+from ..models import Customer, Order, DealerCommission, OrderLog
 
 
 class DealerSerializer(serializers.ModelSerializer):
@@ -25,7 +25,7 @@ class DealerSerializer(serializers.ModelSerializer):
         """Calculate total commission earned by dealer"""
         if obj.is_dealer:
             total = obj.commissions.filter(is_paid=True).aggregate(
-                total=models.Sum('commission_amount')
+                total=Sum('commission_amount')
             )['total']
             return float(total or 0)
         return 0
@@ -34,37 +34,64 @@ class DealerSerializer(serializers.ModelSerializer):
         """Calculate pending commission for dealer"""
         if obj.is_dealer:
             pending = obj.commissions.filter(is_paid=False).aggregate(
-                total=models.Sum('commission_amount')
+                total=Sum('commission_amount')
             )['total']
             return float(pending or 0)
         return 0
 
 
 class DealerAssignmentSerializer(serializers.Serializer):
-    """Serializer for assigning dealer to order"""
-    dealer_id = serializers.IntegerField()
-    dealer_notes = serializers.CharField(required=False, allow_blank=True, max_length=1000)
-    custom_commission_rate = serializers.DecimalField(
-        max_digits=5, decimal_places=2, required=False,
-        help_text="Custom commission rate for this order (overrides dealer default)"
+    """Serializer for assigning dealer to order - FIXED VERSION"""
+    dealer_id = serializers.IntegerField(required=True)
+    dealer_notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=1000,
+        default=''
     )
 
     def validate_dealer_id(self, value):
+        """Validate that the dealer exists and is active"""
+        if not value:
+            raise serializers.ValidationError("Dealer ID is required")
+
         try:
-            dealer = Customer.objects.get(id=value, is_dealer=True, is_active=True)
+            dealer = Customer.objects.get(
+                id=value,
+                is_dealer=True,
+                is_active=True
+            )
+            # Store the dealer object for use in the view
+            self.context['dealer'] = dealer
             return value
         except Customer.DoesNotExist:
-            raise serializers.ValidationError("Valid dealer not found")
+            raise serializers.ValidationError(
+                "Valid active dealer not found with this ID"
+            )
 
-    def validate_custom_commission_rate(self, value):
-        if value is not None and (value < 0 or value > 100):
-            raise serializers.ValidationError("Commission rate must be between 0 and 100")
-        return value
+    def validate(self, attrs):
+        """Additional validation"""
+        dealer_id = attrs.get('dealer_id')
+
+        # Check if order context is provided
+        order = self.context.get('order')
+        if order and order.assigned_dealer:
+            if order.assigned_dealer.id == dealer_id:
+                raise serializers.ValidationError(
+                    "This dealer is already assigned to this order"
+                )
+
+        return attrs
 
 
 class DealerNotesUpdateSerializer(serializers.Serializer):
     """Serializer for updating dealer notes"""
-    dealer_notes = serializers.CharField(max_length=1000, allow_blank=True)
+    dealer_notes = serializers.CharField(
+        max_length=1000,
+        allow_blank=True,
+        required=False,
+        default=''
+    )
 
 
 class DealerCommissionSerializer(serializers.ModelSerializer):
@@ -81,4 +108,3 @@ class DealerCommissionSerializer(serializers.ModelSerializer):
             'is_paid', 'paid_at', 'payment_reference', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
-
