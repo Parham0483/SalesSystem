@@ -1,3 +1,4 @@
+# tasks/views/auth.py - OPTIMIZED VERSION
 from django.contrib.auth import authenticate, login
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -10,7 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
 
-from ..serializers import CustomerSerializer
+from ..serializers.customers import CustomerSerializer, AuthCustomerSerializer
 from ..models import Customer
 
 
@@ -33,22 +34,20 @@ def customer_register(request):
                 'error': 'User with this email already exists'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create customer using the serializer
-        serializer = CustomerSerializer(data=data)
+        # Create customer using the full serializer
+        serializer = CustomerSerializer(data=data, context={'request': request})
         if serializer.is_valid():
             customer = serializer.save()
 
             # Generate tokens
             refresh = RefreshToken.for_user(customer)
 
+            # Use lightweight serializer for auth response
+            auth_serializer = AuthCustomerSerializer(customer)
+
             return Response({
                 'message': 'Registration successful',
-                'user': {
-                    'id': customer.id,
-                    'email': customer.email,
-                    'name': customer.name,
-                    'is_staff': customer.is_staff
-                },
+                'user': auth_serializer.data,
                 'tokens': {
                     'access': str(refresh.access_token),
                     'refresh': str(refresh)
@@ -73,7 +72,7 @@ def customer_login(request):
         email = request.data.get('email')
         password = request.data.get('password')
 
-        if not email or not password:
+        if not email or password is None:
             return Response({
                 'error': 'Email and password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -94,15 +93,12 @@ def customer_login(request):
             # Generate tokens
             refresh = RefreshToken.for_user(user)
 
+            # Use lightweight serializer for clean auth response
+            auth_serializer = AuthCustomerSerializer(user)
+
             return Response({
                 'message': 'Login successful',
-                'user': {
-                    'id': user.id,
-                    'email': user.email,
-                    'name': user.name,
-                    'is_staff': user.is_staff,
-                    'company_name': user.company_name
-                },
+                'user': auth_serializer.data,
                 'tokens': {
                     'access': str(refresh.access_token),
                     'refresh': str(refresh)

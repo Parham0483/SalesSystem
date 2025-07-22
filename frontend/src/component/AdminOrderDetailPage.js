@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import API from '../component/api';
+import DealerAssignmentComponent from './DealerAssignmentComponent';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from '../component/NeoBrutalist/NeoBrutalistInput';
@@ -76,6 +77,33 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setError(errorMessage);
         } finally {
             setCompleting(false);
+        }
+    };
+
+
+    const handleRemoveDealer = async () => {
+        if (!window.confirm('آیا مطمئن هستید که می‌خواهید نماینده را حذف کنید؟')) {
+            return;
+        }
+
+        try {
+            const response = await API.post(`/orders/${orderId}/remove-dealer/`);
+
+            console.log('✅ Dealer removed successfully:', response.data);
+            alert('نماینده با موفقیت حذف شد!');
+
+            // Refresh order data
+            fetchOrder();
+
+            // Update parent component
+            if (onOrderUpdated) {
+                onOrderUpdated();
+            }
+
+        } catch (err) {
+            console.error('❌ Error removing dealer:', err);
+            const errorMessage = err.response?.data?.error || 'خطا در حذف نماینده';
+            setError(errorMessage);
         }
     };
 

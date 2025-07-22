@@ -1,3 +1,5 @@
+// frontend/src/App.js - Corrected routing order for dealer pages
+
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -10,6 +12,8 @@ import MainPage from "./pages/MainPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminOrderDetailPage from "./component/AdminOrderDetailPage";
 import AdminRoute from "./component/AdminRoute";
+import DealerDashboard from "./pages/DealerDashboard";
+import DealerRoute from "./component/DealerRoute";
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
 
@@ -68,10 +72,12 @@ function App() {
     return (
         <Router>
             <Routes>
+                {/* PUBLIC ROUTES */}
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
+
+                {/* ADMIN ROUTES - Put these BEFORE general routes */}
                 <Route
                     path="/admin"
                     element={
@@ -89,8 +95,22 @@ function App() {
                     }
                 />
 
+                {/* DEALER ROUTES - Put these BEFORE customer routes */}
+                <Route
+                    path="/dealer"
+                    element={
+                        <DealerRoute>
+                            <DealerDashboard />
+                        </DealerRoute>
+                    }
+                />
+
+                {/* CUSTOMER ROUTES - Put these AFTER specific routes */}
+                <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/orders/create" element={<CreateOrderPage />} />
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+
+                {/* CATCH-ALL */}
                 <Route path="*" element={<div>Page not found</div>} />
             </Routes>
         </Router>

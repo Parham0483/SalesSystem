@@ -43,16 +43,19 @@ const LoginPage = () => {
                 console.log('🔑 Storing authentication data:', {
                     user: user,
                     hasTokens: !!tokens,
+                    isDealer: user.is_dealer, // LOG DEALER STATUS
+                    isStaff: user.is_staff,
                     accessToken: tokens?.access ? `${tokens.access.substring(0, 20)}...` : null,
                     refreshToken: tokens?.refresh ? `${tokens.refresh.substring(0, 20)}...` : null
                 });
 
-                // Store user data
+                // Store user data - INCLUDE is_dealer field
                 localStorage.setItem('userData', JSON.stringify({
                     id: user.id,
                     email: user.email,
                     name: user.name,
                     is_staff: user.is_staff,
+                    is_dealer: user.is_dealer,        // ← ADD THIS FIELD
                     company_name: user.company_name
                 }));
 
@@ -71,13 +74,16 @@ const LoginPage = () => {
                     axiosHeader: axios.defaults.headers.common['Authorization']
                 });
 
-                // Navigate based on user role
+                // UPDATED: Navigate based on user role INCLUDING DEALER
                 setTimeout(() => {
                     if (user.is_staff) {
                         console.log('🔄 Navigating to admin dashboard...');
                         navigate("/admin");
+                    } else if (user.is_dealer) {
+                        console.log('🔄 Navigating to dealer dashboard...');
+                        navigate("/dealer");
                     } else {
-                        console.log('🔄 Navigating to dashboard...');
+                        console.log('🔄 Navigating to customer dashboard...');
                         navigate("/dashboard");
                     }
                 }, 100);

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import API from '../api';
-import NeoBrutalistButton from '../NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistDropdown from '../NeoBrutalist/NeoBrutalistDropdown';
-import NeoBrutalistInput from '../NeoBrutalist/NeoBrutalistInput';
+import API from './api';
+import NeoBrutalistDropdown from './NeoBrutalist/NeoBrutalistDropdown';
+import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
+
 
 const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
     const [dealers, setDealers] = useState([]);

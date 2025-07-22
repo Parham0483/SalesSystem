@@ -47,44 +47,18 @@ const RegisterPage = () => {
             console.log('✅ Registration response:', response.data);
 
             if (response.status === 201) {
-                const { user, tokens } = response.data;
+                const { user } = response.data;
 
-                console.log('🔑 Storing authentication data:', {
-                    user: user,
-                    hasTokens: !!tokens,
-                    accessToken: tokens?.access ? `${tokens.access.substring(0, 20)}...` : null,
-                    refreshToken: tokens?.refresh ? `${tokens.refresh.substring(0, 20)}...` : null
+                // SUCCESS: Show message and redirect to login
+                alert(`${user.name} عزیز، ثبت نام با موفقیت انجام شد! لطفاً وارد شوید.`);
+
+                // Redirect to login page (no token storage during registration)
+                navigate("/login", {
+                    state: {
+                        registeredEmail: user.email,
+                        message: 'ثبت نام موفقیت‌آمیز بود. لطفاً وارد شوید.'
+                    }
                 });
-
-                // Store user data
-                localStorage.setItem('userData', JSON.stringify({
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
-                    is_staff: user.is_staff,
-                    company_name: user.company_name
-                }));
-
-                // Store tokens
-                localStorage.setItem('access_token', tokens.access);
-                localStorage.setItem('refresh_token', tokens.refresh);
-
-                // CRITICAL: Set the authorization header for future requests
-                axios.defaults.headers.common['Authorization'] = `Bearer ${tokens.access}`;
-
-                console.log('✅ Authentication data stored successfully');
-                console.log('🔍 Verification - localStorage check:', {
-                    userData: !!localStorage.getItem('userData'),
-                    accessToken: !!localStorage.getItem('access_token'),
-                    refreshToken: !!localStorage.getItem('refresh_token'),
-                    axiosHeader: axios.defaults.headers.common['Authorization']
-                });
-
-                // Small delay to ensure storage is complete
-                setTimeout(() => {
-                    console.log('🔄 Navigating to dashboard...');
-                    navigate("/dashboard");
-                }, 100);
             }
 
         } catch (err) {
@@ -102,12 +76,6 @@ const RegisterPage = () => {
             } else {
                 setError("خطا در ثبت نام. لطفاً دوباره تلاش کنید.");
             }
-
-            // Clear any partially stored data on error
-            localStorage.removeItem('userData');
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            delete axios.defaults.headers.common['Authorization'];
         } finally {
             setLoading(false);
         }
