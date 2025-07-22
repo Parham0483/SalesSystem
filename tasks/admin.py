@@ -1,46 +1,133 @@
-# tasks/admin.py - Updated version with new models and features
+# tasks/admin.py - Enhanced version with dealer management
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.http import HttpResponse
+from django.db.models import Sum
+from decimal import Decimal
 from .models import (
     Customer, Product, Order, OrderItem, Invoice,
     InvoiceTemplate, InvoiceTemplateField, InvoiceSection,
-    EmailNotification
+    EmailNotification, OrderLog, DealerCommission
 )
 
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'email', 'company_name', 'is_staff', 'total_orders', 'date_joined']
-    list_filter = ['is_staff', 'date_joined', 'is_active']
-    search_fields = ['name', 'email', 'company_name']
-    readonly_fields = ['date_joined', 'last_login']
+    list_display = ['name', 'email', 'company_name', 'is_staff', 'is_dealer_display', 'total_orders', 'commission_info',
+                    'date_joined']
+    list_filter = ['is_staff', 'is_dealer', 'date_joined', 'is_active']
+    search_fields = ['name', 'email', 'company_name', 'dealer_code']
+    readonly_fields = ['date_joined', 'last_login', 'dealer_code']
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ['name', 'email', 'phone', 'company_name', 'password']
+        }),
+        ('Permissions', {
+            'fields': ['is_active', 'is_staff', 'is_superuser']
+        }),
+        ('Dealer Information', {
+            'fields': ['is_dealer', 'dealer_code', 'dealer_commission_rate'],
+            'classes': ['collapse']
+        }),
+        ('Dates', {
+            'fields': ['date_joined', 'last_login'],
+            'classes': ['collapse']
+        }),
+    )
+
+    actions = ['make_dealer', 'remove_dealer', 'set_commission_rate']
+
+    def is_dealer_display(self, obj):
+        """Display dealer status with styling"""
+        if obj.is_dealer:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ Dealer</span>'
+            )
+        return format_html(
+            '<span style="color: gray;">Regular User</span>'
+        )
+
+    is_dealer_display.short_description = 'Dealer Status'
 
     def total_orders(self, obj):
         """Display total orders count for customer"""
-        count = obj.order_set.count()
+        if obj.is_dealer:
+            count = obj.assigned_orders.count()
+            if count > 0:
+                url = reverse('admin:tasks_order_changelist') + f'?assigned_dealer__id__exact={obj.id}'
+                return format_html('<a href="{}">{} assigned orders</a>', url, count)
+            return '0 assigned orders'
+        else:
+            count = obj.order_set.count()
+            if count > 0:
+                url = reverse('admin:tasks_order_changelist') + f'?customer__id__exact={obj.id}'
+                return format_html('<a href="{}">{} orders</a>', url, count)
+            return '0 orders'
+
+    total_orders.short_description = 'Orders'
+
+    def commission_info(self, obj):
+        """Display commission information for dealers"""
+        if obj.is_dealer:
+            rate = obj.dealer_commission_rate
+            earned = obj.commissions.filter(is_paid=True).aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+            pending = obj.commissions.filter(is_paid=False).aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+
+            return format_html(
+                'Rate: {}%<br>Earned: ${:,.2f}<br>Pending: ${:,.2f}',
+                rate, float(earned), float(pending)
+            )
+        return '-'
+
+    commission_info.short_description = 'Commission Info'
+
+    def make_dealer(self, request, queryset):
+        """Admin action to convert users to dealers"""
+        count = 0
+        for user in queryset.filter(is_dealer=False):
+            user.is_dealer = True
+            user.dealer_commission_rate = Decimal('5.00')  # Default 5%
+            user.save()
+            count += 1
+
         if count > 0:
-            url = reverse('admin:tasks_order_changelist') + f'?customer__id__exact={obj.id}'
-            return format_html('<a href="{}">{} orders</a>', url, count)
-        return '0 orders'
+            self.message_user(request, f"{count} users converted to dealers with 5% commission rate")
 
-    total_orders.short_description = 'Total Orders'
+    make_dealer.short_description = "Convert to dealer (5% commission)"
 
+    def remove_dealer(self, request, queryset):
+        """Admin action to remove dealer status"""
+        count = 0
+        for user in queryset.filter(is_dealer=True):
+            user.is_dealer = False
+            user.dealer_commission_rate = Decimal('0.00')
+            user.save()
+            count += 1
 
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'base_price', 'stock', 'is_active', 'times_ordered', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name', 'description']
-    readonly_fields = ['created_at']
+        if count > 0:
+            self.message_user(request, f"{count} dealers converted to regular users")
 
-    def times_ordered(self, obj):
-        """Display how many times this product was ordered"""
-        count = obj.orderitem_set.count()
-        return f"{count} times"
+    remove_dealer.short_description = "Remove dealer status"
 
-    times_ordered.short_description = 'Ordered'
+    def set_commission_rate(self, request, queryset):
+        """Admin action to set commission rate - this would need a custom form"""
+        # For now, just set to 10%
+        count = 0
+        for dealer in queryset.filter(is_dealer=True):
+            dealer.dealer_commission_rate = Decimal('10.00')
+            dealer.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"Commission rate set to 10% for {count} dealers")
+
+    set_commission_rate.short_description = "Set commission rate to 10%"
 
 
 class OrderItemInline(admin.TabularInline):
@@ -48,13 +135,13 @@ class OrderItemInline(admin.TabularInline):
     extra = 0
     fields = ['product', 'requested_quantity', 'quoted_unit_price', 'final_quantity', 'customer_notes', 'admin_notes',
               'total_price']
-    readonly_fields = ['customer_notes', 'total_price']  # Admin shouldn't edit customer notes
+    readonly_fields = ['customer_notes', 'total_price']
 
     def total_price(self, obj):
         """Display calculated total price"""
         if obj.quoted_unit_price and obj.final_quantity:
             total = obj.quoted_unit_price * obj.final_quantity
-            return f"{total:,.0f} ریال"
+            return f"${total:,.2f}"
         return "Not calculated"
 
     total_price.short_description = 'Total Price'
@@ -63,14 +150,15 @@ class OrderItemInline(admin.TabularInline):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
-        'id', 'customer', 'status_colored', 'quoted_total_display',
+        'id', 'customer', 'status_colored', 'dealer_info', 'quoted_total_display',
         'items_count', 'created_at', 'pricing_date', 'completion_date'
     ]
-    list_filter = ['status', 'created_at', 'pricing_date', 'completion_date']
-    search_fields = ['customer__name', 'customer__email', 'id']
+    list_filter = ['status', 'created_at', 'pricing_date', 'completion_date', 'assigned_dealer']
+    search_fields = ['customer__name', 'customer__email', 'id', 'assigned_dealer__name']
     readonly_fields = [
         'created_at', 'updated_at', 'customer_response_date',
-        'pricing_date', 'completion_date', 'quoted_total_calculated'
+        'pricing_date', 'completion_date', 'quoted_total_calculated',
+        'dealer_commission_amount'
     ]
     inlines = [OrderItemInline]
     date_hierarchy = 'created_at'
@@ -81,6 +169,10 @@ class OrderAdmin(admin.ModelAdmin):
         }),
         ('Customer Request', {
             'fields': ['customer_comment']
+        }),
+        ('Dealer Assignment', {
+            'fields': ['assigned_dealer', 'dealer_assigned_at', 'dealer_notes', 'dealer_commission_amount'],
+            'classes': ['collapse']
         }),
         ('Admin Pricing', {
             'fields': ['admin_comment', 'quoted_total', 'quoted_total_calculated', 'pricing_date', 'priced_by']
@@ -94,7 +186,7 @@ class OrderAdmin(admin.ModelAdmin):
         }),
     )
 
-    actions = ['mark_as_priced', 'mark_as_confirmed', 'mark_as_completed', 'send_pricing_notification']
+    actions = ['assign_to_dealer', 'remove_dealers', 'mark_as_completed', 'generate_commission_report']
 
     def status_colored(self, obj):
         """Display status with color coding"""
@@ -115,10 +207,24 @@ class OrderAdmin(admin.ModelAdmin):
 
     status_colored.short_description = 'Status'
 
+    def dealer_info(self, obj):
+        """Display dealer assignment information"""
+        if obj.assigned_dealer:
+            commission = obj.dealer_commission_amount
+            return format_html(
+                '<strong>{}</strong><br>Code: {}<br>Commission: ${:,.2f}',
+                obj.assigned_dealer.name,
+                obj.assigned_dealer.dealer_code or 'N/A',
+                float(commission)
+            )
+        return format_html('<span style="color: gray;">No dealer assigned</span>')
+
+    dealer_info.short_description = 'Assigned Dealer'
+
     def quoted_total_display(self, obj):
         """Display quoted total with formatting"""
         if obj.quoted_total and obj.quoted_total > 0:
-            return f"{obj.quoted_total:,.0f} ریال"
+            return f"${obj.quoted_total:,.2f}"
         return "Not quoted"
 
     quoted_total_display.short_description = 'Quoted Total'
@@ -127,7 +233,7 @@ class OrderAdmin(admin.ModelAdmin):
         """Display calculated total from items"""
         total = obj.calculate_total_from_items()
         if total > 0:
-            return f"{total:,.0f} ریال"
+            return f"${total:,.2f}"
         return "No items priced"
 
     quoted_total_calculated.short_description = 'Calculated Total'
@@ -139,100 +245,227 @@ class OrderAdmin(admin.ModelAdmin):
 
     items_count.short_description = 'Items'
 
-    def mark_as_priced(self, request, queryset):
-        """Admin action to mark orders as priced"""
+    # ADMIN ACTIONS
+    def assign_to_dealer(self, request, queryset):
+        """Assign selected orders to a dealer - simplified version"""
+        # This would need a custom intermediate page in a full implementation
+        # For now, we'll just show a message
+        count = queryset.filter(assigned_dealer__isnull=True).count()
+        self.message_user(
+            request,
+            f"{count} orders available for dealer assignment. Use the order detail page to assign dealers."
+        )
+
+    assign_to_dealer.short_description = "Assign to dealer (use detail page)"
+
+    def remove_dealers(self, request, queryset):
+        """Remove dealers from selected orders"""
         count = 0
-        for order in queryset.filter(status='pending_pricing'):
-            try:
-                order.mark_as_priced_by_admin()
-                count += 1
-            except Exception as e:
-                self.message_user(request, f"Error pricing order {order.id}: {e}", level='ERROR')
+        for order in queryset.filter(assigned_dealer__isnull=False):
+            order.remove_dealer(request.user)
+            count += 1
 
         if count > 0:
-            self.message_user(request, f"{count} orders marked as priced")
+            self.message_user(request, f"Dealers removed from {count} orders")
 
-    mark_as_priced.short_description = "Mark selected orders as priced"
-
-    def mark_as_confirmed(self, request, queryset):
-        """Admin action to confirm orders"""
-        count = 0
-        for order in queryset.filter(status='waiting_customer_approval'):
-            try:
-                order.customer_approve()
-                count += 1
-            except Exception as e:
-                self.message_user(request, f"Error confirming order {order.id}: {e}", level='ERROR')
-
-        if count > 0:
-            self.message_user(request, f"{count} orders confirmed")
-
-    mark_as_confirmed.short_description = "Confirm selected orders"
+    remove_dealers.short_description = "Remove dealers from orders"
 
     def mark_as_completed(self, request, queryset):
-        """Admin action to complete orders"""
+        """Mark confirmed orders as completed"""
         count = 0
         for order in queryset.filter(status='confirmed'):
             try:
                 order.mark_as_completed(request.user)
+
+                # Create commission record if dealer assigned
+                if order.assigned_dealer:
+                    from .models import DealerCommission
+                    DealerCommission.create_for_completed_order(order)
+
                 count += 1
             except Exception as e:
                 self.message_user(request, f"Error completing order {order.id}: {e}", level='ERROR')
 
         if count > 0:
-            self.message_user(request, f"{count} orders completed")
+            self.message_user(request, f"{count} orders marked as completed")
 
-    mark_as_completed.short_description = "Mark selected orders as completed"
+    mark_as_completed.short_description = "Mark as completed"
 
-    def send_pricing_notification(self, request, queryset):
-        """Send pricing notification to customers"""
-        from .services.notification_service import NotificationService
+    def generate_commission_report(self, request, queryset):
+        """Generate commission report for orders with dealers"""
+        orders_with_dealers = queryset.filter(
+            assigned_dealer__isnull=False,
+            status='completed'
+        )
 
-        count = 0
-        for order in queryset.filter(status='waiting_customer_approval'):
-            try:
-                if NotificationService.notify_customer_pricing_ready(order):
-                    count += 1
-            except Exception as e:
-                self.message_user(request, f"Error sending notification for order {order.id}: {e}", level='ERROR')
+        total_commissions = sum(order.dealer_commission_amount for order in orders_with_dealers)
 
-        if count > 0:
-            self.message_user(request, f"Pricing notifications sent for {count} orders")
+        self.message_user(
+            request,
+            f"Commission report: {orders_with_dealers.count()} completed orders with dealers. "
+            f"Total commissions: ${total_commissions:,.2f}"
+        )
 
-    send_pricing_notification.short_description = "Send pricing notifications"
+    generate_commission_report.short_description = "Generate commission report"
 
 
-@admin.register(OrderItem)
-class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ['order_link', 'product', 'requested_quantity', 'quoted_unit_price', 'final_quantity',
-                    'total_price_display', 'is_priced']
-    list_filter = ['order__status', 'product']
-    search_fields = ['product__name', 'order__customer__name', 'order__id']
-    readonly_fields = ['total_price_display']
+# NEW: Dealer Commission Admin
+@admin.register(DealerCommission)
+class DealerCommissionAdmin(admin.ModelAdmin):
+    list_display = [
+        'commission_id', 'dealer_name', 'order_link', 'commission_rate',
+        'commission_amount_display', 'order_total_display', 'payment_status', 'created_at'
+    ]
+    list_filter = ['is_paid', 'created_at', 'commission_rate']
+    search_fields = ['dealer__name', 'dealer__email', 'order__id', 'payment_reference']
+    readonly_fields = ['created_at', 'commission_amount', 'order_total']
+
+    fieldsets = (
+        ('Commission Information', {
+            'fields': ['dealer', 'order', 'commission_rate', 'commission_amount', 'order_total', 'created_at']
+        }),
+        ('Payment Information', {
+            'fields': ['is_paid', 'paid_at', 'payment_reference']
+        }),
+    )
+
+    actions = ['mark_as_paid', 'mark_as_unpaid', 'export_commission_report']
+
+    def commission_id(self, obj):
+        return f"COM-{obj.id:06d}"
+
+    commission_id.short_description = 'Commission ID'
+
+    def dealer_name(self, obj):
+        return obj.dealer.name
+
+    dealer_name.short_description = 'Dealer'
 
     def order_link(self, obj):
-        """Link to order admin page"""
         url = reverse('admin:tasks_order_change', args=[obj.order.id])
         return format_html('<a href="{}">Order #{}</a>', url, obj.order.id)
 
     order_link.short_description = 'Order'
 
-    def total_price_display(self, obj):
-        """Display total price with formatting"""
-        if obj.quoted_unit_price and obj.final_quantity:
-            total = obj.quoted_unit_price * obj.final_quantity
-            return f"{total:,.0f} ریال"
-        return "Not calculated"
+    def commission_amount_display(self, obj):
+        return f"${obj.commission_amount:,.2f}"
 
-    total_price_display.short_description = 'Total Price'
+    commission_amount_display.short_description = 'Commission Amount'
 
-    def is_priced(self, obj):
-        """Show if item is priced"""
-        if obj.quoted_unit_price and obj.quoted_unit_price > 0:
-            return "✅ Yes"
-        return "❌ No"
+    def order_total_display(self, obj):
+        return f"${obj.order_total:,.2f}"
 
-    is_priced.short_description = 'Priced'
+    order_total_display.short_description = 'Order Total'
+
+    def payment_status(self, obj):
+        if obj.is_paid:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ Paid</span><br>'
+                '<small>{}</small>',
+                obj.paid_at.strftime('%Y-%m-%d') if obj.paid_at else 'Date unknown'
+            )
+        return format_html('<span style="color: red; font-weight: bold;">Unpaid</span>')
+
+    payment_status.short_description = 'Payment Status'
+
+    def mark_as_paid(self, request, queryset):
+        """Mark commissions as paid"""
+        from django.utils import timezone
+        count = 0
+        for commission in queryset.filter(is_paid=False):
+            commission.is_paid = True
+            commission.paid_at = timezone.now()
+            commission.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"{count} commissions marked as paid")
+
+    mark_as_paid.short_description = "Mark as paid"
+
+    def mark_as_unpaid(self, request, queryset):
+        """Mark commissions as unpaid"""
+        count = 0
+        for commission in queryset.filter(is_paid=True):
+            commission.is_paid = False
+            commission.paid_at = None
+            commission.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"{count} commissions marked as unpaid")
+
+    mark_as_unpaid.short_description = "Mark as unpaid"
+
+    def export_commission_report(self, request, queryset):
+        """Export commission report"""
+        total_amount = sum(commission.commission_amount for commission in queryset)
+        paid_amount = sum(commission.commission_amount for commission in queryset if commission.is_paid)
+        unpaid_amount = total_amount - paid_amount
+
+        self.message_user(
+            request,
+            f"Commission Report: {queryset.count()} records. "
+            f"Total: ${total_amount:,.2f}, Paid: ${paid_amount:,.2f}, Unpaid: ${unpaid_amount:,.2f}"
+        )
+
+    export_commission_report.short_description = "Export commission report"
+
+
+# NEW: Order Log Admin
+@admin.register(OrderLog)
+class OrderLogAdmin(admin.ModelAdmin):
+    list_display = ['timestamp', 'order_link', 'action_display', 'performed_by', 'description_short']
+    list_filter = ['action', 'timestamp']
+    search_fields = ['order__id', 'performed_by__name', 'description']
+    readonly_fields = ['timestamp']
+
+    def order_link(self, obj):
+        url = reverse('admin:tasks_order_change', args=[obj.order.id])
+        return format_html('<a href="{}">Order #{}</a>', url, obj.order.id)
+
+    order_link.short_description = 'Order'
+
+    def action_display(self, obj):
+        colors = {
+            'order_created': '#60a5fa',
+            'pricing_submitted': '#fbbf24',
+            'customer_approved': '#34d399',
+            'customer_rejected': '#f87171',
+            'order_completed': '#10b981',
+            'dealer_assigned': '#8b5cf6',
+            'dealer_removed': '#ef4444',
+        }
+        color = colors.get(obj.action, '#9ca3af')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_action_display()
+        )
+
+    action_display.short_description = 'Action'
+
+    def description_short(self, obj):
+        if len(obj.description) > 50:
+            return f"{obj.description[:50]}..."
+        return obj.description
+
+    description_short.short_description = 'Description'
+
+
+# Update existing admins
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ['name', 'base_price', 'stock', 'is_active', 'times_ordered', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at']
+
+    def times_ordered(self, obj):
+        count = obj.orderitem_set.count()
+        return f"{count} times"
+
+    times_ordered.short_description = 'Ordered'
 
 
 @admin.register(Invoice)
@@ -244,138 +477,31 @@ class InvoiceAdmin(admin.ModelAdmin):
     list_filter = ['invoice_type', 'is_finalized', 'is_paid', 'issued_at']
     search_fields = ['invoice_number', 'order__customer__name', 'order__id']
     readonly_fields = ['issued_at', 'tax_amount', 'payable_amount']
-    actions = ['generate_pdfs', 'finalize_invoices']
-
-    fieldsets = (
-        ('Invoice Information', {
-            'fields': ['invoice_number', 'order', 'invoice_type', 'issued_at']
-        }),
-        ('Financial Details', {
-            'fields': ['total_amount', 'discount', 'tax_rate', 'tax_amount', 'payable_amount']
-        }),
-        ('Status', {
-            'fields': ['is_finalized', 'is_paid', 'due_date']
-        }),
-        ('Files', {
-            'fields': ['pdf_file']
-        }),
-    )
 
     def order_link(self, obj):
-        """Link to order admin page"""
         url = reverse('admin:tasks_order_change', args=[obj.order.id])
         return format_html('<a href="{}">Order #{}</a>', url, obj.order.id)
 
     order_link.short_description = 'Order'
 
     def total_amount_display(self, obj):
-        """Display total amount with formatting"""
-        return f"{obj.total_amount:,.0f} ریال"
+        return f"${obj.total_amount:,.2f}"
 
     total_amount_display.short_description = 'Total Amount'
 
     def payable_amount_display(self, obj):
-        """Display payable amount with formatting"""
-        return f"{obj.payable_amount:,.0f} ریال"
+        return f"${obj.payable_amount:,.2f}"
 
     payable_amount_display.short_description = 'Payable Amount'
 
     def has_pdf(self, obj):
-        """Show if PDF exists"""
         if obj.pdf_file:
             return format_html('<a href="{}" target="_blank">📄 View PDF</a>', obj.pdf_file.url)
         return "❌ No PDF"
 
     has_pdf.short_description = 'PDF'
 
-    def generate_pdfs(self, request, queryset):
-        """Generate PDFs for selected invoices"""
-        count = 0
-        for invoice in queryset:
-            try:
-                invoice.generate_pdf()
-                count += 1
-            except Exception as e:
-                self.message_user(request, f"Error generating PDF for invoice {invoice.invoice_number}: {e}",
-                                  level='ERROR')
 
-        if count > 0:
-            self.message_user(request, f"PDFs generated for {count} invoices")
-
-    generate_pdfs.short_description = "Generate PDFs"
-
-    def finalize_invoices(self, request, queryset):
-        """Finalize selected invoices"""
-        count = 0
-        for invoice in queryset.filter(is_finalized=False):
-            try:
-                invoice.finalize_invoice()
-                count += 1
-            except Exception as e:
-                self.message_user(request, f"Error finalizing invoice {invoice.invoice_number}: {e}", level='ERROR')
-
-        if count > 0:
-            self.message_user(request, f"{count} invoices finalized")
-
-    finalize_invoices.short_description = "Finalize invoices"
-
-
-# NEW: Template System Admin
-@admin.register(InvoiceTemplate)
-class InvoiceTemplateAdmin(admin.ModelAdmin):
-    list_display = ['name', 'language', 'is_active', 'fields_count', 'sections_count', 'created_at']
-    list_filter = ['language', 'is_active', 'created_at']
-    search_fields = ['name']
-    readonly_fields = ['created_at']
-
-    def fields_count(self, obj):
-        """Display number of fields"""
-        return obj.fields.count()
-
-    fields_count.short_description = 'Fields'
-
-    def sections_count(self, obj):
-        """Display number of sections"""
-        return obj.sections.count()
-
-    sections_count.short_description = 'Sections'
-
-
-class InvoiceTemplateFieldInline(admin.TabularInline):
-    model = InvoiceTemplateField
-    extra = 0
-    fields = ['field_key', 'field_label', 'field_type', 'section', 'display_order', 'is_required']
-    ordering = ['section', 'display_order']
-
-
-class InvoiceSectionInline(admin.TabularInline):
-    model = InvoiceSection
-    extra = 0
-    fields = ['section_key', 'section_title', 'display_order', 'is_table']
-    ordering = ['display_order']
-
-
-# Add inlines to template admin
-InvoiceTemplateAdmin.inlines = [InvoiceSectionInline, InvoiceTemplateFieldInline]
-
-
-@admin.register(InvoiceTemplateField)
-class InvoiceTemplateFieldAdmin(admin.ModelAdmin):
-    list_display = ['template', 'field_label', 'field_key', 'field_type', 'section', 'display_order', 'is_required']
-    list_filter = ['template', 'field_type', 'section', 'is_required']
-    search_fields = ['field_label', 'field_key']
-    ordering = ['template', 'section', 'display_order']
-
-
-@admin.register(InvoiceSection)
-class InvoiceSectionAdmin(admin.ModelAdmin):
-    list_display = ['template', 'section_title', 'section_key', 'display_order', 'is_table']
-    list_filter = ['template', 'is_table']
-    search_fields = ['section_title', 'section_key']
-    ordering = ['template', 'display_order']
-
-
-# NEW: Email Notification Admin
 @admin.register(EmailNotification)
 class EmailNotificationAdmin(admin.ModelAdmin):
     list_display = ['order_link', 'email_type_colored', 'recipient_email', 'subject_truncated', 'is_successful',
@@ -383,23 +509,21 @@ class EmailNotificationAdmin(admin.ModelAdmin):
     list_filter = ['email_type', 'is_successful', 'sent_at']
     search_fields = ['recipient_email', 'subject', 'order__id', 'order__customer__name']
     readonly_fields = ['sent_at']
-    date_hierarchy = 'sent_at'
 
     def order_link(self, obj):
-        """Link to order admin page"""
         url = reverse('admin:tasks_order_change', args=[obj.order.id])
         return format_html('<a href="{}">Order #{}</a>', url, obj.order.id)
 
     order_link.short_description = 'Order'
 
     def email_type_colored(self, obj):
-        """Display email type with color coding"""
         colors = {
-            'order_submitted': '#60a5fa',  # blue
-            'pricing_ready': '#fbbf24',  # yellow
-            'order_confirmed': '#34d399',  # green
-            'order_rejected': '#f87171',  # red
-            'order_completed': '#10b981',  # dark green
+            'order_submitted': '#60a5fa',
+            'pricing_ready': '#fbbf24',
+            'order_confirmed': '#34d399',
+            'order_rejected': '#f87171',
+            'order_completed': '#10b981',
+            'dealer_assigned': '#8b5cf6',
         }
         color = colors.get(obj.email_type, '#9ca3af')
         return format_html(
@@ -411,7 +535,6 @@ class EmailNotificationAdmin(admin.ModelAdmin):
     email_type_colored.short_description = 'Email Type'
 
     def subject_truncated(self, obj):
-        """Display truncated subject"""
         if len(obj.subject) > 50:
             return f"{obj.subject[:50]}..."
         return obj.subject
@@ -420,6 +543,6 @@ class EmailNotificationAdmin(admin.ModelAdmin):
 
 
 # Customize admin site
-admin.site.site_header = "Order Management System"
+admin.site.site_header = "Order Management System with Dealer Network"
 admin.site.site_title = "OMS Admin"
 admin.site.index_title = "Welcome to Order Management System"

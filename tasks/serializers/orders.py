@@ -1,8 +1,8 @@
+from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
-from rest_framework import serializers
 from decimal import Decimal
-from ..models import Order, OrderItem, Product, STATUS_CHOICES
+from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -27,9 +27,8 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items')
 
         with transaction.atomic():
-            # FIX: Add customer to the order creation
             order = Order.objects.create(
-                customer=customer,  # <- This was missing!
+                customer=customer,
                 **validated_data
             )
             for item_data in items_data:
@@ -37,7 +36,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     order=order,
                     product=item_data['product'],
                     requested_quantity=item_data['requested_quantity'],
-                    customer_notes=item_data.get('customer_notes', '')  # Use .get() to avoid KeyError
+                    customer_notes=item_data.get('customer_notes', '')
                 )
         return order
 
@@ -85,13 +84,12 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
                 if item:
                     for attr, value in item_data.items():
                         if attr != 'id':
-                            #Convert to Decimal for price fields
                             if attr == 'quoted_unit_price' and value is not None:
                                 value = Decimal(str(value))
                             setattr(item, attr, value)
                     item.save()
 
-            #Use Decimal for calculations
+            # Calculate totals
             instance.pricing_date = timezone.now()
             total = Decimal('0.00')
             for item in instance.items.all():
@@ -108,8 +106,19 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    priced_by_name = serializers.CharField(source='priced_by.name', read_only=True)
+
+    # DEALER FIELDS - NEW
+    assigned_dealer_name = serializers.CharField(source='assigned_dealer.name', read_only=True)
+    assigned_dealer_email = serializers.CharField(source='assigned_dealer.email', read_only=True)
+    assigned_dealer_id = serializers.IntegerField(source='assigned_dealer.id', read_only=True)
+    assigned_dealer_code = serializers.CharField(source='assigned_dealer.dealer_code', read_only=True)
+    dealer_commission_amount = serializers.ReadOnlyField()
+    has_dealer = serializers.ReadOnlyField()
+
     items = OrderItemAdminUpdateSerializer(many=True)
-    #Add invoice fields for completed orders
+
+    # Invoice fields
     invoice_id = serializers.SerializerMethodField()
     invoice_number = serializers.SerializerMethodField()
     invoice_date = serializers.SerializerMethodField()
@@ -121,24 +130,27 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'admin_comment', 'pricing_date', 'quoted_total', 'items',
             'created_at', 'updated_at', 'completion_date', 'completed_by',
             'customer_response_date', 'customer_rejection_reason',
+            'priced_by_name',  # WHO PRICED
+            # DEALER FIELDS
+            'assigned_dealer_name', 'assigned_dealer_email', 'assigned_dealer_id',
+            'assigned_dealer_code', 'dealer_assigned_at', 'dealer_notes',
+            'dealer_commission_amount', 'has_dealer',
+            # INVOICE
             'invoice_id', 'invoice_number', 'invoice_date'
         ]
         read_only_fields = fields
 
     def get_invoice_id(self, obj):
-        """Get invoice ID if exists"""
         if hasattr(obj, 'invoice'):
             return obj.invoice.id
         return None
 
     def get_invoice_number(self, obj):
-        """Get invoice number if exists"""
         if hasattr(obj, 'invoice'):
             return obj.invoice.invoice_number
         return None
 
     def get_invoice_date(self, obj):
-        """Get invoice date if exists"""
         if hasattr(obj, 'invoice'):
             return obj.invoice.issued_at
         return None

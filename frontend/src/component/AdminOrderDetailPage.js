@@ -317,6 +317,53 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
+            {/* Dealer Assignment Section */}
+            <NeoBrutalistCard className="admin-dealer-assignment-card">
+                <div className="admin-card-header">
+                    <h2 className="admin-card-title">تخصیص نماینده فروش</h2>
+                </div>
+
+                <div className="dealer-assignment-section">
+                    {order.assigned_dealer_name ? (
+                        <div className="current-dealer">
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">نماینده فعلی:</span>
+                                <span className="admin-info-value">{order.assigned_dealer_name}</span>
+                            </div>
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">تاریخ تخصیص:</span>
+                                <span className="admin-info-value">
+                        {order.dealer_assigned_at && new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}
+                    </span>
+                            </div>
+                            <NeoBrutalistButton
+                                text="حذف نماینده"
+                                color="red-400"
+                                textColor="white"
+                                onClick={handleRemoveDealer}
+                                className="remove-dealer-btn"
+                            />
+                        </div>
+                    ) : (
+                        <div className="assign-dealer">
+                            <DealerAssignmentComponent
+                                orderId={order.id}
+                                onDealerAssigned={fetchOrder}
+                            />
+                        </div>
+                    )}
+
+                    {order.dealer_notes && (
+                        <div className="dealer-notes">
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">یادداشت‌های نماینده:</span>
+                                <span className="admin-info-value">{order.dealer_notes}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </NeoBrutalistCard>
+
             {/* Pricing Form */}
             <NeoBrutalistCard className="admin-pricing-card">
                 <div className="admin-card-header">

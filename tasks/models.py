@@ -1,4 +1,4 @@
-# tasks/models.py
+# tasks/models.py - Final Complete Version with Dealer System
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
@@ -48,13 +48,19 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(null=True, blank=True)
 
+    # DEALER FIELDS
+    is_dealer = models.BooleanField(default=False, help_text="Is this user a dealer?")
+    dealer_code = models.CharField(max_length=20, blank=True, null=True, unique=True, help_text="Unique dealer code")
+    dealer_commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'),
+                                                 help_text="Commission percentage")
+
     objects = CustomerManager()
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name']
 
     def __str__(self):
-        return self.email
+        return f"{self.name} ({self.email})"
 
     def has_perm(self, perm, obj=None):
         """Does the user have a specific permission?"""
@@ -63,6 +69,19 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     def has_module_perms(self, app_label):
         """Does the user have permissions to view the app `app_label`?"""
         return True
+
+    def save(self, *args, **kwargs):
+        # Auto-generate dealer code if user is marked as dealer
+        if self.is_dealer and not self.dealer_code:
+            self.dealer_code = f"DLR{self.id or ''}{timezone.now().strftime('%Y%m')}"
+        super().save(*args, **kwargs)
+
+    @property
+    def assigned_orders_count(self):
+        """Get count of orders assigned to this dealer"""
+        if self.is_dealer:
+            return self.assigned_orders.count()
+        return 0
 
     class Meta:
         db_table = 'customers'
@@ -73,7 +92,8 @@ class Customer(AbstractBaseUser, PermissionsMixin):
 class Product(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
-    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), help_text="Base price for reference")
+    base_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'),
+                                     help_text="Base price for reference")
     stock = models.IntegerField(default=0)
     image_url = models.URLField(blank=True, null=True, help_text="URL to product image")
     is_active = models.BooleanField(default=True)
@@ -105,7 +125,18 @@ class Order(models.Model):
     customer_comment = models.TextField(blank=True, null=True, help_text="Customer's initial request/comments")
     admin_comment = models.TextField(blank=True, null=True, help_text="Admin's pricing notes")
 
-    # NEW: Completion tracking fields
+    # DEALER ASSIGNMENT FIELDS
+    assigned_dealer = models.ForeignKey(
+        Customer,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='assigned_orders',
+        help_text="Dealer assigned to this order"
+    )
+    dealer_assigned_at = models.DateTimeField(null=True, blank=True, help_text="When dealer was assigned")
+    dealer_notes = models.TextField(blank=True, null=True, help_text="Notes from assigned dealer")
+
+    # Completion tracking fields
     completion_date = models.DateTimeField(blank=True, null=True, help_text="When order was completed")
     completed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -116,7 +147,8 @@ class Order(models.Model):
     )
 
     # Pricing fields
-    quoted_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'), help_text="Total quoted by admin")
+    quoted_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'),
+                                       help_text="Total quoted by admin")
     pricing_date = models.DateTimeField(blank=True, null=True, help_text="When admin provided pricing")
     priced_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name='priced_orders')
@@ -130,7 +162,7 @@ class Order(models.Model):
         return f"Order {self.id} - {self.customer.name} - {self.status}"
 
     def calculate_total_from_items(self):
-        """Calculate total from order items (after admin pricing) """
+        """Calculate total from order items (after admin pricing)"""
         total = Decimal('0.00')
         for item in self.items.all():
             total += item.total_price
@@ -204,6 +236,81 @@ class Order(models.Model):
         """Generate unique invoice number"""
         return f"INV-{timezone.now().year}-{self.id:06d}"
 
+    # DEALER MANAGEMENT METHODS
+    def assign_dealer(self, dealer, assigned_by):
+        """Assign a dealer to this order"""
+        if not dealer.is_dealer:
+            raise ValueError("User is not a dealer")
+
+        old_dealer = self.assigned_dealer
+        self.assigned_dealer = dealer
+        self.dealer_assigned_at = timezone.now()
+        self.save()
+
+        # Log the assignment
+        OrderLog.objects.create(
+            order=self,
+            action='dealer_assigned',
+            description=f"Dealer {dealer.name} assigned by {assigned_by.name}" +
+                        (f" (replaced {old_dealer.name})" if old_dealer else ""),
+            performed_by=assigned_by
+        )
+
+        return True
+
+    def remove_dealer(self, removed_by):
+        """Remove dealer from this order"""
+        if self.assigned_dealer:
+            old_dealer = self.assigned_dealer
+            self.assigned_dealer = None
+            self.dealer_assigned_at = None
+            self.dealer_notes = ""
+            self.save()
+
+            # Log the removal
+            OrderLog.objects.create(
+                order=self,
+                action='dealer_removed',
+                description=f"Dealer {old_dealer.name} removed by {removed_by.name}",
+                performed_by=removed_by
+            )
+
+            return True
+        return False
+
+    def update_dealer_notes(self, notes, updated_by):
+        """Update dealer notes"""
+        if self.assigned_dealer:
+            self.dealer_notes = notes
+            self.save()
+
+            # Log the update
+            OrderLog.objects.create(
+                order=self,
+                action='dealer_notes_updated',
+                description=f"Dealer notes updated by {updated_by.name}",
+                performed_by=updated_by
+            )
+
+            return True
+        return False
+
+    @property
+    def has_dealer(self):
+        """Check if order has an assigned dealer"""
+        return self.assigned_dealer is not None
+
+    @property
+    def dealer_commission_amount(self):
+        """Calculate dealer commission amount if applicable"""
+        if self.assigned_dealer and self.status == 'completed' and self.quoted_total:
+            commission_rate = self.assigned_dealer.dealer_commission_rate
+            if commission_rate > 0:
+                return (self.quoted_total * commission_rate / Decimal('100')).quantize(
+                    Decimal('0.01'), rounding=ROUND_HALF_UP
+                )
+        return Decimal('0.00')
+
     class Meta:
         db_table = 'orders'
         ordering = ['-created_at']
@@ -250,10 +357,11 @@ class Invoice(models.Model):
     invoice_number = models.CharField(max_length=20, unique=True)
     invoice_type = models.CharField(max_length=15, choices=INVOICE_TYPE_CHOICES, default='pre_invoice')
 
-    # Financial fields : Use Decimal consistently
+    # Financial fields: Use Decimal consistently
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), help_text="Tax rate as percentage")
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'),
+                                   help_text="Tax rate as percentage")
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     payable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
@@ -270,7 +378,7 @@ class Invoice(models.Model):
         return f"Invoice {self.invoice_number} - Order {self.order.id} - {self.invoice_type}"
 
     def calculate_payable_amount(self):
-        """Calculate final payable amount: Use Decimal"""
+        """Calculate final payable amount"""
         subtotal = self.total_amount - self.discount
         tax_amount = subtotal * (self.tax_rate / Decimal('100'))
         self.tax_amount = tax_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -285,7 +393,7 @@ class Invoice(models.Model):
             self.calculate_payable_amount()
             self.save()
 
-    # NEW: PDF generation methods
+    # PDF generation methods
     def generate_pdf(self):
         """Generate PDF for this invoice"""
         generator = SimpleInvoicePDFGenerator(self)
@@ -298,7 +406,6 @@ class Invoice(models.Model):
 
     def download_pdf_response(self):
         """Get HTTP response for PDF download"""
-
         generator = SimpleInvoicePDFGenerator(self)
         return generator.get_http_response()
 
@@ -313,7 +420,7 @@ class Invoice(models.Model):
         ordering = ['-issued_at']
 
 
-# NEW: Template system for customizable invoices
+# Template system for customizable invoices
 class InvoiceTemplate(models.Model):
     """Template configuration for invoices"""
     name = models.CharField(max_length=100, unique=True)
@@ -376,7 +483,7 @@ class InvoiceSection(models.Model):
         unique_together = ['template', 'section_key']
 
 
-# NEW: Email notification tracking
+# Email notification tracking
 class EmailNotification(models.Model):
     """Track email notifications sent"""
     EMAIL_TYPES = [
@@ -385,6 +492,7 @@ class EmailNotification(models.Model):
         ('order_confirmed', 'Order Confirmed'),
         ('order_rejected', 'Order Rejected'),
         ('order_completed', 'Order Completed'),
+        ('dealer_assigned', 'Dealer Assigned'),  # NEW
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications')
@@ -401,3 +509,71 @@ class EmailNotification(models.Model):
     class Meta:
         db_table = 'email_notifications'
         ordering = ['-sent_at']
+
+
+class OrderLog(models.Model):
+    """Track all actions performed on orders"""
+    ACTION_CHOICES = [
+        ('order_created', 'Order Created'),
+        ('pricing_submitted', 'Pricing Submitted'),
+        ('customer_approved', 'Customer Approved'),
+        ('customer_rejected', 'Customer Rejected'),
+        ('order_completed', 'Order Completed'),
+        ('dealer_assigned', 'Dealer Assigned'),
+        ('dealer_removed', 'Dealer Removed'),
+        ('dealer_notes_updated', 'Dealer Notes Updated'),
+    ]
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='logs')
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    description = models.TextField()
+    performed_by = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Order #{self.order.id} - {self.get_action_display()} by {self.performed_by}"
+
+    class Meta:
+        db_table = 'order_logs'
+        ordering = ['-timestamp']
+
+
+# NEW: Dealer Commission Tracking
+class DealerCommission(models.Model):
+    """Track dealer commissions for completed orders"""
+    dealer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='commissions')
+    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='commission')
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2,
+                                          help_text="Commission percentage at time of completion")
+    commission_amount = models.DecimalField(max_digits=10, decimal_places=2, help_text="Calculated commission amount")
+    order_total = models.DecimalField(max_digits=12, decimal_places=2, help_text="Order total at time of completion")
+
+    # Payment tracking
+    is_paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=100, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Commission for {self.dealer.name} - Order #{self.order.id} - {self.commission_amount}"
+
+    @classmethod
+    def create_for_completed_order(cls, order):
+        """Create commission record when order is completed"""
+        if order.assigned_dealer and order.status == 'completed':
+            commission, created = cls.objects.get_or_create(
+                dealer=order.assigned_dealer,
+                order=order,
+                defaults={
+                    'commission_rate': order.assigned_dealer.dealer_commission_rate,
+                    'commission_amount': order.dealer_commission_amount,
+                    'order_total': order.quoted_total,
+                }
+            )
+            return commission
+        return None
+
+    class Meta:
+        db_table = 'dealer_commissions'
+        ordering = ['-created_at']
