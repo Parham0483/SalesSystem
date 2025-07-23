@@ -314,6 +314,12 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="admin-info-label">مشتری</span>
                         <span className="admin-info-value">{order.customer_name}</span>
                     </div>
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">شماره تماس</span>
+                        <span className="neo-info-value">
+                            {order.customer_phone || 'ثبت نشده'}
+                        </span>
+                    </div>
                     <div className="admin-info-item">
                         <span className="admin-info-label">تاریخ ایجاد</span>
                         <span className="admin-info-value">

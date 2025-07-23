@@ -1,4 +1,4 @@
-// frontend/src/component/DealerOrderDetailPage.js - Dealer-specific order view
+// frontend/src/component/DealerOrderDetailPage.js - Dealer-specific order view with phone number
 import React, { useState, useEffect, useRef } from 'react';
 import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
@@ -219,6 +219,12 @@ const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="neo-info-item">
                         <span className="neo-info-label">نام مشتری</span>
                         <span className="neo-info-value">{order.customer_name}</span>
+                    </div>
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">شماره تماس</span>
+                        <span className="neo-info-value">
+                            {order.customer_phone || 'ثبت نشده'}
+                        </span>
                     </div>
                     <div className="neo-info-item">
                         <span className="neo-info-label">تاریخ ثبت سفارش</span>

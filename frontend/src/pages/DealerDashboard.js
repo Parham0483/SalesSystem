@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import DealerOrderDetailPage from '../component/DealerOrderDetailPage'; // Changed from OrderDetailPage
+import DealerOrderDetailPage from '../component/DealerOrderDetailPage';
 import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
 
 const DealerDashboard = () => {

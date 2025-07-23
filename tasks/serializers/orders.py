@@ -1,3 +1,5 @@
+# tasks/serializers/orders.py - Updated with customer phone field
+
 from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
@@ -106,6 +108,7 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer_phone = serializers.CharField(source='customer.phone', read_only=True)
 
     # ENHANCED: Pricing information
     priced_by_name = serializers.CharField(source='priced_by.name', read_only=True)
@@ -135,7 +138,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'id', 'customer', 'customer_name', 'status', 'customer_comment',
+            'id', 'customer', 'customer_name', 'customer_phone', 'status', 'customer_comment',
             'admin_comment', 'pricing_date', 'quoted_total', 'items',
             'created_at', 'updated_at', 'completion_date', 'completed_by',
             'customer_response_date', 'customer_rejection_reason',
