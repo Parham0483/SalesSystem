@@ -14,8 +14,16 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        fetchProducts();
-    }, []);
+        const { state } = location;
+        if (state?.preselectedProduct) {
+            const product = state.preselectedProduct;
+            setOrderItems([{
+                product: product.id,
+                requested_quantity: 1,
+                customer_notes: `Pre-selected from ${product.name}`
+            }]);
+        }
+    }, [location]);
 
     const fetchProducts = async () => {
         try {

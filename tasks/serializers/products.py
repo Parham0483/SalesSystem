@@ -1,7 +1,202 @@
+# tasks/serializers/products.py - Updated version
 from rest_framework import serializers
-from ..models import Product
+from django.utils import timezone
+from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncement
+
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    """Serializer for additional product images"""
+
+    class Meta:
+        model = ProductImage
+        fields = ['id', 'image', 'alt_text', 'order', 'is_primary']
+
+
+class ProductCategorySerializer(serializers.ModelSerializer):
+    """Serializer for product categories"""
+    products_count = serializers.ReadOnlyField()
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductCategory
+        fields = [
+            'id', 'name', 'description', 'image_url', 'parent',
+            'slug', 'is_active', 'order', 'products_count'
+        ]
+
+    def get_image_url(self, obj):
+        if obj.image:
+            return obj.image.url
+        return None
+
 
 class ProductSerializer(serializers.ModelSerializer):
+    """Enhanced product serializer with image upload and category support"""
+    image_url = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    additional_images = ProductImageSerializer(many=True, read_only=True)
+    is_low_stock = serializers.ReadOnlyField()
+    average_rating = serializers.ReadOnlyField()
+    reviews_count = serializers.ReadOnlyField()
+    days_since_created = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = [
+            'id', 'name', 'description', 'base_price', 'stock', 'sku',
+            'weight', 'dimensions', 'reorder_level', 'max_stock',
+            'image', 'image_url', 'additional_images',
+            'category', 'category_name', 'is_active', 'created_at', 'updated_at',
+            'meta_title', 'meta_description', 'tags',
+            'is_low_stock', 'average_rating', 'reviews_count', 'days_since_created'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_image_url(self, obj):
+        """Get the primary image URL"""
+        return obj.get_primary_image_url()
+
+    def get_days_since_created(self, obj):
+        """Get days since product was created"""
+        return (timezone.now() - obj.created_at).days
+
+    def create(self, validated_data):
+        """Create product with automatic SKU generation"""
+        if not validated_data.get('sku'):
+            # Generate SKU automatically
+            sku = f"PRD-{timezone.now().strftime('%Y%m%d')}-{Product.objects.count() + 1:04d}"
+            validated_data['sku'] = sku
+
+        return super().create(validated_data)
+
+    def validate_stock(self, value):
+        """Validate stock value"""
+        if value < 0:
+            raise serializers.ValidationError("Stock cannot be negative")
+        return value
+
+    def validate_base_price(self, value):
+        """Validate base price"""
+        if value < 0:
+            raise serializers.ValidationError("Price cannot be negative")
+        return value
+
+
+class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
+    """Serializer for shipment announcements"""
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    image_url = serializers.SerializerMethodField()
+    products_count = serializers.ReadOnlyField()
+    related_products_info = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShipmentAnnouncement
+        fields = [
+            'id', 'title', 'description', 'image', 'image_url',
+            'created_at', 'created_by', 'created_by_name',
+            'is_active', 'is_featured', 'products_count',
+            'related_products', 'related_products_info'
+        ]
+        read_only_fields = ['created_at', 'created_by', 'products_count']
+
+    def get_image_url(self, obj):
+        return obj.get_image_url()
+
+    def get_related_products_info(self, obj):
+        """Get basic info about related products"""
+        products = obj.related_products.filter(is_active=True)[:5]  # Limit to 5
+        return [
+            {
+                'id': product.id,
+                'name': product.name,
+                'image_url': product.get_primary_image_url(),
+                'base_price': product.base_price,
+                'stock': product.stock,
+                'is_low_stock': product.is_low_stock
+            }
+            for product in products
+        ]
+
+
+class ProductStockUpdateSerializer(serializers.Serializer):
+    """Serializer for stock updates"""
+    stock = serializers.IntegerField(min_value=0)
+
+    def validate_stock(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Stock cannot be negative")
+        return value
+
+
+class ProductSearchSerializer(serializers.Serializer):
+    """Serializer for product search parameters"""
+    q = serializers.CharField(required=False, max_length=200)
+    category = serializers.IntegerField(required=False)
+    min_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
+    max_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
+    in_stock_only = serializers.BooleanField(default=False)
+    sort_by = serializers.ChoiceField(
+        choices=[
+            ('name', 'Name'),
+            ('-name', 'Name (desc)'),
+            ('price', 'Price (low to high)'),
+            ('-price', 'Price (high to low)'),
+            ('created_at', 'Oldest first'),
+            ('-created_at', 'Newest first'),
+            ('stock', 'Stock (low to high)'),
+            ('-stock', 'Stock (high to low)')
+        ],
+        default='-created_at'
+    )
+
+
+class ProductBulkUpdateSerializer(serializers.Serializer):
+    """Serializer for bulk product updates"""
+    product_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1
+    )
+    action = serializers.ChoiceField(choices=[
+        ('activate', 'Activate'),
+        ('deactivate', 'Deactivate'),
+        ('update_category', 'Update Category'),
+        ('update_stock', 'Update Stock'),
+        ('delete', 'Delete')
+    ])
+
+    # Optional fields based on action
+    category_id = serializers.IntegerField(required=False)
+    stock_change = serializers.IntegerField(required=False)
+    new_stock = serializers.IntegerField(required=False, min_value=0)
+
+    def validate(self, data):
+        action = data.get('action')
+
+        if action == 'update_category' and not data.get('category_id'):
+            raise serializers.ValidationError("category_id is required for update_category action")
+
+        if action == 'update_stock' and 'new_stock' not in data and 'stock_change' not in data:
+            raise serializers.ValidationError("new_stock or stock_change is required for update_stock action")
+
+        return data
+
+
+class ProductAnalyticsSerializer(serializers.Serializer):
+    """Serializer for product analytics data"""
+    total_products = serializers.IntegerField()
+    active_products = serializers.IntegerField()
+    low_stock_products = serializers.IntegerField()
+    out_of_stock_products = serializers.IntegerField()
+    new_products_this_month = serializers.IntegerField()
+    total_inventory_value = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    top_selling_products = serializers.ListField(
+        child=serializers.DictField()
+    )
+    categories_breakdown = serializers.ListField(
+        child=serializers.DictField()
+    )
+    stock_alerts = serializers.ListField(
+        child=serializers.DictField()
+    )
+
