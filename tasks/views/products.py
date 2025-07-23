@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.db.models import Q, Avg
 from datetime import timedelta
 from ..serializers import ProductSerializer
-from ..models import Product, ShipmentAnnouncement, ProductCategory, ProductReview
+from ..models import Product, ShipmentAnnouncement, ProductCategory
 
 
 class ProductViewSet(viewsets.ModelViewSet):
