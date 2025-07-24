@@ -1,212 +1,334 @@
+// frontend/src/pages/AdminDashboardPage.js - Enhanced with proper navigation
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
-import AdminOrderDetailPage from '../component/AdminOrderDetailPage';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
+import '../styles/Admin/AdminDashboard.css'
 
 const AdminDashboardPage = () => {
-    const [orders, setOrders] = useState([]);
-    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [stats, setStats] = useState({
+        orders: { total: 0, pending: 0, completed: 0 },
+        products: { total: 0, active: 0, low_stock: 0, out_of_stock: 0 },
+        announcements: { total: 0, recent: 0 }
+    });
+    const [recentActivity, setRecentActivity] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('active');
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchOrders();
+        fetchDashboardData();
     }, []);
 
-    const fetchOrders = async () => {
-        setLoading(true);
+    const fetchDashboardData = async () => {
         try {
-            const res = await API.get('/orders/');
-            console.log('Admin orders fetched:', res.data);
-            setOrders(res.data);
-            setError('');
+            // Fetch dashboard statistics
+            const [ordersRes, productsRes, announcementsRes] = await Promise.all([
+                API.get('/admin/stats/orders/'),
+                API.get('/admin/stats/products/'),
+                API.get('/admin/stats/announcements/')
+            ]);
+
+            setStats({
+                orders: ordersRes.data,
+                products: productsRes.data,
+                announcements: announcementsRes.data
+            });
+
+            // Fetch recent activity
+            const activityRes = await API.get('/admin/recent-activity/');
+            setRecentActivity(activityRes.data);
         } catch (err) {
-            console.error('Error fetching orders:', err);
-            if (err.response?.status === 401) {
-                setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
-                setTimeout(() => handleLogout(), 2000);
-            } else {
-                setError('خطا در بارگیری سفارشات');
-            }
+            console.error('Error fetching dashboard data:', err);
         } finally {
             setLoading(false);
         }
     };
 
     const handleLogout = () => {
-        // Clear all authentication data using correct key names
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('userData');
-
-        // Clear axios default headers
         delete API.defaults.headers.common['Authorization'];
-
         navigate('/');
-    };
-
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'pending_pricing':
-                return 'yellow-400';
-            case 'waiting_customer_approval':
-                return 'blue-400';
-            case 'confirmed':
-                return 'green-400';
-            case 'rejected':
-                return 'red-400';
-            case 'cancelled':
-                return 'gray-400';
-            default:
-                return 'gray-400';
-        }
-    };
-
-    const formatStatus = (status) => {
-        const statusMap = {
-            'pending_pricing': 'نیاز به قیمت‌گذاری',
-            'waiting_customer_approval': 'منتظر تأیید مشتری',
-            'confirmed': 'تأیید شده',
-            'rejected': 'رد شده',
-            'cancelled': 'لغو شده'
-        };
-        return statusMap[status] || status;
     };
 
     if (loading) {
         return (
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-                <h1>در حال بارگیری...</h1>
+            <div className="admin-dashboard">
+                <div className="loading-state">در حال بارگیری...</div>
             </div>
         );
     }
 
     return (
-        <div style={{ padding: '2rem', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '2rem',
-                padding: '2rem',
-                backgroundColor: '#fff',
-                border: '4px solid #000',
-                boxShadow: '6px 6px 0px #000'
-            }}>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: '2.5rem' }}>پنل مدیریت سفارشات</h1>
-                    <p style={{ margin: '0.5rem 0 0 0', color: '#666' }}>
-                        مجموع سفارشات: {orders.length}
-                    </p>
-                </div>
-                <NeoBrutalistButton
-                    text="خروج"
-                    color="red-400"
-                    textColor="white"
-                    onClick={handleLogout}
-                />
-            </div>
+        <div className="admin-dashboard" dir="rtl">
+            {/* Header */}
+            <div className="dashboard-header">
+                <div className="header-content">
+                    <div className="title-section">
+                        <h1 className="dashboard-title">پنل مدیریت</h1>
+                        <p className="dashboard-subtitle">مدیریت جامع فروشگاه</p>
+                    </div>
+                    <div className="header-actions">
 
-            {error && (
-                <div style={{
-                    backgroundColor: '#fee2e2',
-                    border: '4px solid #dc2626',
-                    padding: '1rem',
-                    marginBottom: '2rem',
-                    color: '#dc2626',
-                    fontWeight: 'bold'
-                }}>
-                    {error}
-                </div>
-            )}
-
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-                gap: '2rem'
-            }}>
-                {orders.map(order => (
-                    <NeoBrutalistCard
-                        key={order.id}
-                        onClick={() => setSelectedOrder(order)}
-                        style={{ cursor: 'pointer' }}
-                    >
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '1rem'
-                        }}>
-                            <h3 style={{ margin: 0 }}>سفارش #{order.id}</h3>
-                            <NeoBrutalistButton
-                                text={formatStatus(order.status)}
-                                color={getStatusColor(order.status)}
-                                textColor="black"
-                                style={{
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    minWidth: 'auto'
-                                }}
-                            />
-                        </div>
-
-                        <div style={{ marginBottom: '1rem' }}>
-                            <p><strong>مشتری:</strong> {order.customer_name}</p>
-                            <p><strong>تاریخ:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
-                            <p><strong>مبلغ:</strong> {order.quoted_total ? `$${order.quoted_total}` : 'نامشخص'}</p>
-                        </div>
-
-                        {order.customer_comment && (
-                            <div style={{
-                                backgroundColor: '#f8f9fa',
-                                padding: '0.5rem',
-                                border: '2px solid #000',
-                                fontSize: '0.9rem'
-                            }}>
-                                <strong>نظر مشتری:</strong> {order.customer_comment.substring(0, 60)}...
-                            </div>
-                        )}
-                    </NeoBrutalistCard>
-                ))}
-            </div>
-
-            {orders.length === 0 && !loading && (
-                <div style={{ textAlign: 'center', padding: '4rem' }}>
-                    <NeoBrutalistCard style={{ maxWidth: '400px', margin: '0 auto' }}>
-                        <h3>هیچ سفارشی یافت نشد</h3>
-                        <p>در حال حاضر هیچ سفارشی در سیستم موجود نیست.</p>
                         <NeoBrutalistButton
-                            text="بروزرسانی"
+                            text="خروج"
+                            color="red-400"
+                            textColor="white"
+                            onClick={handleLogout}
+                            className="logout-btn"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="stats-section">
+                <div className="stats-grid">
+                    <NeoBrutalistCard className="stat-card orders">
+                        <div className="stat-header">
+                            <h3>📋 سفارشات</h3>
+                            <span className="stat-number">{stats.orders.total}</span>
+                        </div>
+                        <div className="stat-details">
+                            <div className="stat-item">
+                                <span>در انتظار: {stats.orders.pending}</span>
+                            </div>
+                            <div className="stat-item">
+                                <span>تکمیل شده: {stats.orders.completed}</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card products">
+                        <div className="stat-header">
+                            <h3>📦 محصولات</h3>
+                            <span className="stat-number">{stats.products.total}</span>
+                        </div>
+                        <div className="stat-details">
+                            <div className="stat-item">
+                                <span>فعال: {stats.products.active}</span>
+                            </div>
+                            <div className="stat-item">
+                                <span>موجودی کم: {stats.products.low_stock}</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card announcements">
+                        <div className="stat-header">
+                            <h3>📢 اطلاعیه‌ها</h3>
+                            <span className="stat-number">{stats.announcements.total}</span>
+                        </div>
+                        <div className="stat-details">
+                            <div className="stat-item">
+                                <span>این ماه: {stats.announcements.recent}</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+                </div>
+            </div>
+
+            {/* Main Navigation Cards */}
+            <div className="main-actions-section">
+                <h2 className="section-title">عملیات اصلی</h2>
+                <div className="actions-grid">
+                    {/* Orders Management */}
+                    <NeoBrutalistCard className="action-card orders-card" onClick={() => navigate('/admin/orders')}>
+                        <div className="card-icon">📋</div>
+                        <div className="card-content">
+                            <h3>مدیریت سفارشات</h3>
+                            <p>مشاهده، پردازش و مدیریت سفارشات مشتریان</p>
+                            <ul className="card-features">
+                                <li>- فیلتر بر اساس وضعیت</li>
+                                <li>- جستجو در مشتریان</li>
+                                <li>- تخصیص نماینده</li>
+                                <li>- قیمت‌گذاری و تکمیل</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="ورود به بخش سفارشات"
+                            color="yellow-400"
+                            textColor="black"
+                            className="card-action-btn"
+                        />
+                    </NeoBrutalistCard>
+
+                    {/* Products Management */}
+                    <NeoBrutalistCard className="action-card products-card" onClick={() => navigate('/admin/products')}>
+                        <div className="card-icon">📦</div>
+                        <div className="card-content">
+                            <h3>مدیریت محصولات</h3>
+                            <p>افزودن، ویرایش و مدیریت کاتالوگ محصولات</p>
+                            <ul className="card-features">
+                                <li>- افزودن محصول جدید</li>
+                                <li>- ویرایش قیمت و موجودی</li>
+                                <li>- مدیریت دسته‌بندی‌ها</li>
+                                <li>- آپلود تصاویر</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="مدیریت محصولات"
+                            color="green-400"
+                            textColor="black"
+                            className="card-action-btn"
+                        />
+                    </NeoBrutalistCard>
+
+                    {/* Shipment Announcements */}
+                    <NeoBrutalistCard className="action-card announcements-card" onClick={() => navigate('/admin/announcements')}>
+                        <div className="card-icon">🚢</div>
+                        <div className="card-content">
+                            <h3>اطلاعیه محموله‌ها</h3>
+                            <p>اعلام ورود محموله‌های جدید به مشتریان</p>
+                            <ul className="card-features">
+                                <li>- ثبت محموله جدید</li>
+                                <li>- آپلود تصاویر متعدد</li>
+                                <li>- اطلاع‌رسانی به مشتریان</li>
+                                <li>- لینک به محصولات</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="مدیریت اطلاعیه‌ها"
                             color="blue-400"
                             textColor="white"
-                            onClick={fetchOrders}
+                            className="card-action-btn"
+                        />
+                    </NeoBrutalistCard>
+
+                    {/* Customers Management */}
+                    <NeoBrutalistCard className="action-card customers-card" onClick={() => navigate('/admin/customers')}>
+                        <div className="card-icon">👥</div>
+                        <div className="card-content">
+                            <h3>مدیریت مشتریان</h3>
+                            <p>مشاهده و مدیریت اطلاعات مشتریان</p>
+                            <ul className="card-features">
+                                <li>- لیست تمام مشتریان</li>
+                                <li>- تاریخچه سفارشات</li>
+                                <li>- اطلاعات تماس</li>
+                                <li>- آمار خرید</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="مشاهده مشتریان"
+                            color="purple-400"
+                            textColor="white"
+                            className="card-action-btn"
+                        />
+                    </NeoBrutalistCard>
+
+                    {/* Dealers Management */}
+                    <NeoBrutalistCard className="action-card dealers-card" onClick={() => navigate('/admin/dealers')}>
+                        <div className="card-icon">🤝</div>
+                        <div className="card-content">
+                            <h3>مدیریت نمایندگان</h3>
+                            <p>مدیریت نمایندگان فروش و کمیسیون‌ها</p>
+                            <ul className="card-features">
+                                <li>- افزودن نماینده جدید</li>
+                                <li>- تنظیم نرخ کمیسیون</li>
+                                <li>- گزارش فروش</li>
+                                <li>- مدیریت تخصیص‌ها</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="مدیریت نمایندگان"
+                            color="orange-400"
+                            textColor="black"
+                            className="card-action-btn"
+                        />
+                    </NeoBrutalistCard>
+
+                    {/* Reports & Analytics */}
+                    <NeoBrutalistCard className="action-card reports-card" onClick={() => navigate('/admin/reports')}>
+                        <div className="card-icon">📊</div>
+                        <div className="card-content">
+                            <h3>گزارشات و آمار</h3>
+                            <p>مشاهده گزارشات فروش و آمار سیستم</p>
+                            <ul className="card-features">
+                                <li>- گزارش فروش ماهانه</li>
+                                <li>- آمار محصولات پرفروش</li>
+                                <li>- عملکرد نمایندگان</li>
+                                <li>- خروجی Excel</li>
+                            </ul>
+                        </div>
+                        <NeoBrutalistButton
+                            text="مشاهده گزارشات"
+                            color="indigo-400"
+                            textColor="white"
+                            className="card-action-btn"
                         />
                     </NeoBrutalistCard>
                 </div>
-            )}
+            </div>
 
-            {/* Order Detail Modal */}
-            <NeoBrutalistModal
-                isOpen={!!selectedOrder}
-                onClose={() => setSelectedOrder(null)}
-                title={selectedOrder ? `ویرایش سفارش #${selectedOrder.id}` : ""}
-                size="large"
-            >
-                {selectedOrder && (
-                    <AdminOrderDetailPage
-                        orderId={selectedOrder.id}
-                        onOrderUpdated={() => {
-                            fetchOrders();
-                            setSelectedOrder(null);
-                        }}
+            {/* Quick Actions */}
+            <div className="quick-actions-section">
+                <h2 className="section-title">دسترسی سریع</h2>
+                <div className="quick-actions-grid">
+                    <NeoBrutalistButton
+                        text="+ افزودن محصول جدید"
+                        color="green-400"
+                        textColor="black"
+                        onClick={() => navigate('/admin/products/new')}
+                        className="quick-action-btn"
                     />
-                )}
-            </NeoBrutalistModal>
+                    <NeoBrutalistButton
+                        text="+ ثبت محموله جدید"
+                        color="blue-400"
+                        textColor="white"
+                        onClick={() => navigate('/admin/announcements/new')}
+                        className="quick-action-btn"
+                    />
+                    <NeoBrutalistButton
+                        text="📋 سفارشات در انتظار"
+                        color="yellow-400"
+                        textColor="black"
+                        onClick={() => navigate('/admin/orders?status=pending')}
+                        className="quick-action-btn"
+                    />
+                    <NeoBrutalistButton
+                        text="⚠️ موجودی کم"
+                        color="red-400"
+                        textColor="white"
+                        onClick={() => navigate('/admin/products?stock=low')}
+                        className="quick-action-btn"
+                    />
+                </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div className="recent-activity-section">
+                <h2 className="section-title">فعالیت‌های اخیر</h2>
+                <NeoBrutalistCard className="activity-card">
+                    <div className="activity-list">
+                        {recentActivity.length > 0 ? (
+                            recentActivity.slice(0, 10).map((activity, index) => (
+                                <div key={index} className="activity-item">
+                                    <div className="activity-icon">{activity.icon}</div>
+                                    <div className="activity-content">
+                                        <span className="activity-text">{activity.description}</span>
+                                        <span className="activity-time">{activity.time_ago}</span>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="no-activity">
+                                <span>📝 هیچ فعالیت اخیری ثبت نشده</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="activity-footer">
+                        <NeoBrutalistButton
+                            text="مشاهده تمام فعالیت‌ها"
+                            color="gray-400"
+                            textColor="black"
+                            onClick={() => navigate('/admin/activity-log')}
+                            className="view-all-activity-btn"
+                        />
+                    </div>
+                </NeoBrutalistCard>
+            </div>
         </div>
     );
 };

@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductsPage.js - Customer Product Gallery
+// frontend/src/pages/ProductsPage.js - Enhanced with stock status only (no numbers)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
@@ -15,17 +15,20 @@ const ProductsPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'in_stock', 'out_of_stock'
-    const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'price_low', 'price_high', 'name'
+    const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'available', 'unavailable'
+    const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'name', 'category'
+    const [categories, setCategories] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState('all');
     const navigate = useNavigate();
 
     useEffect(() => {
         fetchProducts();
+        fetchCategories();
     }, []);
 
     useEffect(() => {
         filterAndSortProducts();
-    }, [products, searchTerm, filterStatus, sortBy]);
+    }, [products, searchTerm, filterStatus, sortBy, selectedCategory]);
 
     const fetchProducts = async () => {
         setLoading(true);
@@ -42,6 +45,17 @@ const ProductsPage = () => {
         }
     };
 
+    const fetchCategories = async () => {
+        try {
+            const response = await API.get('/products/categories/');
+            console.log('📂 Categories fetched:', response.data);
+            setCategories(response.data);
+        } catch (err) {
+            console.error('❌ Error fetching categories:', err);
+            // Categories are optional, don't show error
+        }
+    };
+
     const filterAndSortProducts = () => {
         let filtered = [...products];
 
@@ -49,17 +63,26 @@ const ProductsPage = () => {
         if (searchTerm) {
             filtered = filtered.filter(product =>
                 product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                product.description.toLowerCase().includes(searchTerm.toLowerCase())
+                product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
 
-        // Apply stock status filter
+        // Apply category filter
+        if (selectedCategory !== 'all') {
+            filtered = filtered.filter(product =>
+                product.category === selectedCategory
+            );
+        }
+
+        // Apply availability filter (status only, no numbers)
         if (filterStatus !== 'all') {
             filtered = filtered.filter(product => {
-                if (filterStatus === 'in_stock') {
-                    return product.stock > 0 && product.is_active;
-                } else if (filterStatus === 'out_of_stock') {
-                    return product.stock === 0 || !product.is_active;
+                const stockStatus = getStockStatus(product);
+                if (filterStatus === 'available') {
+                    return stockStatus.status === 'available' || stockStatus.status === 'low_stock';
+                } else if (filterStatus === 'unavailable') {
+                    return stockStatus.status === 'out_of_stock' || stockStatus.status === 'discontinued';
                 }
                 return true;
             });
@@ -72,12 +95,10 @@ const ProductsPage = () => {
                     return new Date(b.created_at) - new Date(a.created_at);
                 case 'oldest':
                     return new Date(a.created_at) - new Date(b.created_at);
-                case 'price_low':
-                    return parseFloat(a.base_price) - parseFloat(b.base_price);
-                case 'price_high':
-                    return parseFloat(b.base_price) - parseFloat(a.base_price);
                 case 'name':
-                    return a.name.localeCompare(b.name);
+                    return a.name.localeCompare(b.name, 'fa');
+                case 'category':
+                    return (a.category || '').localeCompare(b.category || '', 'fa');
                 default:
                     return 0;
             }
@@ -86,15 +107,36 @@ const ProductsPage = () => {
         setFilteredProducts(filtered);
     };
 
+    // Enhanced stock status without showing actual numbers
     const getStockStatus = (product) => {
         if (!product.is_active) {
-            return { status: 'discontinued', text: 'متوقف شده', color: 'gray-400' };
+            return {
+                status: 'discontinued',
+                text: 'متوقف شده',
+                color: 'gray-400',
+                description: 'این محصول دیگر در دسترس نیست'
+            };
         } else if (product.stock === 0) {
-            return { status: 'out_of_stock', text: 'ناموجود', color: 'red-400' };
+            return {
+                status: 'out_of_stock',
+                text: 'ناموجود',
+                color: 'red-400',
+                description: 'موجودی این محصول به پایان رسیده است'
+            };
         } else if (product.stock <= 10) {
-            return { status: 'low_stock', text: `${product.stock} عدد باقی‌مانده`, color: 'yellow-400' };
+            return {
+                status: 'low_stock',
+                text: 'موجودی کم',
+                color: 'yellow-400',
+                description: 'موجودی این محصول رو به اتمام است'
+            };
         } else {
-            return { status: 'in_stock', text: 'موجود', color: 'green-400' };
+            return {
+                status: 'available',
+                text: 'موجود',
+                color: 'green-400',
+                description: 'این محصول در انبار موجود است'
+            };
         }
     };
 
@@ -103,8 +145,12 @@ const ProductsPage = () => {
     };
 
     const handleCreateOrder = (product) => {
+        const stockStatus = getStockStatus(product);
         navigate('/orders/create', {
-            state: { preselectedProduct: product }
+            state: {
+                preselectedProduct: product,
+                stockStatus: stockStatus
+            }
         });
     };
 
@@ -149,12 +195,20 @@ const ProductsPage = () => {
             <div className="products-header">
                 <div className="header-content">
                     <div className="title-section">
-                        <h1 className="products-title">کاتالوگ محصولات</h1>
+                        <h1 className="products-title">🛍️ کاتالوگ محصولات</h1>
                         <p className="products-subtitle">
                             {filteredProducts.length} محصول یافت شد
+                            {selectedCategory !== 'all' && ` در دسته ${selectedCategory}`}
                         </p>
                     </div>
                     <div className="header-actions">
+                        <NeoBrutalistButton
+                            text="محموله‌های جدید"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/product/newarrivals')}
+                            className="new-arrivals-btn"
+                        />
                         <NeoBrutalistButton
                             text="ثبت سفارش"
                             color="yellow-400"
@@ -164,8 +218,8 @@ const ProductsPage = () => {
                         />
                         <NeoBrutalistButton
                             text="داشبورد"
-                            color="blue-400"
-                            textColor="white"
+                            color="green-400"
+                            textColor="black"
                             onClick={() => navigate('/dashboard')}
                             className="dashboard-btn"
                         />
@@ -193,12 +247,12 @@ const ProductsPage = () => {
                 </div>
             )}
 
-            {/* Filters and Search */}
+            {/* Enhanced Filters */}
             <div className="products-filters">
                 <div className="search-section">
                     <NeoBrutalistInput
                         type="text"
-                        placeholder="جستجو در محصولات..."
+                        placeholder="جستجو در نام محصول، توضیحات یا دسته‌بندی..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="search-input"
@@ -207,6 +261,22 @@ const ProductsPage = () => {
 
                 <div className="filter-section">
                     <div className="filter-group">
+                        <label>دسته‌بندی:</label>
+                        <select
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="filter-select"
+                        >
+                            <option value="all">همه دسته‌ها</option>
+                            {categories.map(category => (
+                                <option key={category} value={category}>
+                                    {category}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="filter-group">
                         <label>وضعیت موجودی:</label>
                         <select
                             value={filterStatus}
@@ -214,8 +284,8 @@ const ProductsPage = () => {
                             className="filter-select"
                         >
                             <option value="all">همه محصولات</option>
-                            <option value="in_stock">موجود</option>
-                            <option value="out_of_stock">ناموجود</option>
+                            <option value="available">موجود</option>
+                            <option value="unavailable">ناموجود</option>
                         </select>
                     </div>
 
@@ -229,11 +299,42 @@ const ProductsPage = () => {
                             <option value="newest">جدیدترین</option>
                             <option value="oldest">قدیمی‌ترین</option>
                             <option value="name">نام محصول</option>
-                            <option value="price_low">قیمت (کم به زیاد)</option>
-                            <option value="price_high">قیمت (زیاد به کم)</option>
+                            <option value="category">دسته‌بندی</option>
                         </select>
                     </div>
                 </div>
+            </div>
+
+            {/* Stats Summary */}
+            <div className="products-stats">
+                <NeoBrutalistCard className="stats-card">
+                    <div className="stats-content">
+                        <div className="stat-item">
+                            <span className="stat-number">
+                                {products.filter(p => getStockStatus(p).status === 'available').length}
+                            </span>
+                            <span className="stat-label">موجود</span>
+                        </div>
+                        <div className="stat-item">
+                            <span className="stat-number">
+                                {products.filter(p => getStockStatus(p).status === 'low_stock').length}
+                            </span>
+                            <span className="stat-label">موجودی کم</span>
+                        </div>
+                        <div className="stat-item">
+                            <span className="stat-number">
+                                {products.filter(p => getStockStatus(p).status === 'out_of_stock').length}
+                            </span>
+                            <span className="stat-label">ناموجود</span>
+                        </div>
+                        <div className="stat-item">
+                            <span className="stat-number">
+                                {categories.length}
+                            </span>
+                            <span className="stat-label">دسته‌بندی</span>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
             </div>
 
             {/* Products Grid */}
@@ -245,7 +346,7 @@ const ProductsPage = () => {
                     return (
                         <NeoBrutalistCard
                             key={product.id}
-                            className="product-card"
+                            className={`product-card ${stockStatus.status}`}
                             onClick={() => handleProductClick(product)}
                         >
                             {/* Product Image */}
@@ -261,7 +362,8 @@ const ProductsPage = () => {
                                     />
                                 ) : (
                                     <div className="product-image-placeholder">
-                                        📦
+                                        {product.category === 'آجیل' ? '🥜' :
+                                            product.category === 'ادویه' ? '🌶️' : '📦'}
                                         <span>تصویر ندارد</span>
                                     </div>
                                 )}
@@ -273,10 +375,17 @@ const ProductsPage = () => {
                                     </div>
                                 )}
 
-                                {/* Stock Status Badge */}
+                                {/* Stock Status Badge - NO NUMBERS */}
                                 <div className={`stock-badge ${stockStatus.status}`}>
                                     {stockStatus.text}
                                 </div>
+
+                                {/* Category Badge */}
+                                {product.category && (
+                                    <div className="category-badge">
+                                        {product.category}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Product Info */}
@@ -297,12 +406,22 @@ const ProductsPage = () => {
                                         </span>
                                     </div>
 
-                                    <div className="product-stock">
-                                        <span className="stock-label">موجودی:</span>
-                                        <span className={`stock-value ${stockStatus.status}`}>
-                                            {product.stock > 0 ? `${product.stock} عدد` : 'ناموجود'}
+                                    <div className="product-availability">
+                                        <span className="availability-label">وضعیت:</span>
+                                        <span
+                                            className={`availability-status ${stockStatus.status}`}
+                                            title={stockStatus.description}
+                                        >
+                                            {stockStatus.text}
                                         </span>
                                     </div>
+
+                                    {product.origin && (
+                                        <div className="product-origin">
+                                            <span className="origin-label">🌍 مبدأ:</span>
+                                            <span className="origin-value">{product.origin}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="product-actions">
@@ -319,8 +438,20 @@ const ProductsPage = () => {
 
                                     {stockStatus.status !== 'discontinued' && (
                                         <NeoBrutalistButton
-                                            text={stockStatus.status === 'out_of_stock' ? 'درخواست سفارش' : 'سفارش دهید'}
-                                            color={stockStatus.status === 'out_of_stock' ? 'yellow-400' : 'green-400'}
+                                            text={
+                                                stockStatus.status === 'out_of_stock'
+                                                    ? 'استعلام موجودی'
+                                                    : stockStatus.status === 'low_stock'
+                                                        ? 'سفارش سریع'
+                                                        : 'سفارش دهید'
+                                            }
+                                            color={
+                                                stockStatus.status === 'out_of_stock'
+                                                    ? 'yellow-400'
+                                                    : stockStatus.status === 'low_stock'
+                                                        ? 'yellow-400'
+                                                        : 'green-400'
+                                            }
                                             textColor="black"
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -341,23 +472,45 @@ const ProductsPage = () => {
                 <div className="empty-state">
                     <NeoBrutalistCard className="empty-card">
                         <div className="empty-content">
-                            <div className="empty-icon">📦</div>
+                            <div className="empty-icon">
+                                {searchTerm ? '🔍' : selectedCategory !== 'all' ? '📂' : '📦'}
+                            </div>
                             <h3>محصولی یافت نشد</h3>
                             <p>
                                 {searchTerm
                                     ? `هیچ محصولی با عبارت "${searchTerm}" یافت نشد.`
-                                    : 'در حال حاضر محصولی در این دسته‌بندی موجود نیست.'
+                                    : selectedCategory !== 'all'
+                                        ? `در دسته "${selectedCategory}" محصولی موجود نیست.`
+                                        : 'در حال حاضر محصولی در کاتالوگ موجود نیست.'
                                 }
                             </p>
-                            {searchTerm && (
+                            <div className="empty-actions">
+                                {searchTerm && (
+                                    <NeoBrutalistButton
+                                        text="پاک کردن جستجو"
+                                        color="blue-400"
+                                        textColor="white"
+                                        onClick={() => setSearchTerm('')}
+                                        className="clear-search-btn"
+                                    />
+                                )}
+                                {selectedCategory !== 'all' && (
+                                    <NeoBrutalistButton
+                                        text="مشاهده همه دسته‌ها"
+                                        color="green-400"
+                                        textColor="black"
+                                        onClick={() => setSelectedCategory('all')}
+                                        className="show-all-btn"
+                                    />
+                                )}
                                 <NeoBrutalistButton
-                                    text="پاک کردن جستجو"
-                                    color="blue-400"
-                                    textColor="white"
-                                    onClick={() => setSearchTerm('')}
-                                    className="clear-search-btn"
+                                    text="درخواست محصول خاص"
+                                    color="yellow-400"
+                                    textColor="black"
+                                    onClick={() => navigate('/orders/create')}
+                                    className="special-request-btn"
                                 />
-                            )}
+                            </div>
                         </div>
                     </NeoBrutalistCard>
                 </div>
@@ -384,7 +537,8 @@ const ProductsPage = () => {
                                 />
                             ) : (
                                 <div className="modal-image-placeholder">
-                                    📦
+                                    {selectedProduct.category === 'آجیل' ? '🥜' :
+                                        selectedProduct.category === 'ادویه' ? '🌶️' : '📦'}
                                     <span>تصویر موجود نیست</span>
                                 </div>
                             )}
@@ -393,13 +547,19 @@ const ProductsPage = () => {
                         <div className="modal-product-info">
                             <h2 className="modal-product-name">{selectedProduct.name}</h2>
 
-                            <div className="modal-stock-status">
-                                <NeoBrutalistButton
-                                    text={getStockStatus(selectedProduct).text}
-                                    color={getStockStatus(selectedProduct).color}
-                                    textColor="black"
-                                    className="modal-status-badge"
-                                />
+                            {/* Enhanced Stock Status Display */}
+                            <div className="modal-stock-section">
+                                <div className="modal-stock-status">
+                                    <NeoBrutalistButton
+                                        text={getStockStatus(selectedProduct).text}
+                                        color={getStockStatus(selectedProduct).color}
+                                        textColor="black"
+                                        className="modal-status-badge"
+                                    />
+                                </div>
+                                <p className="stock-description">
+                                    {getStockStatus(selectedProduct).description}
+                                </p>
                             </div>
 
                             <div className="modal-product-description">
@@ -414,28 +574,86 @@ const ProductsPage = () => {
                                         {formatPrice(selectedProduct.base_price)}
                                     </span>
                                 </div>
+
+                                {selectedProduct.category && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">دسته‌بندی:</span>
+                                        <span className="detail-value">
+                                            {selectedProduct.category}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.origin && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">مبدأ:</span>
+                                        <span className="detail-value">
+                                            {selectedProduct.origin}
+                                        </span>
+                                    </div>
+                                )}
+
                                 <div className="detail-row">
-                                    <span className="detail-label">موجودی:</span>
-                                    <span className="detail-value">
-                                        {selectedProduct.stock > 0 ? `${selectedProduct.stock} عدد` : 'ناموجود'}
+                                    <span className="detail-label">وضعیت موجودی:</span>
+                                    <span className={`detail-value status-${getStockStatus(selectedProduct).status}`}>
+                                        {getStockStatus(selectedProduct).text}
                                     </span>
                                 </div>
+
                                 <div className="detail-row">
                                     <span className="detail-label">تاریخ افزودن:</span>
                                     <span className="detail-value">
                                         {new Date(selectedProduct.created_at).toLocaleDateString('fa-IR')}
                                     </span>
                                 </div>
+
+                                {isNewProduct(selectedProduct.created_at) && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">وضعیت:</span>
+                                        <span className="detail-value new-product-label">
+                                            🆕 محصول جدید
+                                        </span>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Availability Notice */}
+                            {getStockStatus(selectedProduct).status === 'out_of_stock' && (
+                                <div className="availability-notice out-of-stock">
+                                    <h4>📋 درخواست موجودی</h4>
+                                    <p>
+                                        این محصول در حال حاضر در انبار موجود نیست.
+                                        می‌توانید درخواست موجودی ثبت کنید تا در صورت ورود به انبار،
+                                        با شما تماس بگیریم.
+                                    </p>
+                                </div>
+                            )}
+
+                            {getStockStatus(selectedProduct).status === 'low_stock' && (
+                                <div className="availability-notice low-stock">
+                                    <h4>⚠️ موجودی محدود</h4>
+                                    <p>
+                                        موجودی این محصول محدود است.
+                                        برای سفارش هر چه سریعتر اقدام کنید.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="modal-actions">
                                 {getStockStatus(selectedProduct).status !== 'discontinued' && (
                                     <NeoBrutalistButton
-                                        text={getStockStatus(selectedProduct).status === 'out_of_stock'
-                                            ? 'درخواست سفارش'
-                                            : 'سفارش این محصول'
+                                        text={
+                                            getStockStatus(selectedProduct).status === 'out_of_stock'
+                                                ? 'درخواست موجودی'
+                                                : getStockStatus(selectedProduct).status === 'low_stock'
+                                                    ? 'سفارش فوری'
+                                                    : 'سفارش این محصول'
                                         }
-                                        color="yellow-400"
+                                        color={
+                                            getStockStatus(selectedProduct).status === 'available'
+                                                ? 'green-400'
+                                                : 'yellow-400'
+                                        }
                                         textColor="black"
                                         onClick={() => {
                                             setSelectedProduct(null);
