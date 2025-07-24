@@ -1,10 +1,10 @@
-// frontend/src/pages/AdminDashboardPage.js - Enhanced with proper navigation
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../component/api';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import '../styles/Admin/AdminDashboard.css'
+import API from '../../component/api';
+import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
+import '../../styles/Admin/AdminDashboard.css'
 
 const AdminDashboardPage = () => {
     const [stats, setStats] = useState({
@@ -24,9 +24,9 @@ const AdminDashboardPage = () => {
         try {
             // Fetch dashboard statistics
             const [ordersRes, productsRes, announcementsRes] = await Promise.all([
-                API.get('/admin/stats/orders/'),
-                API.get('/admin/stats/products/'),
-                API.get('/admin/stats/announcements/')
+                API.get('/admin/dashboard/stats/orders/'),
+                API.get('/admin/dashboard/stats/products/'),
+                API.get('/admin/dashboard/stats/announcements/')
             ]);
 
             setStats({
@@ -36,7 +36,7 @@ const AdminDashboardPage = () => {
             });
 
             // Fetch recent activity
-            const activityRes = await API.get('/admin/recent-activity/');
+            const activityRes = await API.get('/admin/dashboard/recent-activity/'); // Corrected URL
             setRecentActivity(activityRes.data);
         } catch (err) {
             console.error('Error fetching dashboard data:', err);

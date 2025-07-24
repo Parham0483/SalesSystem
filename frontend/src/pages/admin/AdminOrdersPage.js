@@ -1,13 +1,13 @@
 // frontend/src/pages/AdminOrdersPage.js - Enhanced with customer and status filtering
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import API from '../component/api';
-import AdminOrderDetailPage from '../component/AdminOrderDetailPage';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
-import NeoBrutalistInput from '../component/NeoBrutalist/NeoBrutalistInput';
-import '../styles/Admin/AdminOrders.css'
+import API from '../../component/api';
+import AdminOrderDetailPage from '../../component/AdminOrderDetailPage';
+import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
+import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
+import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
+import '../../styles/Admin/AdminOrders.css'
 
 const AdminOrdersPage = () => {
     const [orders, setOrders] = useState([]);

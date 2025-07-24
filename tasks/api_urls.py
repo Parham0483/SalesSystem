@@ -1,4 +1,4 @@
-# tasks/api_urls.py - Updated with dealer endpoints
+# tasks/api_urls.py - Updated with admin endpoints
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
@@ -8,6 +8,11 @@ from tasks.views.invoices import InvoiceViewSet
 from tasks.views.dealers import DealerViewSet
 from tasks.views.auth import get_csrf_token, customer_register, customer_login, customer_logout
 from tasks.views.products import ShipmentAnnouncementViewSet, ProductCategoryViewSet, ProductViewSet
+from tasks.views.admin import (
+    AdminDashboardViewSet, AdminProductViewSet, AdminOrderViewSet,
+    AdminCustomerViewSet, AdminDealerViewSet, AdminAnnouncementViewSet,
+    AdminReportsViewSet
+)
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -19,6 +24,15 @@ router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'dealers', DealerViewSet, basename='dealer')
 router.register(r'shipment-announcements', ShipmentAnnouncementViewSet, basename='shipmentannouncement')
 router.register(r'product-categories', ProductCategoryViewSet, basename='productcategory')
+
+# Admin-specific routes
+router.register(r'admin/dashboard', AdminDashboardViewSet, basename='admin-dashboard')
+router.register(r'admin/products', AdminProductViewSet, basename='admin-products')
+router.register(r'admin/orders', AdminOrderViewSet, basename='admin-orders')
+router.register(r'admin/customers', AdminCustomerViewSet, basename='admin-customers')
+router.register(r'admin/dealers', AdminDealerViewSet, basename='admin-dealers')
+router.register(r'admin/announcements', AdminAnnouncementViewSet, basename='admin-announcements')
+router.register(r'admin/reports', AdminReportsViewSet, basename='admin-reports')
 
 # URL patterns for authentication and API endpoints
 urlpatterns = [

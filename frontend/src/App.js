@@ -9,13 +9,18 @@ import CreateOrderPage from './component/CreateOrderPage';
 import { useEffect } from 'react';
 import axios from 'axios';
 import MainPage from "./pages/MainPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
+import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AdminOrderDetailPage from "./component/AdminOrderDetailPage";
 import AdminRoute from "./component/AdminRoute";
 import DealerDashboard from "./pages/DealerDashboard";
 import DealerRoute from "./component/DealerRoute";
 import ProductsPage from "./pages/ProductsPage";
 import NewArrivalsPage from "./pages/NewArrivalsPage";
+import AdminOrdersPage  from "./pages/admin/AdminOrdersPage";
+import AdminAnnouncementsPage from "./pages/admin/AdminAnnouncementsPage";
+import AdminProductPage from "./pages/admin/AdminProductPage";
+import AdminCustomersPage from "./pages/admin/AdminCustomerPage";
+
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
 
@@ -80,22 +85,30 @@ function App() {
                 <Route path="/register" element={<RegisterPage />} />
 
                 {/* ADMIN ROUTES - Put these BEFORE general routes */}
-                <Route
-                    path="/admin"
-                    element={
-                        <AdminRoute>
-                            <AdminDashboardPage />
-                        </AdminRoute>
-                    }
-                />
-                <Route
-                    path="/admin/orders/:orderId"
-                    element={
-                        <AdminRoute>
-                            <AdminOrderDetailPage />
-                        </AdminRoute>
-                    }
-                />
+                <Route path="/admin" element={
+                    <AdminRoute><AdminDashboardPage /></AdminRoute>
+                } />
+
+                {/* The dedicated page for managing all orders */}
+                <Route path="/admin/orders" element={
+                    <AdminRoute><AdminOrdersPage /></AdminRoute>
+                } />
+
+                {/* You already have this for viewing a single order, maybe as a direct link */}
+                <Route path="/admin/orders/:orderId" element={
+                    <AdminRoute><AdminOrderDetailPage /></AdminRoute>
+                } />
+
+                <Route path="/admin/products" element={
+                    <AdminRoute><AdminProductPage /></AdminRoute>
+                } />
+                <Route path="/admin/announcements" element={
+                    <AdminRoute><AdminAnnouncementsPage /></AdminRoute>
+                } />
+                <Route path="/admin/customers" element={<AdminRoute><AdminCustomersPage /></AdminRoute>} />
+                <Route path="/admin/reports" element={
+                    <AdminRoute><div>Reports Page (To be built)</div></AdminRoute>
+                } />
 
                 {/*<Route
                     path="/admin/products/:productId"
