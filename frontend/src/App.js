@@ -14,6 +14,8 @@ import AdminOrderDetailPage from "./component/AdminOrderDetailPage";
 import AdminRoute from "./component/AdminRoute";
 import DealerDashboard from "./pages/DealerDashboard";
 import DealerRoute from "./component/DealerRoute";
+import ProductsPage from "./pages/ProductsPage";
+import NewArrivalsPage from "./pages/NewArrivalsPage";
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
 
@@ -95,6 +97,16 @@ function App() {
                     }
                 />
 
+                {/*<Route
+                    path="/admin/products/:productId"
+                    element={
+                    <AdminRoute>
+                        <AdminProductManagment/>
+                    </AdminRoute>
+                    }
+                 />
+                 */}
+
                 {/* DEALER ROUTES - Put these BEFORE customer routes */}
                 <Route
                     path="/dealer"
@@ -109,6 +121,9 @@ function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/orders/create" element={<CreateOrderPage />} />
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+                <Route path="/product" element={<ProductsPage/>} />
+                <Route path="/product/newarrivals" element={<NewArrivalsPage />} />
+
 
                 {/* CATCH-ALL */}
                 <Route path="*" element={<div>Page not found</div>} />

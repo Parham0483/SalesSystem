@@ -1,14 +1,18 @@
-# tasks/views/products.py - Updated version with new features
+# tasks/views/products.py - Updated to match your models
 from rest_framework import viewsets, status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
-from django.db.models import Q, Avg
+from django.db.models import Q, Count, Sum
 from datetime import timedelta
-from ..serializers import ProductSerializer
-from ..models import Product, ShipmentAnnouncement, ProductCategory
+from ..serializers.products import (
+    ProductSerializer, ProductCategorySerializer, ProductImageSerializer,
+    ShipmentAnnouncementSerializer, ProductStockUpdateSerializer,
+    ProductSearchSerializer, ProductBulkUpdateSerializer
+)
+from ..models import Product, ShipmentAnnouncement, ProductCategory, ProductImage
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -38,7 +42,6 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'error': 'Permission denied. Admin access required.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        # Handle image upload
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             # Generate SKU if not provided
@@ -91,19 +94,21 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         products = Product.objects.all().order_by('-created_at')
 
-        # Add stock status and other admin-specific info
+        # Add admin-specific info
         product_data = []
         for product in products:
             data = ProductSerializer(product).data
             data.update({
-                'is_low_stock': product.is_low_stock,
                 'days_since_created': (timezone.now() - product.created_at).days,
                 'orders_count': product.orderitem_set.count(),
-                'revenue_generated': sum(
+                'total_ordered': sum(
+                    item.final_quantity for item in product.orderitem_set.all()
+                ),
+                'revenue_generated': float(sum(
                     item.total_price for item in product.orderitem_set.filter(
                         order__status='completed'
                     )
-                )
+                ))
             })
             product_data.append(data)
 
@@ -118,15 +123,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(products, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['GET'], url_path='low-stock')
-    def low_stock(self, request):
-        """Get products with low stock (admin only)"""
+    @action(detail=False, methods=['GET'], url_path='out-of-stock')
+    def out_of_stock(self, request):
+        """Get out of stock products (admin only)"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        products = Product.get_low_stock_products()
+        products = Product.get_out_of_stock_products()
         serializer = self.get_serializer(products, many=True)
 
         return Response({
@@ -137,32 +142,61 @@ class ProductViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['GET'])
     def search(self, request):
         """Search products by name, description, or tags"""
-        query = request.query_params.get('q', '').strip()
-        category_id = request.query_params.get('category')
+        serializer = ProductSearchSerializer(data=request.query_params)
 
-        if not query and not category_id:
+        if not serializer.is_valid():
             return Response({
-                'error': 'Search query or category required'
+                'error': 'Invalid search parameters',
+                'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        validated_data = serializer.validated_data
+        query = validated_data.get('q', '').strip()
+        category_id = validated_data.get('category')
+        min_price = validated_data.get('min_price')
+        max_price = validated_data.get('max_price')
+        in_stock_only = validated_data.get('in_stock_only', False)
+        sort_by = validated_data.get('sort_by', '-created_at')
 
         products = self.get_queryset()
 
+        # Apply filters
         if query:
             products = products.filter(
                 Q(name__icontains=query) |
                 Q(description__icontains=query) |
-                Q(tags__icontains=query)
+                Q(tags__icontains=query) |
+                Q(sku__icontains=query)
             )
 
         if category_id:
             products = products.filter(category_id=category_id)
 
-        # Sort by relevance (could be improved with search ranking)
-        products = products.order_by('-created_at')[:50]  # Limit results
+        if min_price is not None:
+            products = products.filter(base_price__gte=min_price)
+
+        if max_price is not None:
+            products = products.filter(base_price__lte=max_price)
+
+        if in_stock_only:
+            products = products.filter(stock__gt=0)
+
+        # Apply sorting
+        products = products.order_by(sort_by)
+
+        # Limit results
+        products = products[:100]
 
         serializer = self.get_serializer(products, many=True)
         return Response({
             'query': query,
+            'filters': {
+                'category_id': category_id,
+                'min_price': min_price,
+                'max_price': max_price,
+                'in_stock_only': in_stock_only,
+                'sort_by': sort_by
+            },
             'count': len(serializer.data),
             'products': serializer.data
         })
@@ -176,36 +210,28 @@ class ProductViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_403_FORBIDDEN)
 
         product = self.get_object()
-        new_stock = request.data.get('stock')
+        serializer = ProductStockUpdateSerializer(data=request.data)
 
-        if new_stock is None:
-            return Response({
-                'error': 'Stock value required'
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            new_stock = int(new_stock)
-            if new_stock < 0:
-                return Response({
-                    'error': 'Stock cannot be negative'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
+        if serializer.is_valid():
+            new_stock = serializer.validated_data['stock']
             old_stock = product.stock
+
             product.stock = new_stock
             product.save()
 
             return Response({
                 'message': 'Stock updated successfully',
                 'product_id': product.id,
+                'product_name': product.name,
                 'old_stock': old_stock,
                 'new_stock': new_stock,
-                'is_low_stock': product.is_low_stock
+                'stock_status': product.stock_status
             })
 
-        except ValueError:
-            return Response({
-                'error': 'Invalid stock value'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'error': 'Invalid data',
+            'details': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['POST'], url_path='toggle-status')
     def toggle_status(self, request, pk=None):
@@ -222,8 +248,66 @@ class ProductViewSet(viewsets.ModelViewSet):
         return Response({
             'message': f'Product {"activated" if product.is_active else "deactivated"} successfully',
             'product_id': product.id,
+            'product_name': product.name,
             'is_active': product.is_active
         })
+
+    @action(detail=False, methods=['POST'], url_path='bulk-update')
+    def bulk_update(self, request):
+        """Bulk update products (admin only)"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = ProductBulkUpdateSerializer(data=request.data)
+
+        if serializer.is_valid():
+            validated_data = serializer.validated_data
+            product_ids = validated_data['product_ids']
+            action = validated_data['action']
+
+            products = Product.objects.filter(id__in=product_ids)
+
+            if not products.exists():
+                return Response({
+                    'error': 'No products found with the provided IDs'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            updated_count = 0
+
+            if action == 'activate':
+                updated_count = products.update(is_active=True)
+            elif action == 'deactivate':
+                updated_count = products.update(is_active=False)
+            elif action == 'update_category':
+                category_id = validated_data.get('category_id')
+                updated_count = products.update(category_id=category_id)
+            elif action == 'update_stock':
+                new_stock = validated_data.get('new_stock')
+                if new_stock is not None:
+                    updated_count = products.update(stock=new_stock)
+                else:
+                    stock_change = validated_data.get('stock_change', 0)
+                    for product in products:
+                        new_stock = max(0, product.stock + stock_change)
+                        product.stock = new_stock
+                        product.save()
+                        updated_count += 1
+            elif action == 'delete':
+                updated_count = products.count()
+                products.delete()
+
+            return Response({
+                'message': f'Bulk {action} completed successfully',
+                'updated_count': updated_count,
+                'action': action
+            })
+
+        return Response({
+            'error': 'Invalid data',
+            'details': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['GET'])
     def categories(self, request):
@@ -250,35 +334,65 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         return Response(category_data)
 
-    @action(detail=True, methods=['GET'])
-    def reviews(self, request, pk=None):
-        """Get product reviews"""
-        product = self.get_object()
-        reviews = product.reviews.filter(is_approved=True).order_by('-created_at')
+    @action(detail=False, methods=['GET'], url_path='analytics')
+    def analytics(self, request):
+        """Get product analytics (admin only)"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
 
-        reviews_data = []
-        for review in reviews:
-            reviews_data.append({
-                'id': review.id,
-                'customer_name': review.customer.name,
-                'rating': review.rating,
-                'title': review.title,
-                'comment': review.comment,
-                'is_verified_purchase': review.is_verified_purchase,
-                'created_at': review.created_at
+        total_products = Product.objects.count()
+        active_products = Product.objects.filter(is_active=True).count()
+        out_of_stock_products = Product.objects.filter(stock=0, is_active=True).count()
+
+        # New products this month
+        month_ago = timezone.now() - timedelta(days=30)
+        new_products_this_month = Product.objects.filter(created_at__gte=month_ago).count()
+
+        # Top selling products (by quantity ordered)
+        from django.db.models import Sum
+        top_selling = Product.objects.annotate(
+            total_ordered=Sum('orderitem__final_quantity')
+        ).filter(
+            total_ordered__isnull=False
+        ).order_by('-total_ordered')[:10]
+
+        top_selling_data = []
+        for product in top_selling:
+            top_selling_data.append({
+                'id': product.id,
+                'name': product.name,
+                'total_ordered': product.total_ordered or 0,
+                'current_stock': product.stock,
+                'image_url': product.get_primary_image_url()
+            })
+
+        # Categories breakdown
+        categories_breakdown = []
+        categories = ProductCategory.objects.filter(is_active=True)
+        for category in categories:
+            categories_breakdown.append({
+                'id': category.id,
+                'name': category.name,
+                'products_count': category.products_count,
+                'active_products': category.products.filter(is_active=True).count()
             })
 
         return Response({
-            'product_id': product.id,
-            'average_rating': product.average_rating,
-            'total_reviews': product.reviews_count,
-            'reviews': reviews_data
+            'total_products': total_products,
+            'active_products': active_products,
+            'out_of_stock_products': out_of_stock_products,
+            'new_products_this_month': new_products_this_month,
+            'top_selling_products': top_selling_data,
+            'categories_breakdown': categories_breakdown
         })
 
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
     """ViewSet for shipment announcements"""
     authentication_classes = [JWTAuthentication]
+    serializer_class = ShipmentAnnouncementSerializer
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -295,6 +409,10 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
                 is_active=True
             ).order_by('-is_featured', '-created_at')
 
+    def perform_create(self, serializer):
+        """Set created_by when creating announcement"""
+        serializer.save(created_by=self.request.user)
+
     def create(self, request, *args, **kwargs):
         """Admin creates a new announcement"""
         if not request.user.is_staff:
@@ -302,42 +420,7 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
                 'error': 'Permission denied. Admin access required.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        data = request.data.copy()
-
-        # Handle related products
-        related_products = request.data.getlist('related_products', [])
-
-        try:
-            announcement = ShipmentAnnouncement.objects.create(
-                title=data.get('title'),
-                description=data.get('description'),
-                image=request.FILES.get('image'),
-                created_by=request.user,
-                is_active=data.get('is_active', True),
-                is_featured=data.get('is_featured', False)
-            )
-
-            # Add related products
-            if related_products:
-                valid_products = Product.objects.filter(id__in=related_products)
-                announcement.related_products.set(valid_products)
-
-            return Response({
-                'message': 'Announcement created successfully',
-                'announcement': {
-                    'id': announcement.id,
-                    'title': announcement.title,
-                    'description': announcement.description,
-                    'image_url': announcement.get_image_url(),
-                    'products_count': announcement.products_count,
-                    'created_at': announcement.created_at
-                }
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            return Response({
-                'error': f'Failed to create announcement: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+        return super().create(request, *args, **kwargs)
 
     def list(self, request, *args, **kwargs):
         """List announcements with related products"""
@@ -345,35 +428,10 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
 
         # Limit to recent announcements for customers
         if not request.user.is_staff:
-            announcements = announcements[:20]  # Show last 20 announcements
+            announcements = announcements[:20]
 
-        announcement_data = []
-        for announcement in announcements:
-            data = {
-                'id': announcement.id,
-                'title': announcement.title,
-                'description': announcement.description,
-                'image': announcement.get_image_url(),
-                'is_featured': announcement.is_featured,
-                'created_at': announcement.created_at,
-                'products_count': announcement.products_count,
-                'products': []
-            }
-
-            # Add related products info
-            if announcement.related_products.exists():
-                for product in announcement.related_products.filter(is_active=True)[:5]:  # Limit to 5 products
-                    data['products'].append({
-                        'id': product.id,
-                        'name': product.name,
-                        'image_url': product.get_primary_image_url(),
-                        'base_price': product.base_price,
-                        'stock': product.stock
-                    })
-
-            announcement_data.append(data)
-
-        return Response(announcement_data)
+        serializer = self.get_serializer(announcements, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['GET'])
     def recent(self, request):
@@ -392,13 +450,21 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             } for ann in announcements
         ])
 
+    @action(detail=False, methods=['GET'])
+    def featured(self, request):
+        """Get featured announcements"""
+        announcements = self.get_queryset().filter(is_featured=True)[:5]
+        serializer = self.get_serializer(announcements, many=True)
+        return Response(serializer.data)
+
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for product categories"""
     authentication_classes = [JWTAuthentication]
+    serializer_class = ProductCategorySerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'products']:
             permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminUser]
@@ -421,10 +487,48 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
             'category': {
                 'id': category.id,
                 'name': category.name,
-                'description': category.description
+                'description': category.description,
+                'image_url': category.image.url if category.image else None
             },
             'products_count': products.count(),
             'products': serializer.data
         })
 
+    @action(detail=False, methods=['GET'], url_path='with-products')
+    def with_products(self, request):
+        """Get categories that have products"""
+        categories = self.get_queryset().annotate(
+            active_products_count=Count('products', filter=Q(products__is_active=True))
+        ).filter(active_products_count__gt=0)
 
+        serializer = self.get_serializer(categories, many=True)
+        return Response(serializer.data)
+
+
+class ProductImageViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing product images"""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+    serializer_class = ProductImageSerializer
+
+    def get_queryset(self):
+        return ProductImage.objects.all().order_by('order')
+
+    @action(detail=True, methods=['POST'], url_path='set-primary')
+    def set_primary(self, request, pk=None):
+        """Set this image as primary for the product"""
+        image = self.get_object()
+        product = image.product
+
+        # Remove primary status from other images
+        ProductImage.objects.filter(product=product).update(is_primary=False)
+
+        # Set this image as primary
+        image.is_primary = True
+        image.save()
+
+        return Response({
+            'message': 'Image set as primary successfully',
+            'image_id': image.id,
+            'product_id': product.id
+        })

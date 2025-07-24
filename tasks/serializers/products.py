@@ -1,4 +1,4 @@
-# tasks/serializers/products.py - Updated version
+
 from rest_framework import serializers
 from django.utils import timezone
 from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncement
@@ -31,24 +31,22 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Enhanced product serializer with image upload and category support"""
+    """Enhanced product serializer matching your model structure"""
     image_url = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True)
     additional_images = ProductImageSerializer(many=True, read_only=True)
-    is_low_stock = serializers.ReadOnlyField()
-    average_rating = serializers.ReadOnlyField()
-    reviews_count = serializers.ReadOnlyField()
+    stock_status = serializers.ReadOnlyField()
+    is_out_of_stock = serializers.ReadOnlyField()
     days_since_created = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'dimensions', 'reorder_level', 'max_stock',
-            'image', 'image_url', 'additional_images',
+            'weight', 'image', 'image_url', 'additional_images',
             'category', 'category_name', 'is_active', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
-            'is_low_stock', 'average_rating', 'reviews_count', 'days_since_created'
+            'stock_status', 'is_out_of_stock', 'days_since_created'
         ]
         read_only_fields = ['created_at', 'updated_at']
 
@@ -61,7 +59,7 @@ class ProductSerializer(serializers.ModelSerializer):
         return (timezone.now() - obj.created_at).days
 
     def create(self, validated_data):
-        """Create product with automatic SKU generation"""
+        """Create product with automatic SKU generation if needed"""
         if not validated_data.get('sku'):
             # Generate SKU automatically
             sku = f"PRD-{timezone.now().strftime('%Y%m%d')}-{Product.objects.count() + 1:04d}"
@@ -112,7 +110,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
                 'image_url': product.get_primary_image_url(),
                 'base_price': product.base_price,
                 'stock': product.stock,
-                'is_low_stock': product.is_low_stock
+                'stock_status': product.stock_status
             }
             for product in products
         ]
@@ -139,8 +137,8 @@ class ProductSearchSerializer(serializers.Serializer):
         choices=[
             ('name', 'Name'),
             ('-name', 'Name (desc)'),
-            ('price', 'Price (low to high)'),
-            ('-price', 'Price (high to low)'),
+            ('base_price', 'Price (low to high)'),
+            ('-base_price', 'Price (high to low)'),
             ('created_at', 'Oldest first'),
             ('-created_at', 'Newest first'),
             ('stock', 'Stock (low to high)'),
@@ -179,24 +177,3 @@ class ProductBulkUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError("new_stock or stock_change is required for update_stock action")
 
         return data
-
-
-class ProductAnalyticsSerializer(serializers.Serializer):
-    """Serializer for product analytics data"""
-    total_products = serializers.IntegerField()
-    active_products = serializers.IntegerField()
-    low_stock_products = serializers.IntegerField()
-    out_of_stock_products = serializers.IntegerField()
-    new_products_this_month = serializers.IntegerField()
-    total_inventory_value = serializers.DecimalField(max_digits=12, decimal_places=2)
-
-    top_selling_products = serializers.ListField(
-        child=serializers.DictField()
-    )
-    categories_breakdown = serializers.ListField(
-        child=serializers.DictField()
-    )
-    stock_alerts = serializers.ListField(
-        child=serializers.DictField()
-    )
-
