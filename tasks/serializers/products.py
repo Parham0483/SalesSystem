@@ -1,4 +1,3 @@
-
 from rest_framework import serializers
 from django.utils import timezone
 from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncement
@@ -34,23 +33,23 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """Enhanced product serializer matching your model structure"""
     image_url = serializers.SerializerMethodField()
-    stock_status = serializers.SerializerMethodField()
-    is_out_of_stock = serializers.SerializerMethodField()
-    days_since_created = serializers.SerializerMethodField()
-    category_name = serializers.SerializerMethodField()
+    stock_status = serializers.ReadOnlyField()  # Use model property
+    is_out_of_stock = serializers.ReadOnlyField()  # Use model property
+    category_name = serializers.ReadOnlyField()  # Use model property
     category_details = serializers.SerializerMethodField()
+    days_since_created = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
             'weight', 'image', 'image_url',
-            'category', 'category_name','category_details',
-            'origin', 'is_active','is_featured','created_at', 'updated_at',
+            'category', 'category_name', 'category_details',
+            'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'category_name']
 
     def get_image_url(self, obj):
         """Get the primary image URL"""
@@ -97,6 +96,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if value and not value.is_active:
             raise serializers.ValidationError("Selected category is not active")
         return value
+
 
 class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
     """Serializer for shipment announcements"""

@@ -433,6 +433,28 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(announcements, many=True)
         return Response(serializer.data)
 
+    def get_image_url(self, obj):
+        """Get the primary image URL"""
+        request = self.context.get('request')
+
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            else:
+                # Fallback if no request context
+                return obj.image.url
+
+        # Check for additional images
+        primary_image = obj.additional_images.filter(is_primary=True).first() if hasattr(obj,
+                                                                                         'additional_images') else None
+        if primary_image and primary_image.image:
+            if request:
+                return request.build_absolute_uri(primary_image.image.url)
+            else:
+                return primary_image.image.url
+
+        return None
+
     @action(detail=False, methods=['GET'])
     def recent(self, request):
         """Get recent announcements (last 7 days)"""

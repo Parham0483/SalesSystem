@@ -155,7 +155,7 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    origin = models.CharField(max_length=100, blank=True, null=True, help_text="Country/place of origin")
     sku = models.CharField(max_length=50, null=True ,blank=True, help_text="Stock Keeping Unit")
 
     category = models.ForeignKey(

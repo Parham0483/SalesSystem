@@ -75,7 +75,7 @@ const AdminProductsPage = () => {
             console.log('📦 Admin products fetched:', response.data);
             setProducts(response.data);
             calculateStats(response.data);
-            extractCategories(response.data);
+            //extractCategories(response.data);
             setError('');
         } catch (err) {
             console.error('❌ Error fetching products:', err);
@@ -115,13 +115,20 @@ const AdminProductsPage = () => {
             setCategories(response.data);
         } catch (err) {
             console.error('❌ Error fetching categories:', err);
+            setCategories([
+                { id: 1, name: 'Coffee Related', display_name: 'محصولات قهوه' },
+                { id: 2, name: 'Seeds', display_name: 'دانه‌ها' },
+                { id: 3, name: 'Spices', display_name: 'ادویه‌جات' },
+                { id: 4, name: 'Nuts', display_name: 'آجیل' },
+                { id:5, name:'Confectionery products', display_name: 'محصولات قنادی' }
+            ]);
         }
     };
 
-    const extractCategories = (productsList) => {
-        const uniqueCategories = [...new Set(productsList.map(p => p.category).filter(Boolean))];
-        setCategories(uniqueCategories);
-    };
+    //const extractCategories = (productsList) => {
+    //    const uniqueCategories = [...new Set(productsList.map(p => p.category).filter(Boolean))];
+    //    setCategories(uniqueCategories);
+    //};
 
     useEffect(() => {
         let filtered = [...products];
@@ -151,9 +158,14 @@ const AdminProductsPage = () => {
         }
 
         // Category filter
-        if (categoryFilter !== 'all') {
-            filtered = filtered.filter(p => p.category === categoryFilter);
+        if (categoryFilter !== 'all' && categoryFilter !== '') {
+            filtered = filtered.filter(p => {
+                // Handle both cases: category as ID or as object
+                const productCategoryId = typeof p.category === 'object' ? p.category?.id : p.category;
+                return productCategoryId === parseInt(categoryFilter);
+            });
         }
+
 
         // Sorting
         filtered.sort((a, b) => {
@@ -220,8 +232,8 @@ const AdminProductsPage = () => {
         setProductFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked :
-                name === 'category' ? (value ? parseInt(value, 10) : null):
-                value
+                name === 'category' ? (value ? parseInt(value, 10) : null) :
+                    value
         }));
     };
 
@@ -374,7 +386,7 @@ const AdminProductsPage = () => {
     ];
 
     const categoryOptions = [
-        { value: '', label: 'انتخاب دسته‌بندی' },
+        { value: 'all', label: 'همه دسته‌ها' }, // Change empty string to 'all'
         ...categories.map(cat => ({
             value: cat.id,
             label: cat.display_name || cat.name

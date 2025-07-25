@@ -249,23 +249,6 @@ class AdminProductViewSet(viewsets.ModelViewSet):
 
         return Response({'message': message})
 
-    def categories(self, request):
-        """Get all categories for dropdown"""
-        categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
-
-        categories_data = []
-        for category in categories:
-            categories_data.append({
-                'id': category.id,
-                'name': category.name,
-                'name_fa': category.name_fa,
-                'display_name': category.name_fa if category.name_fa else category.name,
-                'products_count': category.products.filter(is_active=True).count()
-            })
-
-        return Response(categories_data)
-
-
     @action(detail=False, methods=['GET'], url_path='categories')
     def get_categories(self, request):
         """Get all active categories for dropdown"""
@@ -282,7 +265,6 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             })
 
         return Response(categories_data)
-
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
     """Admin order management"""
