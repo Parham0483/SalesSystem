@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductsPage.js - Enhanced with stock status only (no numbers)
+// frontend/src/pages/ProductsPage.js - UPDATED Customer View
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
@@ -15,8 +15,8 @@ const ProductsPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'available', 'unavailable'
-    const [sortBy, setSortBy] = useState('newest'); // 'newest', 'oldest', 'name', 'category'
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [sortBy, setSortBy] = useState('newest');
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const navigate = useNavigate();
@@ -39,7 +39,12 @@ const ProductsPage = () => {
             setError('');
         } catch (err) {
             console.error('❌ Error fetching products:', err);
-            setError('خطا در بارگیری محصولات');
+            if (err.response?.status === 401) {
+                setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
+                setTimeout(() => handleLogout(), 2000);
+            } else {
+                setError('خطا در بارگیری محصولات');
+            }
         } finally {
             setLoading(false);
         }
@@ -47,7 +52,7 @@ const ProductsPage = () => {
 
     const fetchCategories = async () => {
         try {
-            const response = await API.get('/products/categories/');
+            const response = await API.get('/categories/');
             console.log('📂 Categories fetched:', response.data);
             setCategories(response.data);
         } catch (err) {
@@ -64,14 +69,15 @@ const ProductsPage = () => {
             filtered = filtered.filter(product =>
                 product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
+                (product.category_name && product.category_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (product.tags && product.tags.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
 
-        // Apply category filter
+        // Apply category filter - FIXED to use category ID
         if (selectedCategory !== 'all') {
             filtered = filtered.filter(product =>
-                product.category === selectedCategory
+                product.category === parseInt(selectedCategory)
             );
         }
 
@@ -98,7 +104,7 @@ const ProductsPage = () => {
                 case 'name':
                     return a.name.localeCompare(b.name, 'fa');
                 case 'category':
-                    return (a.category || '').localeCompare(b.category || '', 'fa');
+                    return (a.category_name || '').localeCompare(b.category_name || '', 'fa');
                 default:
                     return 0;
             }
@@ -107,7 +113,7 @@ const ProductsPage = () => {
         setFilteredProducts(filtered);
     };
 
-    // Enhanced stock status without showing actual numbers
+    // Enhanced stock status without showing actual numbers - CUSTOMER VIEW
     const getStockStatus = (product) => {
         if (!product.is_active) {
             return {
@@ -116,7 +122,37 @@ const ProductsPage = () => {
                 color: 'gray-400',
                 description: 'این محصول دیگر در دسترس نیست'
             };
-        } else if (product.stock === 0) {
+        }
+
+        // Use stock_status from API if available, otherwise fall back to stock number
+        if (product.stock_status) {
+            switch (product.stock_status) {
+                case 'out_of_stock':
+                    return {
+                        status: 'out_of_stock',
+                        text: 'ناموجود',
+                        color: 'red-400',
+                        description: 'موجودی این محصول به پایان رسیده است'
+                    };
+                case 'in_stock':
+                    return {
+                        status: 'available',
+                        text: 'موجود',
+                        color: 'green-400',
+                        description: 'این محصول در انبار موجود است'
+                    };
+                default:
+                    return {
+                        status: 'unknown',
+                        text: 'نامشخص',
+                        color: 'gray-400',
+                        description: 'وضعیت موجودی مشخص نیست'
+                    };
+            }
+        }
+
+        // Fallback to stock number (but don't show the actual number)
+        if (product.stock === 0) {
             return {
                 status: 'out_of_stock',
                 text: 'ناموجود',
@@ -154,14 +190,10 @@ const ProductsPage = () => {
         });
     };
 
+    // UPDATED: Better price formatting for customer view
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
-    };
-
-    const getUserInfo = () => {
-        const userDataString = localStorage.getItem('userData');
-        return userDataString ? JSON.parse(userDataString) : null;
     };
 
     const handleLogout = () => {
@@ -183,7 +215,10 @@ const ProductsPage = () => {
         return (
             <div className="products-page">
                 <div className="products-header">
-                    <h1>در حال بارگیری محصولات...</h1>
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                        <h1>در حال بارگیری محصولات...</h1>
+                    </div>
                 </div>
             </div>
         );
@@ -198,7 +233,9 @@ const ProductsPage = () => {
                         <h1 className="products-title">🛍️ کاتالوگ محصولات</h1>
                         <p className="products-subtitle">
                             {filteredProducts.length} محصول یافت شد
-                            {selectedCategory !== 'all' && ` در دسته ${selectedCategory}`}
+                            {selectedCategory !== 'all' && categories.find(c => c.id == selectedCategory) &&
+                                ` در دسته ${categories.find(c => c.id == selectedCategory).display_name}`
+                            }
                         </p>
                     </div>
                     <div className="header-actions">
@@ -269,8 +306,8 @@ const ProductsPage = () => {
                         >
                             <option value="all">همه دسته‌ها</option>
                             {categories.map(category => (
-                                <option key={category} value={category}>
-                                    {category}
+                                <option key={category.id} value={category.id}>
+                                    {category.display_name || category.name}
                                 </option>
                             ))}
                         </select>
@@ -305,7 +342,7 @@ const ProductsPage = () => {
                 </div>
             </div>
 
-            {/* Stats Summary */}
+            {/* Stats Summary - NO NUMBERS SHOWN */}
             <div className="products-stats">
                 <NeoBrutalistCard className="stats-card">
                     <div className="stats-content">
@@ -362,8 +399,8 @@ const ProductsPage = () => {
                                     />
                                 ) : (
                                     <div className="product-image-placeholder">
-                                        {product.category === 'آجیل' ? '🥜' :
-                                            product.category === 'ادویه' ? '🌶️' : '📦'}
+                                        {product.category_name === 'آجیل' ? '🥜' :
+                                            product.category_name === 'ادویه' ? '🌶️' : '📦'}
                                         <span>تصویر ندارد</span>
                                     </div>
                                 )}
@@ -381,9 +418,9 @@ const ProductsPage = () => {
                                 </div>
 
                                 {/* Category Badge */}
-                                {product.category && (
+                                {product.category_name && (
                                     <div className="category-badge">
-                                        {product.category}
+                                        {product.category_name}
                                     </div>
                                 )}
                             </div>
@@ -420,6 +457,13 @@ const ProductsPage = () => {
                                         <div className="product-origin">
                                             <span className="origin-label">🌍 مبدأ:</span>
                                             <span className="origin-value">{product.origin}</span>
+                                        </div>
+                                    )}
+
+                                    {product.sku && (
+                                        <div className="product-sku">
+                                            <span className="sku-label">کد محصول:</span>
+                                            <span className="sku-value">{product.sku}</span>
                                         </div>
                                     )}
                                 </div>
@@ -480,7 +524,7 @@ const ProductsPage = () => {
                                 {searchTerm
                                     ? `هیچ محصولی با عبارت "${searchTerm}" یافت نشد.`
                                     : selectedCategory !== 'all'
-                                        ? `در دسته "${selectedCategory}" محصولی موجود نیست.`
+                                        ? `در دسته انتخاب شده محصولی موجود نیست.`
                                         : 'در حال حاضر محصولی در کاتالوگ موجود نیست.'
                                 }
                             </p>
@@ -537,8 +581,8 @@ const ProductsPage = () => {
                                 />
                             ) : (
                                 <div className="modal-image-placeholder">
-                                    {selectedProduct.category === 'آجیل' ? '🥜' :
-                                        selectedProduct.category === 'ادویه' ? '🌶️' : '📦'}
+                                    {selectedProduct.category_name === 'آجیل' ? '🥜' :
+                                        selectedProduct.category_name === 'ادویه' ? '🌶️' : '📦'}
                                     <span>تصویر موجود نیست</span>
                                 </div>
                             )}
@@ -547,7 +591,7 @@ const ProductsPage = () => {
                         <div className="modal-product-info">
                             <h2 className="modal-product-name">{selectedProduct.name}</h2>
 
-                            {/* Enhanced Stock Status Display */}
+                            {/* Enhanced Stock Status Display - NO NUMBERS */}
                             <div className="modal-stock-section">
                                 <div className="modal-stock-status">
                                     <NeoBrutalistButton
@@ -575,11 +619,20 @@ const ProductsPage = () => {
                                     </span>
                                 </div>
 
-                                {selectedProduct.category && (
+                                {selectedProduct.category_name && (
                                     <div className="detail-row">
                                         <span className="detail-label">دسته‌بندی:</span>
                                         <span className="detail-value">
-                                            {selectedProduct.category}
+                                            {selectedProduct.category_name}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.sku && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">کد محصول:</span>
+                                        <span className="detail-value">
+                                            {selectedProduct.sku}
                                         </span>
                                     </div>
                                 )}
@@ -589,6 +642,15 @@ const ProductsPage = () => {
                                         <span className="detail-label">مبدأ:</span>
                                         <span className="detail-value">
                                             {selectedProduct.origin}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.weight && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">وزن:</span>
+                                        <span className="detail-value">
+                                            {selectedProduct.weight} کیلوگرم
                                         </span>
                                     </div>
                                 )}
@@ -612,6 +674,15 @@ const ProductsPage = () => {
                                         <span className="detail-label">وضعیت:</span>
                                         <span className="detail-value new-product-label">
                                             🆕 محصول جدید
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.tags && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">برچسب‌ها:</span>
+                                        <span className="detail-value">
+                                            {selectedProduct.tags}
                                         </span>
                                     </div>
                                 )}

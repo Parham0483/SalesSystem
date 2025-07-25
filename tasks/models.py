@@ -222,17 +222,68 @@ class Product(models.Model):
         db_table = 'products'
 
 
-class ShipmentAnnouncement(models.Model):
-    title = models.CharField(max_length=200)
-    description = models.TextField(help_text="Describe the new shipment, packaging, container info, etc.")
-    image = models.ImageField(upload_to='shipments/', blank=True, null=True, help_text="Photo of packaging/container")
-    origin_country = models.CharField(max_length=100, blank=True, null=True, help_text="Country of origin")
-    related_products = models.ManyToManyField('Product', blank=True, help_text="Products in this shipment")
 
+class ShipmentAnnouncement(models.Model):
+    title = models.CharField(max_length=200, help_text="Title of the shipment announcement")
+    description = models.TextField(help_text="Describe the new shipment, packaging, container info, etc.")
+
+    # Main image field
+    image = models.ImageField(
+        upload_to='shipments/',
+        blank=True,
+        null=True,
+        help_text="Main photo of packaging/container"
+    )
+
+    # Shipment details
+    origin_country = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Country of origin"
+    )
+    shipment_date = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Date when shipment was sent"
+    )
+    estimated_arrival = models.DateField(
+        blank=True,
+        null=True,
+        help_text="Estimated arrival date"
+    )
+    product_categories = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Categories of products in this shipment"
+    )
+
+    # Relationships
+    related_products = models.ManyToManyField(
+        'Product',
+        blank=True,
+        help_text="Products in this shipment"
+    )
+
+    # Meta fields
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey('Customer', on_delete=models.CASCADE, related_name='shipment_announcements')
-    is_active = models.BooleanField(default=True)
-    is_featured = models.BooleanField(default=False, help_text="Show prominently on new arrivals page")
+    created_by = models.ForeignKey(
+        'Customer',
+        on_delete=models.CASCADE,
+        related_name='shipment_announcements',
+        help_text="Admin who created this announcement"
+    )
+
+    # Status fields
+    is_active = models.BooleanField(default=True, help_text="Is this announcement active?")
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Show prominently on new arrivals page"
+    )
+
+    # View tracking
+    view_count = models.PositiveIntegerField(default=0, help_text="Number of times viewed")
 
     def __str__(self):
         return f"{self.title} - {self.created_at.strftime('%Y-%m-%d')}"
@@ -244,7 +295,18 @@ class ShipmentAnnouncement(models.Model):
     def get_image_url(self):
         if self.image:
             return self.image.url
+
+        # Fallback to first additional image if no main image
+        first_additional = self.images.first()
+        if first_additional and first_additional.image:
+            return first_additional.image.url
+
         return None
+
+    def increment_view_count(self):
+        """Increment view count"""
+        self.view_count = models.F('view_count') + 1
+        self.save(update_fields=['view_count'])
 
     class Meta:
         db_table = 'shipment_announcements'
@@ -254,13 +316,24 @@ class ShipmentAnnouncement(models.Model):
 
 
 class ShipmentAnnouncementImage(models.Model):
-    announcement = models.ForeignKey(ShipmentAnnouncement, on_delete=models.CASCADE, related_name='images')
+    """Additional images for shipment announcements"""
+    announcement = models.ForeignKey(
+        ShipmentAnnouncement,
+        on_delete=models.CASCADE,
+        related_name='images'
+    )
     image = models.ImageField(upload_to='shipments/images/')
     alt_text = models.CharField(max_length=200, blank=True)
-    order = models.IntegerField(default=0)
+    order = models.IntegerField(default=0, help_text="Display order")
+
+    def __str__(self):
+        return f"Image {self.order + 1} for {self.announcement.title}"
 
     class Meta:
+        db_table = 'shipment_announcement_images'
         ordering = ['order']
+        verbose_name = 'Shipment Announcement Image'
+        verbose_name_plural = 'Shipment Announcement Images'
 
 STATUS_CHOICES = [
     ('pending_pricing', 'Pending Pricing'),

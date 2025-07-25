@@ -222,30 +222,74 @@ const AdminAnnouncementsPage = () => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        const submissionForm = new FormData();
-
-        Object.keys(formData).forEach(key => {
-            if (!['images', 'id'].includes(key) && formData[key] !== null) {
-                submissionForm.append(key, formData[key]);
-            }
-        });
-
-        imageFiles.forEach(file => {
-            submissionForm.append('images', file);
-        });
-
-        const url = editingAnnouncement ? `/admin/announcements/${editingAnnouncement.id}/` : '/admin/announcements/';
-        const method = editingAnnouncement ? 'patch' : 'post';
-
         try {
-            await API[method](url, submissionForm, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+            const submissionForm = new FormData()
+
+            Object.keys(formData).forEach(key => {
+                if (!['images', 'id'].includes(key) && formData[key] !== null && formData[key] !== undefined) {
+                    submissionForm.append(key, formData[key]);
+                }
             });
+
+            imageFiles.forEach(file => {
+                submissionForm.append('images', file);
+            });
+
+            const url = editingAnnouncement
+                ? `/admin/announcements/${editingAnnouncement.id}/`
+                : '/admin/announcements/';
+            const method = editingAnnouncement ? 'patch' : 'post';
+
+            console.log('📤 Submitting announcement:', {
+                url,
+                method,
+                formDataKeys: Array.from(submissionForm.keys()),
+                isEditing: !!editingAnnouncement
+            });
+
+            const response = await API[method](url, submissionForm, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            console.log('✅ Announcement saved successfully:', response.data);
+
             fetchAnnouncements();
+
             handleCloseModal();
+
         } catch (err) {
-            console.error('❌ Error saving announcement:', err.response?.data);
-            setError(`خطا در ذخیره اطلاعیه: ${JSON.stringify(err.response?.data)}`);
+            console.error('❌ Error saving announcement:', err);
+
+            let errorMessage = 'خطا در ذخیره اطلاعیه';
+
+            if (err.response?.data) {
+                if (typeof err.response.data === 'string') {
+                    errorMessage = err.response.data;
+                } else if (err.response.data.error) {
+                    errorMessage = err.response.data.error;
+                } else if (err.response.data.details) {
+                    // Handle validation errors
+                    const details = err.response.data.details;
+                    const errorMessages = [];
+
+                    Object.keys(details).forEach(field => {
+                        if (Array.isArray(details[field])) {
+                            errorMessages.push(`${field}: ${details[field].join(', ')}`);
+                        } else {
+                            errorMessages.push(`${field}: ${details[field]}`);
+                        }
+                    });
+
+                    errorMessage = errorMessages.join('; ');
+                } else {
+                    errorMessage = JSON.stringify(err.response.data);
+                }
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+
+            setError(`خطا در ذخیره اطلاعیه: ${errorMessage}`);
         }
     };
 
@@ -333,17 +377,42 @@ const AdminAnnouncementsPage = () => {
     };
 
     const handleBulkAction = async (action) => {
+        if (selectedAnnouncements.length === 0) {
+            setError('هیچ اطلاعیه‌ای انتخاب نشده است');
+            return;
+        }
+
         try {
-            await API.post('/admin/announcements/bulk-action/', {
+            console.log('🔄 Performing bulk action:', { action, ids: selectedAnnouncements });
+
+            const response = await API.post('/admin/announcements/bulk-action/', {
                 action,
                 announcement_ids: selectedAnnouncements
             });
+
+            console.log('✅ Bulk action completed:', response.data);
+
+            // Refresh the announcements list
             fetchAnnouncements();
+
+            // Clear selection
             setSelectedAnnouncements([]);
             setShowBulkActions(false);
+
+            // Clear any errors
+            setError('');
+
         } catch (err) {
-            console.error('Error performing bulk action', err);
-            setError('خطا در انجام عملیات گروهی');
+            console.error('❌ Error performing bulk action:', err);
+
+            let errorMessage = 'خطا در انجام عملیات گروهی';
+            if (err.response?.data?.error) {
+                errorMessage = err.response.data.error;
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            }
+
+            setError(errorMessage);
         }
     };
 

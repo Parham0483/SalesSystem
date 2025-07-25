@@ -1,9 +1,10 @@
-// frontend/src/pages/NewArrivalsPage.js - Enhanced with multiple images and shipment focus
+// frontend/src/pages/NewArrivalsPage.js - COMPLETE UPDATED Customer View
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
 import '../styles/component/NewArrivalsPage.css';
 
 const NewArrivalsPage = () => {
@@ -12,6 +13,7 @@ const NewArrivalsPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -27,7 +29,12 @@ const NewArrivalsPage = () => {
             setShipmentAnnouncements(response.data);
         } catch (err) {
             console.error('❌ Error fetching shipment announcements:', err);
-            setError('خطا در بارگیری اطلاعیه‌های محموله');
+            if (err.response?.status === 401) {
+                setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
+                setTimeout(() => handleLogout(), 2000);
+            } else {
+                setError('خطا در بارگیری اطلاعیه‌های محموله');
+            }
         }
     };
 
@@ -45,6 +52,14 @@ const NewArrivalsPage = () => {
         }
     };
 
+    const handleLogout = () => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('userData');
+        delete API.defaults.headers.common['Authorization'];
+        navigate('/');
+    };
+
     const getDaysAgo = (dateString) => {
         const date = new Date(dateString);
         const now = new Date();
@@ -57,21 +72,46 @@ const NewArrivalsPage = () => {
         return 'بیش از یک ماه پیش';
     };
 
-    const handleOrderInquiry = (productName) => {
-        // Navigate to create order with inquiry about this product
+    const handleOrderInquiry = (productName, announcementTitle) => {
+        // Navigate to create order with inquiry about this product/announcement
         navigate('/orders/create', {
             state: {
                 inquiryMode: true,
-                productInquiry: productName
+                productInquiry: productName,
+                announcementReference: announcementTitle
             }
         });
+    };
+
+    const openAnnouncementModal = (announcement) => {
+        setSelectedAnnouncement(announcement);
+        setCurrentImageIndex(0);
+    };
+
+    const nextImage = () => {
+        if (selectedAnnouncement && selectedAnnouncement.images.length > 1) {
+            setCurrentImageIndex((prev) =>
+                prev === selectedAnnouncement.images.length - 1 ? 0 : prev + 1
+            );
+        }
+    };
+
+    const prevImage = () => {
+        if (selectedAnnouncement && selectedAnnouncement.images.length > 1) {
+            setCurrentImageIndex((prev) =>
+                prev === 0 ? selectedAnnouncement.images.length - 1 : prev - 1
+            );
+        }
     };
 
     if (loading) {
         return (
             <div className="new-arrivals-page">
                 <div className="page-header">
-                    <h1>در حال بارگیری اطلاعیه‌های جدید...</h1>
+                    <div className="loading-container">
+                        <div className="loading-spinner"></div>
+                        <h1>در حال بارگیری اطلاعیه‌های جدید...</h1>
+                    </div>
                 </div>
             </div>
         );
@@ -86,6 +126,7 @@ const NewArrivalsPage = () => {
                         <h1 className="page-title">🚢 محموله‌های جدید</h1>
                         <p className="page-subtitle">
                             آخرین اطلاعیه‌ها و محموله‌های وارد شده
+                            {shipmentAnnouncements.length > 0 && ` - ${shipmentAnnouncements.length} محموله`}
                         </p>
                     </div>
                     <div className="header-actions">
@@ -110,6 +151,13 @@ const NewArrivalsPage = () => {
                             onClick={() => navigate('/dashboard')}
                             className="dashboard-btn"
                         />
+                        <NeoBrutalistButton
+                            text="خروج"
+                            color="red-400"
+                            textColor="white"
+                            onClick={handleLogout}
+                            className="logout-btn"
+                        />
                     </div>
                 </div>
             </div>
@@ -117,6 +165,17 @@ const NewArrivalsPage = () => {
             {error && (
                 <div className="error-banner">
                     <span>⚠️ {error}</span>
+                    <NeoBrutalistButton
+                        text="تلاش مجدد"
+                        color="blue-400"
+                        textColor="white"
+                        onClick={() => {
+                            setError('');
+                            fetchShipmentAnnouncements();
+                            fetchFeaturedProducts();
+                        }}
+                        className="retry-btn"
+                    />
                 </div>
             )}
 
@@ -128,8 +187,8 @@ const NewArrivalsPage = () => {
                         {shipmentAnnouncements.map((announcement) => (
                             <NeoBrutalistCard
                                 key={announcement.id}
-                                className="shipment-card"
-                                onClick={() => setSelectedAnnouncement(announcement)}
+                                className={`shipment-card ${announcement.is_featured ? 'featured' : ''}`}
+                                onClick={() => openAnnouncementModal(announcement)}
                             >
                                 <div className="shipment-header">
                                     <h3 className="shipment-title">{announcement.title}</h3>
@@ -137,13 +196,18 @@ const NewArrivalsPage = () => {
                                         <span className="shipment-date">
                                             {getDaysAgo(announcement.created_at)}
                                         </span>
-                                        <span className="shipment-type">
-                                            {announcement.shipment_type || 'محموله عمومی'}
-                                        </span>
+                                        {announcement.is_featured && (
+                                            <span className="featured-badge">ویژه</span>
+                                        )}
+                                        {announcement.created_by_name && (
+                                            <span className="author-badge">
+                                                توسط {announcement.created_by_name}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Multiple Images Support */}
+                                {/* Enhanced Multiple Images Support */}
                                 {announcement.images && announcement.images.length > 0 && (
                                     <div className="shipment-images">
                                         {announcement.images.length === 1 ? (
@@ -195,52 +259,73 @@ const NewArrivalsPage = () => {
 
                                 <div className="shipment-content">
                                     <p className="shipment-description">
-                                        {announcement.description}
+                                        {announcement.description.length > 150
+                                            ? `${announcement.description.substring(0, 150)}...`
+                                            : announcement.description
+                                        }
                                     </p>
 
-                                    {/* Shipment Details */}
+                                    {/* Enhanced Shipment Details */}
                                     <div className="shipment-details">
-                                        {announcement.origin && (
+                                        {announcement.origin_country && (
                                             <div className="detail-item">
                                                 <span className="detail-label">🌍 مبدأ:</span>
-                                                <span className="detail-value">{announcement.origin}</span>
+                                                <span className="detail-value">{announcement.origin_country}</span>
                                             </div>
                                         )}
-                                        {announcement.container_info && (
+                                        {announcement.shipment_date && (
                                             <div className="detail-item">
-                                                <span className="detail-label">📦 کانتینر:</span>
-                                                <span className="detail-value">{announcement.container_info}</span>
+                                                <span className="detail-label">📅 تاریخ ارسال:</span>
+                                                <span className="detail-value">
+                                                    {new Date(announcement.shipment_date).toLocaleDateString('fa-IR')}
+                                                </span>
                                             </div>
                                         )}
-                                        {announcement.weight && (
+                                        {announcement.estimated_arrival && (
                                             <div className="detail-item">
-                                                <span className="detail-label">⚖️ وزن:</span>
-                                                <span className="detail-value">{announcement.weight}</span>
+                                                <span className="detail-label">🚛 تاریخ رسیدن:</span>
+                                                <span className="detail-value">
+                                                    {new Date(announcement.estimated_arrival).toLocaleDateString('fa-IR')}
+                                                </span>
                                             </div>
                                         )}
-                                        {announcement.estimated_products_count && (
+                                        {announcement.product_categories && (
+                                            <div className="detail-item">
+                                                <span className="detail-label">📦 دسته‌بندی:</span>
+                                                <span className="detail-value">{announcement.product_categories}</span>
+                                            </div>
+                                        )}
+                                        {announcement.products_count > 0 && (
                                             <div className="detail-item">
                                                 <span className="detail-label">📊 تعداد محصول:</span>
                                                 <span className="detail-value">
-                                                    {announcement.estimated_products_count} قلم
+                                                    {announcement.products_count} قلم
                                                 </span>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Featured Products from this Shipment */}
-                                    {announcement.featured_items && announcement.featured_items.length > 0 && (
-                                        <div className="featured-items">
-                                            <h4 className="featured-title">محصولات ویژه این محموله:</h4>
-                                            <div className="featured-list">
-                                                {announcement.featured_items.map((item, idx) => (
-                                                    <div key={idx} className="featured-item">
-                                                        <span className="item-name">{item.name}</span>
-                                                        {item.special_note && (
-                                                            <span className="item-note">{item.special_note}</span>
+                                    {/* Related Products Preview - NO STOCK NUMBERS */}
+                                    {announcement.related_products_info && announcement.related_products_info.length > 0 && (
+                                        <div className="related-products-preview">
+                                            <h4 className="related-title">محصولات این محموله:</h4>
+                                            <div className="related-list">
+                                                {announcement.related_products_info.slice(0, 3).map((product, idx) => (
+                                                    <div key={idx} className="related-item">
+                                                        <span className="item-name">{product.name}</span>
+                                                        {product.stock_status && (
+                                                            <span className={`item-status ${product.stock_status}`}>
+                                                                {product.stock_status === 'in_stock' ? 'موجود' :
+                                                                    product.stock_status === 'out_of_stock' ? 'ناموجود' : 'نامشخص'}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 ))}
+                                                {announcement.related_products_info.length > 3 && (
+                                                    <div className="more-products">
+                                                        و {announcement.related_products_info.length - 3} محصول دیگر...
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -253,7 +338,7 @@ const NewArrivalsPage = () => {
                                         textColor="white"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setSelectedAnnouncement(announcement);
+                                            openAnnouncementModal(announcement);
                                         }}
                                         className="details-btn"
                                     />
@@ -263,7 +348,7 @@ const NewArrivalsPage = () => {
                                         textColor="black"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleOrderInquiry(announcement.title);
+                                            handleOrderInquiry('محصولات محموله', announcement.title);
                                         }}
                                         className="inquiry-btn"
                                     />
@@ -274,67 +359,6 @@ const NewArrivalsPage = () => {
                 </div>
             )}
 
-            {/* Featured Products Section (No Stock Display) */}
-            {featuredProducts.length > 0 && (
-                <div className="featured-products-section">
-                    <h2 className="section-title">⭐ محصولات ویژه</h2>
-                    <div className="featured-products-grid">
-                        {featuredProducts.map((product) => (
-                            <NeoBrutalistCard key={product.id} className="featured-product-card">
-                                <div className="product-image-container">
-                                    {product.image_url ? (
-                                        <img
-                                            src={product.image_url}
-                                            alt={product.name}
-                                            className="product-image"
-                                            onError={(e) => {
-                                                e.target.src = '/placeholder-product.png';
-                                            }}
-                                        />
-                                    ) : (
-                                        <div className="product-image-placeholder">
-                                            🥜
-                                            <span>تصویر ندارد</span>
-                                        </div>
-                                    )}
-
-                                    {/* New arrival badge - no stock status */}
-                                    <div className="arrival-badge">
-                                        جدید
-                                    </div>
-                                </div>
-
-                                <div className="product-info">
-                                    <h3 className="product-name">{product.name}</h3>
-                                    <p className="product-description">
-                                        {product.description.length > 80
-                                            ? `${product.description.substring(0, 80)}...`
-                                            : product.description
-                                        }
-                                    </p>
-
-                                    <div className="product-actions">
-                                        <NeoBrutalistButton
-                                            text="مشاهده در کاتالوگ"
-                                            color="blue-400"
-                                            textColor="white"
-                                            onClick={() => navigate('/product')}
-                                            className="catalog-btn"
-                                        />
-                                        <NeoBrutalistButton
-                                            text="استعلام قیمت"
-                                            color="yellow-400"
-                                            textColor="black"
-                                            onClick={() => handleOrderInquiry(product.name)}
-                                            className="inquiry-btn"
-                                        />
-                                    </div>
-                                </div>
-                            </NeoBrutalistCard>
-                        ))}
-                    </div>
-                </div>
-            )}
 
             {/* Empty State */}
             {shipmentAnnouncements.length === 0 && featuredProducts.length === 0 && !loading && (
@@ -392,43 +416,185 @@ const NewArrivalsPage = () => {
                             color="yellow-400"
                             textColor="black"
                             onClick={() => {
-                                // Add phone contact functionality
                                 window.open('tel:+989123456789', '_self');
                             }}
+                            className="quick-action-btn"
+                        />
+
+                        <NeoBrutalistButton
+                            text="📨 سفارشات من"
+                            color="purple-400"
+                            textColor="white"
+                            onClick={() => navigate('/orders')}
                             className="quick-action-btn"
                         />
                     </div>
                 </NeoBrutalistCard>
             </div>
 
-            {/* Shipment Detail Modal */}
-            {selectedAnnouncement && (
-                <div className="modal-overlay" onClick={() => setSelectedAnnouncement(null)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>{selectedAnnouncement.title}</h2>
-                            <button
-                                className="modal-close"
-                                onClick={() => setSelectedAnnouncement(null)}
-                            >
-                                ×
-                            </button>
-                        </div>
+            {/* Enhanced Shipment Detail Modal */}
+            <NeoBrutalistModal
+                isOpen={!!selectedAnnouncement}
+                onClose={() => setSelectedAnnouncement(null)}
+                title={selectedAnnouncement ? selectedAnnouncement.title : ""}
+                size="large"
+            >
+                {selectedAnnouncement && (
+                    <div className="announcement-detail-modal" dir="rtl">
+                        {/* Image Gallery */}
+                        {selectedAnnouncement.images && selectedAnnouncement.images.length > 0 && (
+                            <div className="modal-image-gallery">
+                                <div className="main-image-container">
+                                    <img
+                                        src={selectedAnnouncement.images[currentImageIndex].image}
+                                        alt={`${selectedAnnouncement.title} - تصویر ${currentImageIndex + 1}`}
+                                        className="main-modal-image"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                        }}
+                                    />
 
-                        <div className="modal-body">
-                            {/* Full image gallery would go here */}
-                            <div className="full-description">
+                                    {selectedAnnouncement.images.length > 1 && (
+                                        <>
+                                            <button className="image-nav-btn prev-btn" onClick={prevImage}>
+                                                ‹
+                                            </button>
+                                            <button className="image-nav-btn next-btn" onClick={nextImage}>
+                                                ›
+                                            </button>
+                                            <div className="image-counter">
+                                                {currentImageIndex + 1} از {selectedAnnouncement.images.length}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Thumbnail Navigation */}
+                                {selectedAnnouncement.images.length > 1 && (
+                                    <div className="thumbnail-navigation">
+                                        {selectedAnnouncement.images.map((img, index) => (
+                                            <div
+                                                key={index}
+                                                className={`thumbnail-nav ${index === currentImageIndex ? 'active' : ''}`}
+                                                onClick={() => setCurrentImageIndex(index)}
+                                            >
+                                                <img
+                                                    src={img.image}
+                                                    alt={`Thumbnail ${index + 1}`}
+                                                    className="thumbnail-nav-image"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Announcement Details */}
+                        <div className="modal-announcement-info">
+                            <div className="modal-header-info">
+                                <h2 className="modal-announcement-title">{selectedAnnouncement.title}</h2>
+                                <div className="modal-meta">
+                                    <span className="modal-date">
+                                        {getDaysAgo(selectedAnnouncement.created_at)}
+                                    </span>
+                                    {selectedAnnouncement.is_featured && (
+                                        <span className="modal-featured-badge">ویژه</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="modal-description">
+                                <h4>توضیحات کامل:</h4>
                                 <p>{selectedAnnouncement.description}</p>
                             </div>
 
-                            {/* Additional details */}
-                            <div className="full-details">
-                                {/* Complete shipment information */}
+                            {/* Complete Details */}
+                            <div className="modal-complete-details">
+                                {selectedAnnouncement.origin_country && (
+                                    <div className="modal-detail-row">
+                                        <span className="modal-detail-label">🌍 کشور مبدأ:</span>
+                                        <span className="modal-detail-value">{selectedAnnouncement.origin_country}</span>
+                                    </div>
+                                )}
+
+                                {selectedAnnouncement.shipment_date && (
+                                    <div className="modal-detail-row">
+                                        <span className="modal-detail-label">📅 تاریخ ارسال:</span>
+                                        <span className="modal-detail-value">
+                                            {new Date(selectedAnnouncement.shipment_date).toLocaleDateString('fa-IR')}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedAnnouncement.estimated_arrival && (
+                                    <div className="modal-detail-row">
+                                        <span className="modal-detail-label">🚛 تاریخ تخمینی رسیدن:</span>
+                                        <span className="modal-detail-value">
+                                            {new Date(selectedAnnouncement.estimated_arrival).toLocaleDateString('fa-IR')}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {selectedAnnouncement.product_categories && (
+                                    <div className="modal-detail-row">
+                                        <span className="modal-detail-label">📦 دسته‌بندی محصولات:</span>
+                                        <span className="modal-detail-value">{selectedAnnouncement.product_categories}</span>
+                                    </div>
+                                )}
+
+                                <div className="modal-detail-row">
+                                    <span className="modal-detail-label">📊 تعداد بازدید:</span>
+                                    <span className="modal-detail-value">
+                                        {selectedAnnouncement.view_count || 0} بار
+                                    </span>
+                                </div>
+
+                                <div className="modal-detail-row">
+                                    <span className="modal-detail-label">📅 تاریخ انتشار:</span>
+                                    <span className="modal-detail-value">
+                                        {new Date(selectedAnnouncement.created_at).toLocaleDateString('fa-IR')}
+                                    </span>
+                                </div>
                             </div>
+
+                            {/* Related Products Full List - NO STOCK NUMBERS */}
+                            {selectedAnnouncement.related_products_info && selectedAnnouncement.related_products_info.length > 0 && (
+                                <div className="modal-related-products">
+                                    <h4>محصولات این محموله:</h4>
+                                    <div className="modal-products-list">
+                                        {selectedAnnouncement.related_products_info.map((product, idx) => (
+                                            <div key={idx} className="modal-product-item">
+                                                <div className="product-item-info">
+                                                    <span className="product-item-name">{product.name}</span>
+                                                    {product.stock_status && (
+                                                        <span className={`product-item-status ${product.stock_status}`}>
+                                                            {product.stock_status === 'in_stock' ? 'موجود' :
+                                                                product.stock_status === 'out_of_stock' ? 'ناموجود' : 'نامشخص'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <NeoBrutalistButton
+                                                    text="استعلام"
+                                                    color="blue-400"
+                                                    textColor="white"
+                                                    onClick={() => {
+                                                        setSelectedAnnouncement(null);
+                                                        handleOrderInquiry(product.name, selectedAnnouncement.title);
+                                                    }}
+                                                    className="product-inquiry-btn"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </NeoBrutalistModal>
         </div>
     );
 };

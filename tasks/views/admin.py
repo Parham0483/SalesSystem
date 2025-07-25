@@ -770,69 +770,211 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
         })
 
 
+# tasks/views/admin.py - FIXED AdminAnnouncementViewSet
+
 class AdminAnnouncementViewSet(viewsets.ModelViewSet):
-    """Admin shipment announcement management"""
+    """Admin shipment announcement management - FIXED VERSION"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     serializer_class = ShipmentAnnouncementSerializer
 
     def get_queryset(self):
-        return ShipmentAnnouncement.objects.all().prefetch_related('images').order_by('-created_at')
-
-    def perform_create(self, serializer):
-        """Set created_by when creating announcement"""
-        serializer.save(created_by=self.request.user)
+        return ShipmentAnnouncement.objects.all().select_related('created_by').prefetch_related('images').order_by(
+            '-created_at')
 
     def create(self, request, *args, **kwargs):
-        """Handle announcement creation with multiple images"""
-        serializer = self.get_serializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            announcement = serializer.save()
+        """Handle announcement creation with multiple images - FIXED"""
+        try:
+            # Create the announcement data
+            announcement_data = request.data.copy()
 
-            # Handle multiple image uploads
-            images = request.FILES.getlist('images')
-            for i, image_file in enumerate(images):
-                ShipmentAnnouncementImage.objects.create(
-                    announcement=announcement,
-                    image=image_file,
-                    order=i
-                )
+            # Remove files from data before serialization
+            images = request.FILES.getlist('images', [])
 
-            return Response({
-                'message': 'Announcement created successfully',
-                'announcement': ShipmentAnnouncementSerializer(announcement).data
-            }, status=status.HTTP_201_CREATED)
+            # Create serializer with request context
+            serializer = self.get_serializer(data=announcement_data, context={'request': request})
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if serializer.is_valid():
+                # FIXED: Explicitly set created_by
+                announcement = serializer.save(created_by=request.user)
 
-    def update(self, request, *args, **kwargs):
-        """Handle announcement update with multiple images"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial, context={'request': request})
-
-        if serializer.is_valid():
-            announcement = serializer.save()
-
-            # Handle new image uploads (replace existing)
-            images = request.FILES.getlist('images')
-            if images:
-                # Delete existing additional images
-                instance.images.all().delete()
-                # Add new images
+                # Handle multiple image uploads
                 for i, image_file in enumerate(images):
                     ShipmentAnnouncementImage.objects.create(
                         announcement=announcement,
                         image=image_file,
-                        order=i
+                        order=i,
+                        alt_text=f"Image {i + 1} for {announcement.title}"
                     )
 
+                return Response({
+                    'message': 'Announcement created successfully',
+                    'announcement': ShipmentAnnouncementSerializer(announcement, context={'request': request}).data
+                }, status=status.HTTP_201_CREATED)
+
             return Response({
-                'message': 'Announcement updated successfully',
-                'announcement': ShipmentAnnouncementSerializer(announcement).data
+                'error': 'Invalid data',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            print(f"❌ Error creating announcement: {str(e)}")
+            return Response({
+                'error': f'Failed to create announcement: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def update(self, request, *args, **kwargs):
+        """Handle announcement update with multiple images - FIXED"""
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            # Get the data and images
+            announcement_data = request.data.copy()
+            images = request.FILES.getlist('images', [])
+
+            # Create serializer with request context
+            serializer = self.get_serializer(
+                instance,
+                data=announcement_data,
+                partial=partial,
+                context={'request': request}
+            )
+
+            if serializer.is_valid():
+                # Save the announcement (created_by should remain unchanged)
+                announcement = serializer.save()
+
+                # Handle new image uploads if provided
+                if images:
+                    # Delete existing additional images only if new ones are provided
+                    instance.images.all().delete()
+
+                    # Add new images
+                    for i, image_file in enumerate(images):
+                        ShipmentAnnouncementImage.objects.create(
+                            announcement=announcement,
+                            image=image_file,
+                            order=i,
+                            alt_text=f"Image {i + 1} for {announcement.title}"
+                        )
+
+                return Response({
+                    'message': 'Announcement updated successfully',
+                    'announcement': ShipmentAnnouncementSerializer(announcement, context={'request': request}).data
+                })
+
+            return Response({
+                'error': 'Invalid data',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            print(f"❌ Error updating announcement: {str(e)}")
+            return Response({
+                'error': f'Failed to update announcement: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['POST'], url_path='bulk-action')
+    def bulk_action(self, request):
+        """Perform bulk actions on announcements"""
+        try:
+            announcement_ids = request.data.get('announcement_ids', [])
+            action = request.data.get('action')
+
+            if not announcement_ids:
+                return Response({
+                    'error': 'No announcements selected'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            announcements = ShipmentAnnouncement.objects.filter(id__in=announcement_ids)
+
+            if not announcements.exists():
+                return Response({
+                    'error': 'No announcements found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            updated_count = 0
+
+            if action == 'activate':
+                updated_count = announcements.update(is_active=True)
+                message = f'{updated_count} announcements activated'
+            elif action == 'deactivate':
+                updated_count = announcements.update(is_active=False)
+                message = f'{updated_count} announcements deactivated'
+            elif action == 'feature':
+                updated_count = announcements.update(is_featured=True)
+                message = f'{updated_count} announcements featured'
+            elif action == 'unfeature':
+                updated_count = announcements.update(is_featured=False)
+                message = f'{updated_count} announcements unfeatured'
+            elif action == 'delete':
+                updated_count = announcements.count()
+                announcements.delete()
+                message = f'{updated_count} announcements deleted'
+            else:
+                return Response({
+                    'error': 'Invalid action'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                'message': message,
+                'updated_count': updated_count
             })
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'error': f'Bulk action failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['GET'], url_path='analytics')
+    def analytics(self, request):
+        """Get announcement analytics"""
+        try:
+            announcements = self.get_queryset()
+
+            # Basic stats
+            total = announcements.count()
+            active = announcements.filter(is_active=True).count()
+            featured = announcements.filter(is_featured=True).count()
+
+            # Recent stats
+            week_ago = timezone.now() - timedelta(days=7)
+            month_ago = timezone.now() - timedelta(days=30)
+
+            recent_week = announcements.filter(created_at__gte=week_ago).count()
+            recent_month = announcements.filter(created_at__gte=month_ago).count()
+
+            # Most recent announcements
+            recent_announcements = announcements[:5]
+            recent_data = []
+            for ann in recent_announcements:
+                recent_data.append({
+                    'id': ann.id,
+                    'title': ann.title,
+                    'created_at': ann.created_at.isoformat(),
+                    'is_active': ann.is_active,
+                    'is_featured': ann.is_featured,
+                    'created_by': ann.created_by.name if ann.created_by else 'Unknown'
+                })
+
+            return Response({
+                'stats': {
+                    'total': total,
+                    'active': active,
+                    'inactive': total - active,
+                    'featured': featured,
+                    'recent_week': recent_week,
+                    'recent_month': recent_month
+                },
+                'recent_announcements': recent_data
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Analytics failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class AdminReportsViewSet(viewsets.ViewSet):
     """Admin reports and analytics"""

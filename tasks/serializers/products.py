@@ -52,8 +52,28 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'category_name']
 
     def get_image_url(self, obj):
-        """Get the primary image URL"""
-        return obj.get_primary_image_url()
+        """Get the primary image URL with full domain"""
+        request = self.context.get('request')
+
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            else:
+                # Fallback - hardcode your backend URL if no request context
+                from django.conf import settings
+                base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
+                return f"{base_url}{obj.image.url}"
+
+        # Use the model's method if no direct image
+        image_url = obj.get_primary_image_url()
+        if image_url and request:
+            return request.build_absolute_uri(image_url)
+        elif image_url:
+            from django.conf import settings
+            base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
+            return f"{base_url}{image_url}"
+
+        return None
 
     def get_category_details(self, obj):
         """Get category details"""
