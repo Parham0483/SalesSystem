@@ -23,7 +23,7 @@ router.register(r'order-items', OrderItemViewSet, basename='orderitem')
 router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'dealers', DealerViewSet, basename='dealer')
 router.register(r'shipment-announcements', ShipmentAnnouncementViewSet, basename='shipmentannouncement')
-router.register(r'product-categories', ProductCategoryViewSet, basename='productcategory')
+router.register(r'categories', ProductCategoryViewSet, basename='categories')
 
 # Admin-specific routes
 router.register(r'admin/dashboard', AdminDashboardViewSet, basename='admin-dashboard')

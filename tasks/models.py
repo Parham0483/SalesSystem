@@ -90,9 +90,9 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         verbose_name = 'Customer'
         verbose_name_plural = 'Customers'
 
-
 class ProductCategory(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, help_text="English name")
+    name_fa = models.CharField(max_length=100, help_text="Persian name", blank=True)
     description = models.TextField(blank=True, null=True)
     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='subcategories')
     slug = models.SlugField(unique=True, blank=True)
@@ -102,7 +102,12 @@ class ProductCategory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return self.name_fa if self.name_fa else self.name
+
+    @property
+    def display_name(self):
+        """Return Persian name if available, otherwise English name"""
+        return self.name_fa if self.name_fa else self.name
 
     @property
     def products_count(self):
@@ -147,18 +152,23 @@ class Product(models.Model):
     stock = models.IntegerField(default=0)
     image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product image")
     is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     sku = models.CharField(max_length=50, null=True ,blank=True, help_text="Stock Keeping Unit")
+
     category = models.ForeignKey(
         ProductCategory,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='products'
+        related_name='products',
+        help_text="Product category"
     )
     weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Weight in kg")
+
+    is_featured = models.BooleanField(default=False, help_text="Featured product")
 
     # SEO and metadata
     meta_title = models.CharField(max_length=200, blank=True)
@@ -167,6 +177,10 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def category_name(self):
+        return self.category.display_name if self.category else None
 
     @property
     def is_out_of_stock(self):
@@ -212,7 +226,7 @@ class ShipmentAnnouncement(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(help_text="Describe the new shipment, packaging, container info, etc.")
     image = models.ImageField(upload_to='shipments/', blank=True, null=True, help_text="Photo of packaging/container")
-
+    origin_country = models.CharField(max_length=100, blank=True, null=True, help_text="Country of origin")
     related_products = models.ManyToManyField('Product', blank=True, help_text="Products in this shipment")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -238,6 +252,15 @@ class ShipmentAnnouncement(models.Model):
         verbose_name = 'Shipment Announcement'
         verbose_name_plural = 'Shipment Announcements'
 
+
+class ShipmentAnnouncementImage(models.Model):
+    announcement = models.ForeignKey(ShipmentAnnouncement, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='shipments/images/')
+    alt_text = models.CharField(max_length=200, blank=True)
+    order = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['order']
 
 STATUS_CHOICES = [
     ('pending_pricing', 'Pending Pricing'),

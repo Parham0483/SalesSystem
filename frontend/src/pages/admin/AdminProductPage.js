@@ -30,15 +30,13 @@ const AdminProductsPage = () => {
     const [productFormData, setProductFormData] = useState({
         name: '',
         description: '',
-        category: '',
+        category: null,
         origin: '',
         base_price: 0,
         stock: 0,
         is_active: true,
         is_featured: false,
-        min_order_quantity: 1,
         weight: 0,
-        dimensions: ''
     });
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
@@ -94,6 +92,7 @@ const AdminProductsPage = () => {
 
     useEffect(() => {
         fetchProducts();
+        fetchCategories();
     }, [fetchProducts]);
 
     const calculateStats = (productsList) => {
@@ -107,6 +106,16 @@ const AdminProductsPage = () => {
             totalValue: productsList.reduce((sum, p) => sum + (p.base_price * p.stock), 0)
         };
         setProductStats(stats);
+    };
+
+    const fetchCategories = async () => {
+        try {
+            const response = await API.get('/admin/products/categories/');
+            console.log('📂 Categories fetched:', response.data);
+            setCategories(response.data);
+        } catch (err) {
+            console.error('❌ Error fetching categories:', err);
+        }
     };
 
     const extractCategories = (productsList) => {
@@ -184,15 +193,13 @@ const AdminProductsPage = () => {
             setProductFormData({
                 name: '',
                 description: '',
-                category: '',
+                category: null,
                 origin: '',
                 base_price: 0,
                 stock: 0,
                 is_active: true,
                 is_featured: false,
-                min_order_quantity: 1,
                 weight: 0,
-                dimensions: ''
             });
             setImagePreview('');
         }
@@ -212,7 +219,9 @@ const AdminProductsPage = () => {
         const { name, value, type, checked } = e.target;
         setProductFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : value
+            [name]: type === 'checkbox' ? checked :
+                name === 'category' ? (value ? parseInt(value, 10) : null):
+                value
         }));
     };
 
@@ -229,7 +238,7 @@ const AdminProductsPage = () => {
         const formData = new FormData();
 
         Object.keys(productFormData).forEach(key => {
-            if (key !== 'image_url' && key !== 'id' && productFormData[key] !== null) {
+            if (!['image_url', 'id'].includes(key) && productFormData[key] !== null)  {
                 formData.append(key, productFormData[key]);
             }
         });
@@ -242,9 +251,10 @@ const AdminProductsPage = () => {
         const method = editingProduct ? 'patch' : 'post';
 
         try {
-            await API[method](url, formData, {
+            const response = await API[method](url, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
+            console.log('✅ Product saved successfully:', response.data);
             fetchProducts();
             handleCloseModal();
         } catch (err) {
@@ -364,8 +374,11 @@ const AdminProductsPage = () => {
     ];
 
     const categoryOptions = [
-        { value: 'all', label: 'همه دسته‌ها' },
-        ...categories.map(cat => ({ value: cat, label: cat }))
+        { value: '', label: 'انتخاب دسته‌بندی' },
+        ...categories.map(cat => ({
+            value: cat.id,
+            label: cat.display_name || cat.name
+        }))
     ];
 
     const sortOptions = [
@@ -734,10 +747,14 @@ const AdminProductsPage = () => {
                         </div>
                         <div className="form-group">
                             <label>دسته‌بندی</label>
-                            <NeoBrutalistInput
-                                name="category"
+                            <NeoBrutalistDropdown
+                                label=""
+                                options={categoryOptions}
                                 value={productFormData.category || ''}
-                                onChange={handleFormChange}
+                                onChange={(value) => setProductFormData(prev => ({
+                                    ...prev,
+                                    category: value ? parseInt(value, 10) : null
+                                }))}
                             />
                         </div>
                     </div>
@@ -786,15 +803,7 @@ const AdminProductsPage = () => {
                                 onChange={handleFormChange}
                             />
                         </div>
-                        <div className="form-group">
-                            <label>حداقل سفارش</label>
-                            <NeoBrutalistInput
-                                type="number"
-                                name="min_order_quantity"
-                                value={productFormData.min_order_quantity || 1}
-                                onChange={handleFormChange}
-                            />
-                        </div>
+
                     </div>
 
                     <div className="form-row">
@@ -808,15 +817,7 @@ const AdminProductsPage = () => {
                                 onChange={handleFormChange}
                             />
                         </div>
-                        <div className="form-group">
-                            <label>ابعاد</label>
-                            <NeoBrutalistInput
-                                name="dimensions"
-                                value={productFormData.dimensions || ''}
-                                onChange={handleFormChange}
-                                placeholder="مثال: 20x30x15 سانتی‌متر"
-                            />
-                        </div>
+
                     </div>
 
                     <div className="form-group">

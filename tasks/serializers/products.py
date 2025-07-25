@@ -14,37 +14,39 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     """Serializer for product categories"""
-    products_count = serializers.ReadOnlyField()
-    image_url = serializers.SerializerMethodField()
+    products_count = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductCategory
         fields = [
-            'id', 'name', 'description', 'image_url', 'parent',
+            'id', 'name', 'name_fa', 'display_name', 'description',
             'slug', 'is_active', 'order', 'products_count'
         ]
 
-    def get_image_url(self, obj):
-        if obj.image:
-            return obj.image.url
-        return None
+    def get_products_count(self, obj):
+        return obj.products.filter(is_active=True).count()
+
+    def get_display_name(self, obj):
+        return obj.name_fa if obj.name_fa else obj.name
 
 
 class ProductSerializer(serializers.ModelSerializer):
     """Enhanced product serializer matching your model structure"""
     image_url = serializers.SerializerMethodField()
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    additional_images = ProductImageSerializer(many=True, read_only=True)
-    stock_status = serializers.ReadOnlyField()
-    is_out_of_stock = serializers.ReadOnlyField()
+    stock_status = serializers.SerializerMethodField()
+    is_out_of_stock = serializers.SerializerMethodField()
     days_since_created = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    category_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'image', 'image_url', 'additional_images',
-            'category', 'category_name', 'is_active', 'created_at', 'updated_at',
+            'weight', 'image', 'image_url',
+            'category', 'category_name','category_details',
+            'origin', 'is_active','is_featured','created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created'
         ]
@@ -53,6 +55,17 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """Get the primary image URL"""
         return obj.get_primary_image_url()
+
+    def get_category_details(self, obj):
+        """Get category details"""
+        if obj.category:
+            return {
+                'id': obj.category.id,
+                'name': obj.category.name,
+                'name_fa': obj.category.name_fa,
+                'display_name': obj.category.display_name
+            }
+        return None
 
     def get_days_since_created(self, obj):
         """Get days since product was created"""
@@ -79,6 +92,11 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Price cannot be negative")
         return value
 
+    def validate_category(self, value):
+        """Validate category exists and is active"""
+        if value and not value.is_active:
+            raise serializers.ValidationError("Selected category is not active")
+        return value
 
 class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
     """Serializer for shipment announcements"""

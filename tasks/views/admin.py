@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from ..models import (
     Customer, Product, Order, OrderItem, Invoice,
-    ShipmentAnnouncement, ProductCategory, DealerCommission
+    ShipmentAnnouncement, ProductCategory, DealerCommission, ShipmentAnnouncementImage
 )
 from ..serializers.customers import CustomerSerializer
 from ..serializers.products import ProductSerializer, ShipmentAnnouncementSerializer
@@ -248,6 +248,40 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'message': message})
+
+    def categories(self, request):
+        """Get all categories for dropdown"""
+        categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
+
+        categories_data = []
+        for category in categories:
+            categories_data.append({
+                'id': category.id,
+                'name': category.name,
+                'name_fa': category.name_fa,
+                'display_name': category.name_fa if category.name_fa else category.name,
+                'products_count': category.products.filter(is_active=True).count()
+            })
+
+        return Response(categories_data)
+
+
+    @action(detail=False, methods=['GET'], url_path='categories')
+    def get_categories(self, request):
+        """Get all active categories for dropdown"""
+        categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
+
+        categories_data = []
+        for category in categories:
+            categories_data.append({
+                'id': category.id,
+                'name': category.name,
+                'name_fa': category.name_fa,
+                'display_name': category.display_name,
+                'products_count': category.products_count
+            })
+
+        return Response(categories_data)
 
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
@@ -761,36 +795,62 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
     serializer_class = ShipmentAnnouncementSerializer
 
     def get_queryset(self):
-        return ShipmentAnnouncement.objects.all().order_by('-created_at')
+        return ShipmentAnnouncement.objects.all().prefetch_related('images').order_by('-created_at')
 
     def perform_create(self, serializer):
         """Set created_by when creating announcement"""
         serializer.save(created_by=self.request.user)
 
-    @action(detail=True, methods=['POST'], url_path='toggle-featured')
-    def toggle_featured(self, request, pk=None):
-        """Toggle featured status"""
-        announcement = self.get_object()
-        announcement.is_featured = not announcement.is_featured
-        announcement.save()
+    def create(self, request, *args, **kwargs):
+        """Handle announcement creation with multiple images"""
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            announcement = serializer.save()
 
-        return Response({
-            'message': f'Announcement {"featured" if announcement.is_featured else "unfeatured"}',
-            'announcement': ShipmentAnnouncementSerializer(announcement).data
-        })
+            # Handle multiple image uploads
+            images = request.FILES.getlist('images')
+            for i, image_file in enumerate(images):
+                ShipmentAnnouncementImage.objects.create(
+                    announcement=announcement,
+                    image=image_file,
+                    order=i
+                )
 
-    @action(detail=True, methods=['POST'], url_path='toggle-status')
-    def toggle_status(self, request, pk=None):
-        """Toggle active status"""
-        announcement = self.get_object()
-        announcement.is_active = not announcement.is_active
-        announcement.save()
+            return Response({
+                'message': 'Announcement created successfully',
+                'announcement': ShipmentAnnouncementSerializer(announcement).data
+            }, status=status.HTTP_201_CREATED)
 
-        return Response({
-            'message': f'Announcement {"activated" if announcement.is_active else "deactivated"}',
-            'announcement': ShipmentAnnouncementSerializer(announcement).data
-        })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def update(self, request, *args, **kwargs):
+        """Handle announcement update with multiple images"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial, context={'request': request})
+
+        if serializer.is_valid():
+            announcement = serializer.save()
+
+            # Handle new image uploads (replace existing)
+            images = request.FILES.getlist('images')
+            if images:
+                # Delete existing additional images
+                instance.images.all().delete()
+                # Add new images
+                for i, image_file in enumerate(images):
+                    ShipmentAnnouncementImage.objects.create(
+                        announcement=announcement,
+                        image=image_file,
+                        order=i
+                    )
+
+            return Response({
+                'message': 'Announcement updated successfully',
+                'announcement': ShipmentAnnouncementSerializer(announcement).data
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AdminReportsViewSet(viewsets.ViewSet):
     """Admin reports and analytics"""
