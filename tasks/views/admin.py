@@ -315,6 +315,7 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+
 class AdminCustomerViewSet(viewsets.ModelViewSet):
     """Admin customer management"""
     authentication_classes = [JWTAuthentication]
@@ -349,6 +350,95 @@ class AdminCustomerViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    def create(self, request, *args, **kwargs):
+        """Create new customer with required password"""
+        data = request.data.copy()
+
+        # Validate required fields
+        required_fields = ['name', 'email', 'password']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+
+        if missing_fields:
+            return Response({
+                'error': f'Missing required fields: {", ".join(missing_fields)}',
+                'required_fields': required_fields
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate password length upfront
+        password = data.get('password', '')
+        if len(password) < 8:
+            return Response({
+                'error': 'Password must be at least 8 characters long'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=data)
+
+        if serializer.is_valid():
+            try:
+                customer = serializer.save()
+                return Response({
+                    'message': 'Customer created successfully',
+                    'customer': CustomerSerializer(customer, context={'request': request}).data
+                }, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({
+                    'error': f'Error creating customer: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Return detailed validation errors
+        return Response({
+            'error': 'Validation failed',
+            'details': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        """Update customer"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'message': 'Customer updated successfully',
+                'customer': serializer.data
+            })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['GET'], url_path='details')
+    def customer_details(self, request, pk=None):
+        """Get detailed customer information with orders"""
+        customer = self.get_object()
+
+        # Get customer's orders - DON'T slice here, do it later
+        orders = Order.objects.filter(customer=customer).order_by('-created_at')
+
+        # Calculate totals from the full queryset
+        completed_orders = orders.filter(status='completed')
+        total_spent = completed_orders.aggregate(
+            total=Sum('quoted_total')
+        )['total'] or Decimal('0.00')
+
+        # NOW slice for the recent orders display
+        recent_orders = orders[:10]
+
+        # Prepare orders data
+        orders_data = []
+        for order in recent_orders:
+            orders_data.append({
+                'id': order.id,
+                'created_at': order.created_at.isoformat(),
+                'status': order.status,
+                'total': float(order.quoted_total) if order.quoted_total else 0,
+                'items_count': order.items.count()
+            })
+
+        return Response({
+            'customer': CustomerSerializer(customer, context={'request': request}).data,
+            'orders': orders_data,
+            'total_orders': orders.count(),
+            'total_spent': float(total_spent)
+        })
+
     @action(detail=True, methods=['POST'], url_path='toggle-status')
     def toggle_status(self, request, pk=None):
         """Toggle customer active status"""
@@ -358,25 +448,149 @@ class AdminCustomerViewSet(viewsets.ModelViewSet):
 
         return Response({
             'message': f'Customer {"activated" if customer.is_active else "deactivated"}',
-            'customer': CustomerSerializer(customer).data
+            'customer': CustomerSerializer(customer, context={'request': request}).data
         })
+
+    @action(detail=False, methods=['POST'], url_path='bulk-action')
+    def bulk_actions(self, request):
+        """Perform bulk actions on customers"""
+        customer_ids = request.data.get('customer_ids', [])
+        action = request.data.get('action')
+
+        if not customer_ids:
+            return Response({
+                'error': 'No customers selected'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        customers = Customer.objects.filter(id__in=customer_ids)
+
+        if action == 'activate':
+            customers.update(is_active=True)
+            message = f'{customers.count()} customers activated'
+        elif action == 'deactivate':
+            customers.update(is_active=False)
+            message = f'{customers.count()} customers deactivated'
+        elif action == 'email':
+            # For now, just return success - you can implement actual email sending later
+            message = f'Email sent to {customers.count()} customers'
+        elif action == 'delete':
+            count = customers.count()
+            customers.delete()
+            message = f'{count} customers deleted'
+        else:
+            return Response({
+                'error': 'Invalid action'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({'message': message})
 
     @action(detail=True, methods=['GET'], url_path='orders')
     def customer_orders(self, request, pk=None):
-        """Get orders for a specific customer"""
+        """Get all orders for a specific customer"""
         customer = self.get_object()
         orders = Order.objects.filter(customer=customer).order_by('-created_at')
 
-        serializer = OrderDetailSerializer(orders, many=True)
+        # Apply pagination if needed
+        page = request.query_params.get('page', 1)
+        limit = request.query_params.get('limit', 20)
+
+        try:
+            page = int(page)
+            limit = int(limit)
+            start = (page - 1) * limit
+            end = start + limit
+            orders_page = orders[start:end]
+        except (ValueError, TypeError):
+            orders_page = orders[:20]
+
+        orders_data = []
+        for order in orders_page:
+            orders_data.append({
+                'id': order.id,
+                'created_at': order.created_at.isoformat(),
+                'status': order.status,
+                'total': float(order.quoted_total) if order.quoted_total else 0,
+                'items_count': order.items.count(),
+                'dealer': order.assigned_dealer.name if order.assigned_dealer else None
+            })
+
+        total_spent = orders.filter(status='completed').aggregate(
+            total=Sum('quoted_total')
+        )['total'] or Decimal('0.00')
+
         return Response({
-            'customer': CustomerSerializer(customer).data,
-            'orders': serializer.data,
-            'total_orders': orders.count(),
-            'total_spent': float(orders.filter(
-                status='completed'
-            ).aggregate(total=Sum('quoted_total'))['total'] or 0)
+            'customer': CustomerSerializer(customer, context={'request': request}).data,
+            'orders': orders_data,
+            'pagination': {
+                'total_orders': orders.count(),
+                'page': page,
+                'limit': limit,
+                'has_more': orders.count() > end
+            },
+            'total_spent': float(total_spent)
         })
 
+    @action(detail=False, methods=['POST'], url_path='convert-to-dealer')
+    def convert_to_dealer(self, request):
+        """Convert customer to dealer"""
+        customer_id = request.data.get('customer_id')
+        commission_rate = request.data.get('commission_rate', 5.0)
+
+        if not customer_id:
+            return Response({
+                'error': 'Customer ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            customer = Customer.objects.get(id=customer_id)
+            if customer.is_dealer:
+                return Response({
+                    'error': 'Customer is already a dealer'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            customer.is_dealer = True
+            customer.dealer_commission_rate = Decimal(str(commission_rate))
+            customer.save()
+
+            return Response({
+                'message': f'{customer.name} converted to dealer',
+                'customer': CustomerSerializer(customer, context={'request': request}).data
+            })
+
+        except Customer.DoesNotExist:
+            return Response({
+                'error': 'Customer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except (ValueError, TypeError):
+            return Response({
+                'error': 'Invalid commission rate'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['GET'], url_path='export')
+    def export_customers(self, request):
+        """Export customers to Excel (placeholder)"""
+        return Response({
+            'message': 'Export functionality would be implemented here',
+            'download_url': '/api/admin/customers/download-export/'
+        })
+
+    @action(detail=False, methods=['GET'], url_path='stats')
+    def customer_statistics(self, request):
+        """Get customer statistics"""
+        customers = self.get_queryset()
+        month_ago = timezone.now() - timedelta(days=30)
+
+        stats = {
+            'total': customers.count(),
+            'active': customers.filter(is_active=True).count(),
+            'inactive': customers.filter(is_active=False).count(),
+            'dealers': customers.filter(is_dealer=True).count(),
+            'regular': customers.filter(is_dealer=False, is_staff=False).count(),
+            'staff': customers.filter(is_staff=True).count(),
+            'new_this_month': customers.filter(date_joined__gte=month_ago).count(),
+        }
+
+        return Response(stats)
 
 class AdminDealerViewSet(viewsets.ModelViewSet):
     """Admin dealer management"""

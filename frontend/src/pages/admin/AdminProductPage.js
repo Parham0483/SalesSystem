@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../../component/api'; // Assuming API setup is in this path
+import {
+    Package, Search, Filter, Eye, Edit, ShoppingCart, TrendingUp,
+    AlertTriangle, CheckCircle, XCircle, Plus, Download, Star,
+    BarChart3, DollarSign, Archive, RefreshCw
+} from 'lucide-react';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
 import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
-import NeoBrutalistToggle from '../../component/NeoBrutalist/NeoBrutalistToggle'; // <-- IMPORT THE NEW COMPONENT
+import NeoBrutalistDropdown from '../../component/NeoBrutalist/NeoBrutalistDropdown';
+import NeoBrutalistToggle from '../../component/NeoBrutalist/NeoBrutalistToggle';
+import API from '../../component/api';
 import '../../styles/Admin/AdminProducts.css';
 
 const AdminProductsPage = () => {
@@ -14,17 +20,53 @@ const AdminProductsPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // Editing and Modal State
+    // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProduct, setEditingProduct] = useState(null); // null for new, product object for editing
-    const [productFormData, setProductFormData] = useState({});
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [selectedImage, setSelectedImage] = useState('');
+
+    // Form State
+    const [productFormData, setProductFormData] = useState({
+        name: '',
+        description: '',
+        category: '',
+        origin: '',
+        base_price: 0,
+        stock: 0,
+        is_active: true,
+        is_featured: false,
+        min_order_quantity: 1,
+        weight: 0,
+        dimensions: ''
+    });
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
 
     // Filtering and Sorting State
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'active', 'inactive'
-    const [stockFilter, setStockFilter] = useState('all'); // 'all', 'in_stock', 'low_stock', 'out_of_stock'
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [stockFilter, setStockFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('newest');
+
+    // Bulk Actions
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [showBulkActions, setShowBulkActions] = useState(false);
+
+    // Stats
+    const [productStats, setProductStats] = useState({
+        total: 0,
+        active: 0,
+        inactive: 0,
+        lowStock: 0,
+        outOfStock: 0,
+        featured: 0,
+        totalValue: 0
+    });
+
+    // Categories for filter
+    const [categories, setCategories] = useState([]);
 
     const navigate = useNavigate();
 
@@ -32,11 +74,19 @@ const AdminProductsPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/products/');
+            console.log('📦 Admin products fetched:', response.data);
             setProducts(response.data);
+            calculateStats(response.data);
+            extractCategories(response.data);
             setError('');
         } catch (err) {
             console.error('❌ Error fetching products:', err);
-            setError('خطا در بارگیری لیست محصولات');
+            if (err.response?.status === 401) {
+                setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
+                setTimeout(() => handleLogout(), 2000);
+            } else {
+                setError('خطا در بارگیری لیست محصولات');
+            }
         } finally {
             setLoading(false);
         }
@@ -46,14 +96,33 @@ const AdminProductsPage = () => {
         fetchProducts();
     }, [fetchProducts]);
 
+    const calculateStats = (productsList) => {
+        const stats = {
+            total: productsList.length,
+            active: productsList.filter(p => p.is_active).length,
+            inactive: productsList.filter(p => !p.is_active).length,
+            lowStock: productsList.filter(p => p.stock > 0 && p.stock <= 10).length,
+            outOfStock: productsList.filter(p => p.stock === 0).length,
+            featured: productsList.filter(p => p.is_featured).length,
+            totalValue: productsList.reduce((sum, p) => sum + (p.base_price * p.stock), 0)
+        };
+        setProductStats(stats);
+    };
+
+    const extractCategories = (productsList) => {
+        const uniqueCategories = [...new Set(productsList.map(p => p.category).filter(Boolean))];
+        setCategories(uniqueCategories);
+    };
+
     useEffect(() => {
         let filtered = [...products];
 
         // Search filter
         if (searchTerm) {
             filtered = filtered.filter(p =>
-                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.description.toLowerCase().includes(searchTerm.toLowerCase())
+                p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.category?.toLowerCase().includes(searchTerm.toLowerCase())
             );
         }
 
@@ -72,8 +141,39 @@ const AdminProductsPage = () => {
             });
         }
 
+        // Category filter
+        if (categoryFilter !== 'all') {
+            filtered = filtered.filter(p => p.category === categoryFilter);
+        }
+
+        // Sorting
+        filtered.sort((a, b) => {
+            switch (sortBy) {
+                case 'newest':
+                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+                case 'oldest':
+                    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+                case 'name':
+                    return a.name.localeCompare(b.name, 'fa');
+                case 'price':
+                    return b.base_price - a.base_price;
+                case 'stock':
+                    return b.stock - a.stock;
+                default:
+                    return 0;
+            }
+        });
+
         setFilteredProducts(filtered);
-    }, [products, searchTerm, statusFilter, stockFilter]);
+    }, [products, searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
+
+    const handleLogout = () => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('userData');
+        delete API.defaults.headers.common['Authorization'];
+        navigate('/');
+    };
 
     const handleOpenModal = (product = null) => {
         setEditingProduct(product);
@@ -81,7 +181,6 @@ const AdminProductsPage = () => {
             setProductFormData({ ...product });
             setImagePreview(product.image_url || '');
         } else {
-            // Default state for a new product
             setProductFormData({
                 name: '',
                 description: '',
@@ -90,6 +189,10 @@ const AdminProductsPage = () => {
                 base_price: 0,
                 stock: 0,
                 is_active: true,
+                is_featured: false,
+                min_order_quantity: 1,
+                weight: 0,
+                dimensions: ''
             });
             setImagePreview('');
         }
@@ -110,13 +213,6 @@ const AdminProductsPage = () => {
         setProductFormData(prev => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
-        }));
-    };
-
-    const handleToggleChange = (checked) => {
-        setProductFormData(prev => ({
-            ...prev,
-            is_active: checked
         }));
     };
 
@@ -167,6 +263,16 @@ const AdminProductsPage = () => {
         }
     };
 
+    const handleToggleFeatured = async (product) => {
+        try {
+            await API.patch(`/admin/products/${product.id}/`, { is_featured: !product.is_featured });
+            fetchProducts();
+        } catch (err) {
+            console.error('Error toggling featured status', err);
+            setError('خطا در تغییر وضعیت ویژه محصول');
+        }
+    };
+
     const handleDeleteProduct = async (productId) => {
         if (window.confirm('آیا از حذف این محصول اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
             try {
@@ -186,7 +292,7 @@ const AdminProductsPage = () => {
             return;
         }
         try {
-            await API.post(`/admin/products/${productId}/update-stock/`, { stock });
+            await API.patch(`/admin/products/${productId}/`, { stock });
             fetchProducts();
         } catch(err) {
             console.error('Error updating stock', err);
@@ -194,145 +300,598 @@ const AdminProductsPage = () => {
         }
     };
 
+    const handleProductSelect = (productId) => {
+        setSelectedProducts(prev => {
+            const newSelection = prev.includes(productId)
+                ? prev.filter(id => id !== productId)
+                : [...prev, productId];
+            setShowBulkActions(newSelection.length > 0);
+            return newSelection;
+        });
+    };
 
-    if (loading) return <div className="admin-page-container"><h1>در حال بارگیری...</h1></div>;
+    const handleSelectAll = () => {
+        if (selectedProducts.length === filteredProducts.length) {
+            setSelectedProducts([]);
+            setShowBulkActions(false);
+        } else {
+            const allIds = filteredProducts.map(p => p.id);
+            setSelectedProducts(allIds);
+            setShowBulkActions(true);
+        }
+    };
+
+    const handleBulkAction = async (action) => {
+        try {
+            await API.post('/admin/products/bulk-action/', {
+                action,
+                product_ids: selectedProducts
+            });
+            fetchProducts();
+            setSelectedProducts([]);
+            setShowBulkActions(false);
+        } catch (err) {
+            console.error('Error performing bulk action', err);
+            setError('خطا در انجام عملیات گروهی');
+        }
+    };
+
+    const clearFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setStockFilter('all');
+        setCategoryFilter('all');
+        setSortBy('newest');
+    };
+
+    const getStockStatus = (stock) => {
+        if (stock === 0) return { status: 'out', label: 'ناموجود', color: 'red' };
+        if (stock <= 10) return { status: 'low', label: 'موجودی کم', color: 'yellow' };
+        return { status: 'ok', label: 'موجود', color: 'green' };
+    };
+
+    const statusOptions = [
+        { value: 'all', label: 'همه وضعیت‌ها' },
+        { value: 'active', label: 'فعال' },
+        { value: 'inactive', label: 'غیرفعال' }
+    ];
+
+    const stockOptions = [
+        { value: 'all', label: 'همه موجودی‌ها' },
+        { value: 'in_stock', label: 'موجود' },
+        { value: 'low_stock', label: 'موجودی کم' },
+        { value: 'out_of_stock', label: 'ناموجود' }
+    ];
+
+    const categoryOptions = [
+        { value: 'all', label: 'همه دسته‌ها' },
+        ...categories.map(cat => ({ value: cat, label: cat }))
+    ];
+
+    const sortOptions = [
+        { value: 'newest', label: 'جدیدترین' },
+        { value: 'oldest', label: 'قدیمی‌ترین' },
+        { value: 'name', label: 'نام' },
+        { value: 'price', label: 'قیمت' },
+        { value: 'stock', label: 'موجودی' }
+    ];
+
+    if (loading) {
+        return (
+            <div className="admin-products-page">
+                <div className="loading-container">
+                    <div className="loading-spinner"></div>
+                    <p>در حال بارگیری محصولات...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="admin-page-container admin-products-page" dir="rtl">
+        <div className="admin-products-page" dir="rtl">
+            {/* Header */}
             <div className="page-header">
-                <h1>📦 مدیریت محصولات</h1>
-                <NeoBrutalistButton
-                    text="+ افزودن محصول جدید"
-                    color="green-400"
-                    textColor="black"
-                    onClick={() => handleOpenModal()}
-                />
+                <div className="header-content">
+                    <div className="title-section">
+                        <h1 className="page-title">
+                            <Package className="title-icon" />
+                            مدیریت محصولات
+                        </h1>
+                        <p className="page-subtitle">
+                            {filteredProducts.length} محصول از مجموع {products.length} محصول
+                        </p>
+                    </div>
+                    <div className="header-actions">
+                        <NeoBrutalistButton
+                            text="+ افزودن محصول جدید"
+                            color="green-400"
+                            textColor="black"
+                            onClick={() => handleOpenModal()}
+                        />
+                        <NeoBrutalistButton
+                            text="داشبورد"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/admin')}
+                        />
+                    </div>
+                </div>
             </div>
 
-            {error && <div className="error-banner">⚠️ {error}</div>}
+            {error && (
+                <div className="error-banner">
+                    <AlertTriangle size={20} />
+                    <span>{error}</span>
+                    <button onClick={() => setError('')}>×</button>
+                </div>
+            )}
 
+            {/* Statistics Cards */}
+            <div className="stats-section">
+                <div className="stats-grid">
+                    <NeoBrutalistCard className="stat-card total" onClick={() => { setStatusFilter('all'); setStockFilter('all'); }}>
+                        <div className="stat-content">
+                            <Package className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{productStats.total}</span>
+                                <span className="stat-label">کل محصولات</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card active" onClick={() => setStatusFilter('active')}>
+                        <div className="stat-content">
+                            <CheckCircle className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{productStats.active}</span>
+                                <span className="stat-label">فعال</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card warning" onClick={() => setStockFilter('low_stock')}>
+                        <div className="stat-content">
+                            <AlertTriangle className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{productStats.lowStock}</span>
+                                <span className="stat-label">موجودی کم</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card featured">
+                        <div className="stat-content">
+                            <Star className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{productStats.featured}</span>
+                                <span className="stat-label">محصولات ویژه</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard className="stat-card value">
+                        <div className="stat-content">
+                            <DollarSign className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{(productStats.totalValue / 1000000).toFixed(1)}M</span>
+                                <span className="stat-label">ارزش کل موجودی</span>
+                            </div>
+                        </div>
+                    </NeoBrutalistCard>
+                </div>
+            </div>
+
+            {/* Filters Section */}
             <NeoBrutalistCard className="filters-card">
-                <div className="filters-grid">
-                    <NeoBrutalistInput
-                        type="text"
-                        placeholder="جستجو در نام و توضیحات..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                <div className="filters-header">
+                    <h3>
+                        <Filter size={20} />
+                        فیلترها و جستجو
+                    </h3>
+                    <NeoBrutalistButton
+                        text="پاک کردن فیلترها"
+                        color="red-400"
+                        textColor="white"
+                        onClick={clearFilters}
                     />
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select">
-                        <option value="all">همه وضعیت‌ها</option>
-                        <option value="active">فعال</option>
-                        <option value="inactive">غیرفعال</option>
-                    </select>
-                    <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)} className="filter-select">
-                        <option value="all">همه موجودی‌ها</option>
-                        <option value="in_stock">موجود</option>
-                        <option value="low_stock">موجودی کم</option>
-                        <option value="out_of_stock">ناموجود</option>
-                    </select>
+                </div>
+
+                <div className="filters-grid">
+                    <div className="search-wrapper">
+                        <Search className="search-icon" />
+                        <NeoBrutalistInput
+                            placeholder="جستجو در نام، توضیحات یا دسته..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="search-input"
+                        />
+                    </div>
+
+                    <NeoBrutalistDropdown
+                        label="وضعیت"
+                        options={statusOptions}
+                        value={statusFilter}
+                        onChange={(value) => setStatusFilter(value)}
+                    />
+
+                    <NeoBrutalistDropdown
+                        label="موجودی"
+                        options={stockOptions}
+                        value={stockFilter}
+                        onChange={(value) => setStockFilter(value)}
+                    />
+
+                    <NeoBrutalistDropdown
+                        label="دسته‌بندی"
+                        options={categoryOptions}
+                        value={categoryFilter}
+                        onChange={(value) => setCategoryFilter(value)}
+                    />
+
+                    <NeoBrutalistDropdown
+                        label="مرتب‌سازی"
+                        options={sortOptions}
+                        value={sortBy}
+                        onChange={(value) => setSortBy(value)}
+                    />
+                </div>
+
+                {/* Bulk Actions */}
+                {showBulkActions && (
+                    <div className="bulk-actions">
+                        <span>{selectedProducts.length} محصول انتخاب شده</span>
+                        <div className="bulk-buttons">
+                            <NeoBrutalistButton
+                                text="فعال کردن"
+                                color="green-400"
+                                textColor="black"
+                                onClick={() => handleBulkAction('activate')}
+                            />
+                            <NeoBrutalistButton
+                                text="غیرفعال کردن"
+                                color="red-400"
+                                textColor="white"
+                                onClick={() => handleBulkAction('deactivate')}
+                            />
+                            <NeoBrutalistButton
+                                text="حذف گروهی"
+                                color="red-400"
+                                textColor="white"
+                                onClick={() => handleBulkAction('delete')}
+                            />
+                        </div>
+                    </div>
+                )}
+            </NeoBrutalistCard>
+
+            {/* Products Header */}
+            <NeoBrutalistCard className="table-header">
+                <div className="table-header-content">
+                    <label className="select-all-wrapper">
+                        <input
+                            type="checkbox"
+                            checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
+                            onChange={handleSelectAll}
+                        />
+                        انتخاب همه
+                    </label>
+                    <span>نمایش {filteredProducts.length} محصول</span>
+                    <div className="view-toggles">
+                        <NeoBrutalistButton
+                            text="📋 لیست"
+                            color="blue-400"
+                            textColor="white"
+                        />
+                    </div>
                 </div>
             </NeoBrutalistCard>
 
-            <div className="products-table-container">
-                <table className="products-table">
-                    <thead>
-                    <tr>
-                        <th>تصویر</th>
-                        <th>نام محصول</th>
-                        <th>دسته</th>
-                        <th>موجودی</th>
-                        <th>قیمت پایه (ریال)</th>
-                        <th>وضعیت</th>
-                        <th>عملیات</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {filteredProducts.map(p => (
-                        <tr key={p.id}>
-                            <td>
-                                <img src={p.image_url || 'https://placehold.co/60x60/e2e8f0/a0aec0?text=No+Image'} alt={p.name} className="product-thumbnail" />
-                            </td>
-                            <td data-label="نام محصول">{p.name}</td>
-                            <td data-label="دسته">{p.category || '-'}</td>
-                            <td data-label="موجودی" className="stock-cell">
-                                <NeoBrutalistInput
-                                    type="number"
-                                    defaultValue={p.stock}
-                                    onBlur={(e) => handleQuickStockUpdate(p.id, e.target.value)}
-                                    className="stock-input"
-                                />
-                            </td>
-                            <td data-label="قیمت">{p.base_price.toLocaleString('fa-IR')}</td>
-                            <td data-label="وضعیت">
-                                {/* --- REPLACED WITH NEW COMPONENT --- */}
-                                <NeoBrutalistToggle
-                                    checked={p.is_active}
-                                    onChange={() => handleToggleStatus(p)}
-                                />
-                            </td>
-                            <td data-label="عملیات" className="actions-cell">
-                                <NeoBrutalistButton text="ویرایش" color="blue-400" textColor="white" onClick={() => handleOpenModal(p)} />
-                                <NeoBrutalistButton text="حذف" color="red-400" textColor="white" onClick={() => handleDeleteProduct(p.id)} />
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
+            {/* Products Grid */}
+            <div className="products-grid">
+                {filteredProducts.map(product => {
+                    const stockStatus = getStockStatus(product.stock);
+                    return (
+                        <NeoBrutalistCard
+                            key={product.id}
+                            className={`product-card ${!product.is_active ? 'inactive' : ''} ${product.is_featured ? 'featured' : ''}`}
+                        >
+                            <div className="card-header">
+                                <label className="product-select">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedProducts.includes(product.id)}
+                                        onChange={() => handleProductSelect(product.id)}
+                                    />
+                                </label>
+
+                                <div className="product-image">
+                                    <img
+                                        src={product.image_url || 'https://placehold.co/120x120/e2e8f0/a0aec0?text=No+Image'}
+                                        alt={product.name}
+                                        onClick={() => {
+                                            setSelectedImage(product.image_url);
+                                            setIsImageModalOpen(true);
+                                        }}
+                                    />
+                                    {product.is_featured && (
+                                        <div className="featured-badge">
+                                            <Star size={16} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="product-tags">
+                                    <span className={`tag status-tag ${product.is_active ? 'active' : 'inactive'}`}>
+                                        {product.is_active ? (
+                                            <><CheckCircle size={12} /> فعال</>
+                                        ) : (
+                                            <><XCircle size={12} /> غیرفعال</>
+                                        )}
+                                    </span>
+                                    <span className={`tag stock-tag ${stockStatus.status}`}>
+                                        {stockStatus.label}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="product-info">
+                                <h3 className="product-name">{product.name}</h3>
+                                {product.category && (
+                                    <span className="product-category">{product.category}</span>
+                                )}
+                                <p className="product-description">
+                                    {product.description?.substring(0, 100)}...
+                                </p>
+                            </div>
+
+                            <div className="product-details">
+                                <div className="detail-row">
+                                    <span className="detail-label">قیمت پایه:</span>
+                                    <span className="detail-value price">
+                                        {product.base_price.toLocaleString('fa-IR')} ریال
+                                    </span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">موجودی:</span>
+                                    <div className="stock-update">
+                                        <NeoBrutalistInput
+                                            type="number"
+                                            value={product.stock}
+                                            onChange={(e) => handleQuickStockUpdate(product.id, e.target.value)}
+                                            className="stock-input"
+                                        />
+                                    </div>
+                                </div>
+                                {product.origin && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">مبدا:</span>
+                                        <span className="detail-value">{product.origin}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="product-actions">
+                                <div className="toggle-actions">
+                                    <NeoBrutalistToggle
+                                        checked={product.is_active}
+                                        onChange={() => handleToggleStatus(product)}
+                                        label="فعال"
+                                    />
+                                    <NeoBrutalistToggle
+                                        checked={product.is_featured}
+                                        onChange={() => handleToggleFeatured(product)}
+                                        label="ویژه"
+                                    />
+                                </div>
+                                <div className="action-buttons">
+                                    <NeoBrutalistButton
+                                        text="ویرایش"
+                                        color="blue-400"
+                                        textColor="white"
+                                        onClick={() => handleOpenModal(product)}
+                                    />
+                                    <NeoBrutalistButton
+                                        text="حذف"
+                                        color="red-400"
+                                        textColor="white"
+                                        onClick={() => handleDeleteProduct(product.id)}
+                                    />
+                                </div>
+                            </div>
+                        </NeoBrutalistCard>
+                    );
+                })}
             </div>
 
-            <NeoBrutalistModal isOpen={isModalOpen} onClose={handleCloseModal} title={editingProduct ? 'ویرایش محصول' : 'افزودن محصول جدید'}>
+            {/* Empty State */}
+            {filteredProducts.length === 0 && !loading && (
+                <NeoBrutalistCard className="empty-state-card">
+                    <div className="empty-content">
+                        <Package size={48} className="empty-icon" />
+                        <h3>محصولی یافت نشد</h3>
+                        <p>
+                            {products.length === 0
+                                ? 'هنوز محصولی ثبت نشده است.'
+                                : 'بر اساس فیلترهای انتخاب شده، محصولی یافت نشد.'
+                            }
+                        </p>
+                        {products.length > 0 && (
+                            <NeoBrutalistButton
+                                text="پاک کردن فیلترها"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={clearFilters}
+                            />
+                        )}
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Product Modal */}
+            <NeoBrutalistModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                title={editingProduct ? 'ویرایش محصول' : 'افزودن محصول جدید'}
+                size="large"
+            >
                 <form onSubmit={handleFormSubmit} className="product-form">
                     <div className="form-row">
                         <div className="form-group">
                             <label>نام محصول</label>
-                            <NeoBrutalistInput name="name" value={productFormData.name || ''} onChange={handleFormChange} required />
+                            <NeoBrutalistInput
+                                name="name"
+                                value={productFormData.name || ''}
+                                onChange={handleFormChange}
+                                required
+                            />
                         </div>
                         <div className="form-group">
-                            <label>دسته</label>
-                            <NeoBrutalistInput name="category" value={productFormData.category || ''} onChange={handleFormChange} />
+                            <label>دسته‌بندی</label>
+                            <NeoBrutalistInput
+                                name="category"
+                                value={productFormData.category || ''}
+                                onChange={handleFormChange}
+                            />
                         </div>
                     </div>
 
                     <div className="form-group">
                         <label>توضیحات</label>
-                        <textarea name="description" value={productFormData.description || ''} onChange={handleFormChange} rows="4" className="form-textarea"></textarea>
+                        <textarea
+                            name="description"
+                            value={productFormData.description || ''}
+                            onChange={handleFormChange}
+                            rows="4"
+                            className="form-textarea"
+                            placeholder="توضیحات کامل محصول..."
+                        ></textarea>
                     </div>
 
                     <div className="form-row">
                         <div className="form-group">
                             <label>موجودی اولیه</label>
-                            <NeoBrutalistInput type="number" name="stock" value={productFormData.stock || 0} onChange={handleFormChange} required />
+                            <NeoBrutalistInput
+                                type="number"
+                                name="stock"
+                                value={productFormData.stock || 0}
+                                onChange={handleFormChange}
+                                required
+                            />
                         </div>
                         <div className="form-group">
                             <label>قیمت پایه (ریال)</label>
-                            <NeoBrutalistInput type="number" name="base_price" value={productFormData.base_price || 0} onChange={handleFormChange} required />
+                            <NeoBrutalistInput
+                                type="number"
+                                name="base_price"
+                                value={productFormData.base_price || 0}
+                                onChange={handleFormChange}
+                                required
+                            />
                         </div>
+                    </div>
+
+                    <div className="form-row">
                         <div className="form-group">
                             <label>مبدا</label>
-                            <NeoBrutalistInput name="origin" value={productFormData.origin || ''} onChange={handleFormChange} />
+                            <NeoBrutalistInput
+                                name="origin"
+                                value={productFormData.origin || ''}
+                                onChange={handleFormChange}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>حداقل سفارش</label>
+                            <NeoBrutalistInput
+                                type="number"
+                                name="min_order_quantity"
+                                value={productFormData.min_order_quantity || 1}
+                                onChange={handleFormChange}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label>وزن (کیلوگرم)</label>
+                            <NeoBrutalistInput
+                                type="number"
+                                step="0.1"
+                                name="weight"
+                                value={productFormData.weight || 0}
+                                onChange={handleFormChange}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>ابعاد</label>
+                            <NeoBrutalistInput
+                                name="dimensions"
+                                value={productFormData.dimensions || ''}
+                                onChange={handleFormChange}
+                                placeholder="مثال: 20x30x15 سانتی‌متر"
+                            />
                         </div>
                     </div>
 
                     <div className="form-group">
                         <label>تصویر محصول</label>
-                        <input type="file" onChange={handleFileChange} accept="image/*" className="file-input"/>
-                        {imagePreview && <img src={imagePreview} alt="Preview" className="image-preview" />}
+                        <input
+                            type="file"
+                            onChange={handleFileChange}
+                            accept="image/*"
+                            className="file-input"
+                        />
+                        {imagePreview && (
+                            <div className="image-preview-container">
+                                <img src={imagePreview} alt="Preview" className="image-preview" />
+                            </div>
+                        )}
                     </div>
 
-                    {/* --- REPLACED WITH NEW COMPONENT --- */}
-                    <div className="form-group">
-                        <NeoBrutalistToggle
-                            checked={productFormData.is_active || false}
-                            onChange={(e) => handleToggleChange(e.target.checked)}
-                            label="محصول فعال باشد"
-                        />
+                    <div className="form-row">
+                        <div className="form-group">
+                            <NeoBrutalistToggle
+                                checked={productFormData.is_active || false}
+                                onChange={(e) => setProductFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                                label="محصول فعال باشد"
+                            />
+                        </div>
+                        <div className="form-group">
+                            <NeoBrutalistToggle
+                                checked={productFormData.is_featured || false}
+                                onChange={(e) => setProductFormData(prev => ({ ...prev, is_featured: e.target.checked }))}
+                                label="محصول ویژه"
+                            />
+                        </div>
                     </div>
 
                     <div className="form-actions">
-                        <NeoBrutalistButton text="لغو" color="gray-400" textColor="black" onClick={handleCloseModal} type="button" />
-                        <NeoBrutalistButton text="ذخیره تغییرات" color="green-400" textColor="black" type="submit" />
+                        <NeoBrutalistButton
+                            text="لغو"
+                            color="gray-400"
+                            textColor="black"
+                            onClick={handleCloseModal}
+                            type="button"
+                        />
+                        <NeoBrutalistButton
+                            text="ذخیره تغییرات"
+                            color="green-400"
+                            textColor="black"
+                            type="submit"
+                        />
                     </div>
                 </form>
+            </NeoBrutalistModal>
+
+            {/* Image Modal */}
+            <NeoBrutalistModal
+                isOpen={isImageModalOpen}
+                onClose={() => setIsImageModalOpen(false)}
+                title="نمایش تصویر"
+                size="medium"
+            >
+                <div className="image-modal-content">
+                    <img src={selectedImage} alt="Product" className="modal-image" />
+                </div>
             </NeoBrutalistModal>
         </div>
     );

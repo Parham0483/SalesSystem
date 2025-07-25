@@ -1,4 +1,4 @@
-# tasks/serializers/customers.py - SMART VERSION
+# tasks/serializers/customers.py - FIXED VERSION
 from rest_framework import serializers
 from ..models import Customer
 
@@ -6,23 +6,70 @@ from ..models import Customer
 class CustomerSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     dealer_commission_rate = serializers.SerializerMethodField()
-
-    # Dynamic fields based on context
     dealer_code = serializers.SerializerMethodField()
+
+    # Add these as SerializerMethodField (not model fields)
+    total_orders = serializers.SerializerMethodField()
+    total_spent = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
         fields = [
             'id', 'name', 'email', 'password', 'phone', 'company_name',
+            'is_active',
+            'is_staff',
             'is_dealer', 'dealer_code', 'dealer_commission_rate',
-            'date_joined'
+            'date_joined', 'last_login',
+            'total_orders', 'total_spent'
         ]
         extra_kwargs = {
-            'password': {'write_only': True},
+            'password': {'write_only': True,'required': True,
+                'min_length': 8,},
             'email': {'required': True},
             'name': {'required': True},
-            'date_joined': {'read_only': True}
+            'date_joined': {'read_only': True},
+            'last_login': {'read_only': True},
         }
+
+    def validate_password(self, value):
+        """Validate password strength"""
+        if len(value) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long")
+
+        # Check for at least one letter and one number
+        if not any(c.isalpha() for c in value):
+            raise serializers.ValidationError("Password must contain at least one letter")
+
+        if not any(c.isdigit() for c in value):
+            raise serializers.ValidationError("Password must contain at least one number")
+
+        return value
+
+    def validate_email(self, value):
+        """Validate email uniqueness"""
+        if self.instance:
+            # Update case - exclude current instance
+            if Customer.objects.filter(email=value).exclude(id=self.instance.id).exists():
+                raise serializers.ValidationError("A customer with this email already exists")
+        else:
+            # Create case
+            if Customer.objects.filter(email=value).exists():
+                raise serializers.ValidationError("A customer with this email already exists")
+        return value
+
+    def create(self, validated_data):
+        """Create customer with required password"""
+        password = validated_data.pop('password')
+
+        try:
+            customer = Customer.objects.create_user(
+                password=password,
+                **validated_data
+            )
+            return customer
+        except Exception as e:
+            raise serializers.ValidationError(f"Error creating customer: {str(e)}")
+
 
     def get_dealer_code(self, obj):
         """Only return dealer_code if user is a dealer or if admin is requesting"""
@@ -39,13 +86,35 @@ class CustomerSerializer(serializers.ModelSerializer):
         """Only return commission rate for dealers and only to authorized users"""
         request = self.context.get('request')
 
-        # Only show commission rate if:
-        # 1. User is a dealer AND
-        # 2. It's either the dealer themselves or an admin viewing
         if obj.is_dealer and request and (request.user == obj or request.user.is_staff):
             return float(obj.dealer_commission_rate)
 
         return None
+
+    def get_total_orders(self, obj):
+        """Get total orders count"""
+        try:
+            if obj.is_dealer:
+                # For dealers, count assigned orders
+                return obj.assigned_orders.count()
+            else:
+                # For regular customers, count their orders
+                return obj.order_set.count()
+        except Exception:
+            return 0
+
+    def get_total_spent(self, obj):
+        """Get total amount spent by customer"""
+        try:
+            if not obj.is_dealer:
+                from django.db.models import Sum
+                total = obj.order_set.filter(
+                    status='completed'
+                ).aggregate(total=Sum('quoted_total'))['total']
+                return float(total or 0)
+            return 0
+        except Exception:
+            return 0
 
     def to_representation(self, instance):
         """Customize the output based on context"""
