@@ -33,6 +33,7 @@
 /* Header Section */
 .page-header {
     margin-bottom: 30px;
+    max-width: 91.5vw;
 }
 
 .header-content {
@@ -170,55 +171,6 @@
     font-size: 0.9rem;
     color: #64748b;
     font-weight: 600;
-}
-
-/* Filters Section */
-.filters-card {
-    margin-bottom: 30px;
-    background: #ffffff;
-}
-
-.filters-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-    border-bottom: 2px solid #e2e8f0;
-}
-
-.filters-header h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #1e293b;
-}
-
-.filters-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-    gap: 20px;
-    align-items: end;
-}
-
-.search-wrapper {
-    position: relative;
-}
-
-.search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #64748b;
-    z-index: 1;
-}
-
-.search-input {
-    padding-left: 40px !important;
 }
 
 /* Bulk Actions */

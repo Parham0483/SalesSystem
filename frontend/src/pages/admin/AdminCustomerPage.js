@@ -671,29 +671,30 @@ const AdminCustomersPage = () => {
                                 </div>
                             </div>
                         </NeoBrutalistCard>
-
-                        <NeoBrutalistCard className="detail-section">
+                        <NeoBrutalistCard className="detail-section orders-section">
                             <h4>آخرین سفارشات</h4>
                             {customerDetails.orders?.length > 0 ? (
-                                <div className="orders-list">
-                                    {customerDetails.orders.slice(0, 5).map(order => (
-                                        <div key={order.id} className="order-item">
-                                            <span className="order-id">سفارش #{order.id}</span>
-                                            <span className="order-date">
-                                                {new Date(order.created_at).toLocaleDateString('fa-IR')}
-                                            </span>
-                                            <span className={`order-status ${order.status}`}>
-                                                {order.status === 'completed' ? 'تکمیل شده' :
-                                                    order.status === 'pending_pricing' ? 'در انتظار قیمت' :
-                                                        order.status === 'confirmed' ? 'تایید شده' : order.status}
-                                            </span>
-                                            {order.total > 0 && (
-                                                <span className="order-total">
-                                                    {order.total.toLocaleString('fa-IR')} تومان
-                                                </span>
-                                            )}
-                                        </div>
-                                    ))}
+                                <div className="orders-container">
+                                    <div className="orders-list-scrollable">
+                                        {customerDetails.orders.map(order => (
+                                            <div key={order.id} className="order-item">
+                                                <span className="order-id">سفارش #{order.id}</span>
+                                                <span className="order-date">
+                            {new Date(order.created_at).toLocaleDateString('fa-IR')}
+                        </span>
+                                                <span className={`order-status ${order.status}`}>
+                            {order.status === 'completed' ? 'تکمیل شده' :
+                                order.status === 'pending_pricing' ? 'در انتظار قیمت' :
+                                    order.status === 'confirmed' ? 'تایید شده' : order.status}
+                        </span>
+                                                {order.total > 0 && (
+                                                    <span className="order-total">
+                                {order.total.toLocaleString('fa-IR')} تومان
+                            </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : (
                                 <p className="no-orders">هنوز سفارشی ثبت نکرده است.</p>

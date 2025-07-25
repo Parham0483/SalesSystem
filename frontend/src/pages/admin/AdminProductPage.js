@@ -459,15 +459,6 @@ const AdminProductsPage = () => {
                         </div>
                     </NeoBrutalistCard>
 
-                    <NeoBrutalistCard className="stat-card featured">
-                        <div className="stat-content">
-                            <Star className="stat-icon" />
-                            <div className="stat-info">
-                                <span className="stat-number">{productStats.featured}</span>
-                                <span className="stat-label">محصولات ویژه</span>
-                            </div>
-                        </div>
-                    </NeoBrutalistCard>
 
                     <NeoBrutalistCard className="stat-card value">
                         <div className="stat-content">
@@ -653,14 +644,10 @@ const AdminProductsPage = () => {
                                 </div>
                                 <div className="detail-row">
                                     <span className="detail-label">موجودی:</span>
-                                    <div className="stock-update">
-                                        <NeoBrutalistInput
-                                            type="number"
-                                            value={product.stock}
-                                            onChange={(e) => handleQuickStockUpdate(product.id, e.target.value)}
-                                            className="stock-input"
-                                        />
-                                    </div>
+                                    <span className="detail-value price">
+                                        {product.stock.toLocaleString()}
+                                    </span>
+
                                 </div>
                                 {product.origin && (
                                     <div className="detail-row">

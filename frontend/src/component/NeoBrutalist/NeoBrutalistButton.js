@@ -23,5 +23,4 @@ const NeoBrutalistButton = ({
         </button>
     );
 };
-
 export default NeoBrutalistButton;

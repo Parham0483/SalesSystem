@@ -262,40 +262,6 @@ const AdminDashboardPage = () => {
                 </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="quick-actions-section">
-                <h2 className="section-title">دسترسی سریع</h2>
-                <div className="quick-actions-grid">
-                    <NeoBrutalistButton
-                        text="+ افزودن محصول جدید"
-                        color="green-400"
-                        textColor="black"
-                        onClick={() => navigate('/admin/products/new')}
-                        className="quick-action-btn"
-                    />
-                    <NeoBrutalistButton
-                        text="+ ثبت محموله جدید"
-                        color="blue-400"
-                        textColor="white"
-                        onClick={() => navigate('/admin/announcements/new')}
-                        className="quick-action-btn"
-                    />
-                    <NeoBrutalistButton
-                        text="📋 سفارشات در انتظار"
-                        color="yellow-400"
-                        textColor="black"
-                        onClick={() => navigate('/admin/orders?status=pending')}
-                        className="quick-action-btn"
-                    />
-                    <NeoBrutalistButton
-                        text="⚠️ موجودی کم"
-                        color="red-400"
-                        textColor="white"
-                        onClick={() => navigate('/admin/products?stock=low')}
-                        className="quick-action-btn"
-                    />
-                </div>
-            </div>
 
             {/* Recent Activity */}
             <div className="recent-activity-section">

@@ -571,6 +571,70 @@
     color: #64748b;
     text-align: center;
 }
+/* Orders Section - Scrollable */
+.orders-section {
+    position: relative;
+    height: 400px; /* Set a fixed height for the card */
+    display: flex;
+    flex-direction: column;
+}
+
+.orders-section h4 {
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.orders-container {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.orders-list-scrollable {
+    height: 100%;
+    overflow-y: auto;
+    padding-right: 0.5rem; /* Space for scrollbar */
+}
+
+/* Custom scrollbar styling */
+.orders-list-scrollable::-webkit-scrollbar {
+    width: 8px;
+}
+
+.orders-list-scrollable::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.orders-list-scrollable::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.orders-list-scrollable::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.orders-section .order-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.orders-section .order-item:last-child {
+    margin-bottom: 0;
+}
+
+.orders-section .no-orders {
+    padding: 2rem;
+    text-align: center;
+    color: #666;
+}
 
 .orders-list {
     display: flex;
