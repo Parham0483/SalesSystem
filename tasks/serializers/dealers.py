@@ -1,4 +1,5 @@
-# tasks/serializers/dealers.py - Updated with custom commission rate
+# tasks/serializers/dealers.py - COMPLETE FIXED VERSION
+
 from rest_framework import serializers
 from django.db.models import Sum
 from decimal import Decimal
@@ -6,7 +7,7 @@ from ..models import Customer, Order, DealerCommission, OrderLog
 
 
 class DealerSerializer(serializers.ModelSerializer):
-    """Serializer for dealer information"""
+    """Serializer for dealer information - FIXED with is_active"""
     assigned_orders_count = serializers.ReadOnlyField()
     total_commission_earned = serializers.SerializerMethodField()
     pending_commission = serializers.SerializerMethodField()
@@ -16,6 +17,7 @@ class DealerSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'email', 'phone', 'company_name',
             'is_dealer', 'dealer_code', 'dealer_commission_rate',
+            'is_active',  
             'assigned_orders_count', 'total_commission_earned',
             'pending_commission', 'date_joined'
         ]

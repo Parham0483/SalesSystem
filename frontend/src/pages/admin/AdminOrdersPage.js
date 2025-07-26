@@ -1,12 +1,18 @@
-// frontend/src/pages/AdminOrdersPage.js - Enhanced with customer and status filtering
+// frontend/src/pages/AdminOrdersPage.js - Enhanced with NeoBrutalist components
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+    Package, Search, Filter, Eye, Edit, Clock, CheckCircle, XCircle, AlertCircle,
+    Star, TrendingUp, Users, Phone, Mail, Building, Download, FileText,
+    Calendar, CreditCard, MoreVertical, Plus
+} from 'lucide-react';
 import API from '../../component/api';
 import AdminOrderDetailPage from '../../component/AdminOrderDetailPage';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
 import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
+import NeoBrutalistDropdown from '../../component/NeoBrutalist/NeoBrutalistDropdown';
 import '../../styles/Admin/AdminOrders.css'
 
 const AdminOrdersPage = () => {
@@ -30,6 +36,40 @@ const AdminOrdersPage = () => {
 
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+
+    // Filter options arrays
+    const statusOptions = [
+        { value: 'all', label: 'همه وضعیت‌ها' },
+        { value: 'pending_pricing', label: 'نیاز به قیمت‌گذاری' },
+        { value: 'waiting_customer_approval', label: 'منتظر تأیید مشتری' },
+        { value: 'confirmed', label: 'تأیید شده' },
+        { value: 'completed', label: 'تکمیل شده' },
+        { value: 'rejected', label: 'رد شده' }
+    ];
+
+    const dealerOptions = [
+        { value: 'all', label: 'همه نمایندگان' },
+        { value: 'unassigned', label: 'بدون نماینده' },
+        ...dealers.map(dealer => ({
+            value: dealer.name,
+            label: dealer.name
+        }))
+    ];
+
+    const dateOptions = [
+        { value: 'all', label: 'همه تاریخ‌ها' },
+        { value: 'today', label: 'امروز' },
+        { value: 'week', label: 'هفته گذشته' },
+        { value: 'month', label: 'ماه گذشته' }
+    ];
+
+    const sortOptions = [
+        { value: 'newest', label: 'جدیدترین' },
+        { value: 'oldest', label: 'قدیمی‌ترین' },
+        { value: 'customer', label: 'نام مشتری' },
+        { value: 'amount', label: 'مبلغ سفارش' },
+        { value: 'status', label: 'وضعیت' }
+    ];
 
     useEffect(() => {
         // Set initial filters from URL parameters
@@ -190,6 +230,18 @@ const AdminOrdersPage = () => {
         }
     };
 
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'pending_pricing': return Clock;
+            case 'waiting_customer_approval': return AlertCircle;
+            case 'confirmed': return CheckCircle;
+            case 'completed': return CheckCircle;
+            case 'rejected': return XCircle;
+            case 'cancelled': return XCircle;
+            default: return Package;
+        }
+    };
+
     const formatStatus = (status) => {
         const statusMap = {
             'pending_pricing': 'نیاز به قیمت‌گذاری',
@@ -213,8 +265,9 @@ const AdminOrdersPage = () => {
     if (loading) {
         return (
             <div className="admin-orders-page">
-                <div className="loading-state">
-                    <h1>در حال بارگیری سفارشات...</h1>
+                <div className="loading-container">
+                    <div className="loading-spinner"></div>
+                    <p>در حال بارگیری سفارشات...</p>
                 </div>
             </div>
         );
@@ -226,25 +279,20 @@ const AdminOrdersPage = () => {
             <div className="page-header">
                 <div className="header-content">
                     <div className="title-section">
-                        <h1 className="page-title">📋 مدیریت سفارشات</h1>
+                        <h1 className="page-title">
+                            <Package className="title-icon" />
+                            مدیریت سفارشات
+                        </h1>
                         <p className="page-subtitle">
                             {filteredOrders.length} سفارش از مجموع {orders.length} سفارش
                         </p>
                     </div>
                     <div className="header-actions">
                         <NeoBrutalistButton
-                            text="داشبورد اصلی"
+                            text="داشبورد"
                             color="blue-400"
                             textColor="white"
                             onClick={() => navigate('/admin')}
-                            className="dashboard-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="خروج"
-                            color="red-400"
-                            textColor="white"
-                            onClick={handleLogout}
-                            className="logout-btn"
                         />
                     </div>
                 </div>
@@ -252,138 +300,114 @@ const AdminOrdersPage = () => {
 
             {error && (
                 <div className="error-banner">
-                    <span>⚠️ {error}</span>
+                    <AlertCircle size={20} />
+                    <span>{error}</span>
+                    <button onClick={() => setError('')}>×</button>
                 </div>
             )}
 
             {/* Statistics Cards */}
             <div className="stats-section">
                 <div className="stats-grid">
-                    <NeoBrutalistCard className="stat-card" onClick={() => setStatusFilter('all')}>
+                    <NeoBrutalistCard className="stat-card total" onClick={() => setStatusFilter('all')}>
                         <div className="stat-content">
-                            <span className="stat-number">{orderStats.total || 0}</span>
-                            <span className="stat-label">کل سفارشات</span>
+                            <Package className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{orderStats.total || 0}</span>
+                                <span className="stat-label">کل سفارشات</span>
+                            </div>
                         </div>
                     </NeoBrutalistCard>
 
                     <NeoBrutalistCard className="stat-card pending" onClick={() => setStatusFilter('pending_pricing')}>
                         <div className="stat-content">
-                            <span className="stat-number">{orderStats.pending_pricing || 0}</span>
-                            <span className="stat-label">نیاز به قیمت‌گذاری</span>
+                            <Clock className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{orderStats.pending_pricing || 0}</span>
+                                <span className="stat-label">نیاز به قیمت‌گذاری</span>
+                            </div>
                         </div>
                     </NeoBrutalistCard>
 
                     <NeoBrutalistCard className="stat-card waiting" onClick={() => setStatusFilter('waiting_customer_approval')}>
                         <div className="stat-content">
-                            <span className="stat-number">{orderStats.waiting_customer_approval || 0}</span>
-                            <span className="stat-label">منتظر تأیید</span>
+                            <AlertCircle className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{orderStats.waiting_customer_approval || 0}</span>
+                                <span className="stat-label">منتظر تأیید</span>
+                            </div>
                         </div>
                     </NeoBrutalistCard>
 
                     <NeoBrutalistCard className="stat-card completed" onClick={() => setStatusFilter('completed')}>
                         <div className="stat-content">
-                            <span className="stat-number">{orderStats.completed || 0}</span>
-                            <span className="stat-label">تکمیل شده</span>
+                            <CheckCircle className="stat-icon" />
+                            <div className="stat-info">
+                                <span className="stat-number">{orderStats.completed || 0}</span>
+                                <span className="stat-label">تکمیل شده</span>
+                            </div>
                         </div>
                     </NeoBrutalistCard>
                 </div>
             </div>
 
-            {/* Advanced Filters */}
-            <div className="filters-section">
-                <NeoBrutalistCard className="filters-card">
-                    <div className="filters-header">
-                        <h3>🔍 فیلترهای پیشرفته</h3>
-                        <NeoBrutalistButton
-                            text="پاک کردن فیلترها"
-                            color="gray-400"
-                            textColor="black"
-                            onClick={clearAllFilters}
-                            className="clear-filters-btn"
+            {/* Filters Section */}
+            <NeoBrutalistCard className="filters-card">
+                <div className="filters-header">
+                    <h3>
+                        <Filter size={20} />
+                        فیلترها و جستجو
+                    </h3>
+                    <NeoBrutalistButton
+                        text="پاک کردن فیلترها"
+                        color="red-400"
+                        textColor="white"
+                        onClick={clearAllFilters}
+                    />
+                </div>
+
+                <div className="filters-grid">
+                    <div className="search-wrapper">
+                        <Search className="search-icon" />
+                        <NeoBrutalistInput
+                            placeholder="جستجو در نام، ایمیل یا شماره تلفن مشتری..."
+                            value={customerFilter}
+                            onChange={(e) => setCustomerFilter(e.target.value)}
+                            className="search-input"
                         />
                     </div>
 
-                    <div className="filters-grid">
-                        {/* Status Filter */}
-                        <div className="filter-group">
-                            <label>وضعیت سفارش:</label>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="all">همه وضعیت‌ها</option>
-                                <option value="pending_pricing">نیاز به قیمت‌گذاری</option>
-                                <option value="waiting_customer_approval">منتظر تأیید مشتری</option>
-                                <option value="confirmed">تأیید شده</option>
-                                <option value="completed">تکمیل شده</option>
-                                <option value="rejected">رد شده</option>
-                            </select>
-                        </div>
+                    <NeoBrutalistDropdown
+                        label="وضعیت سفارش"
+                        options={statusOptions}
+                        value={statusFilter}
+                        onChange={(value) => setStatusFilter(value)}
+                    />
 
-                        {/* Customer Search */}
-                        <div className="filter-group">
-                            <label>جستجو در مشتری:</label>
-                            <NeoBrutalistInput
-                                type="text"
-                                placeholder="نام، ایمیل یا شماره تلفن..."
-                                value={customerFilter}
-                                onChange={(e) => setCustomerFilter(e.target.value)}
-                                className="customer-search-input"
-                            />
-                        </div>
+                    <NeoBrutalistDropdown
+                        label="نماینده فروش"
+                        options={dealerOptions}
+                        value={dealerFilter}
+                        onChange={(value) => setDealerFilter(value)}
+                    />
 
-                        {/* Dealer Filter */}
-                        <div className="filter-group">
-                            <label>نماینده فروش:</label>
-                            <select
-                                value={dealerFilter}
-                                onChange={(e) => setDealerFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="all">همه نمایندگان</option>
-                                <option value="unassigned">بدون نماینده</option>
-                                {dealers.map(dealer => (
-                                    <option key={dealer.id} value={dealer.name}>
-                                        {dealer.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                    <NeoBrutalistDropdown
+                        label="تاریخ ثبت"
+                        options={dateOptions}
+                        value={dateFilter}
+                        onChange={(value) => setDateFilter(value)}
+                    />
 
-                        {/* Date Filter */}
-                        <div className="filter-group">
-                            <label>تاریخ ثبت:</label>
-                            <select
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="all">همه تاریخ‌ها</option>
-                                <option value="today">امروز</option>
-                                <option value="week">هفته گذشته</option>
-                                <option value="month">ماه گذشته</option>
-                            </select>
-                        </div>
+                    <NeoBrutalistDropdown
+                        label="مرتب‌سازی"
+                        options={sortOptions}
+                        value={sortBy}
+                        onChange={(value) => setSortBy(value)}
+                    />
+                </div>
 
-                        {/* Sort Options */}
-                        <div className="filter-group">
-                            <label>مرتب‌سازی:</label>
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                className="filter-select"
-                            >
-                                <option value="newest">جدیدترین</option>
-                                <option value="oldest">قدیمی‌ترین</option>
-                                <option value="customer">نام مشتری</option>
-                                <option value="amount">مبلغ سفارش</option>
-                                <option value="status">وضعیت</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Active Filters Display */}
+                {/* Active Filters Display */}
+                {(statusFilter !== 'all' || customerFilter || dealerFilter !== 'all' || dateFilter !== 'all') && (
                     <div className="active-filters">
                         {statusFilter !== 'all' && (
                             <span className="filter-tag">
@@ -410,52 +434,67 @@ const AdminOrdersPage = () => {
                             </span>
                         )}
                     </div>
-                </NeoBrutalistCard>
-            </div>
+                )}
+            </NeoBrutalistCard>
 
             {/* Orders Grid */}
             <div className="orders-grid">
-                {filteredOrders.map(order => (
-                    <NeoBrutalistCard
-                        key={order.id}
-                        className={`order-card ${order.status}`}
-                        onClick={() => setSelectedOrder(order)}
-                    >
-                        <div className="order-header">
-                            <div className="order-info">
-                                <h3>سفارش #{order.id}</h3>
-                                <span className="order-date">
-                                    {new Date(order.created_at).toLocaleDateString('fa-IR')}
-                                </span>
-                            </div>
-                            <NeoBrutalistButton
-                                text={formatStatus(order.status)}
-                                color={getStatusColor(order.status)}
-                                textColor="black"
-                                className="status-badge"
-                            />
-                        </div>
-
-                        <div className="order-details">
-                            <div className="customer-info">
-                                <strong>👤 {order.customer_name}</strong>
-                                {order.customer_phone && (
-                                    <span className="phone">📞 {order.customer_phone}</span>
-                                )}
-                            </div>
-
-                            {order.assigned_dealer_name && (
-                                <div className="dealer-info">
-                                    <span>🤝 نماینده: {order.assigned_dealer_name}</span>
-                                </div>
-                            )}
-
-                            <div className="order-summary">
-                                <span>تعداد اقلام: {order.items?.length || 0}</span>
-                                {order.quoted_total && (
-                                    <span className="total-amount">
-                                        💰 {order.quoted_total.toLocaleString('fa-IR')} ریال
+                {filteredOrders.map(order => {
+                    const StatusIcon = getStatusIcon(order.status);
+                    return (
+                        <NeoBrutalistCard
+                            key={order.id}
+                            className={`order-card ${order.status}`}
+                        >
+                            <div className="card-header">
+                                <div className="order-identity">
+                                    <h3 className="order-id">سفارش #{order.id}</h3>
+                                    <span className="order-date">
+                                        <Calendar size={14} />
+                                        {new Date(order.created_at).toLocaleDateString('fa-IR')}
                                     </span>
+                                </div>
+
+                                <div className="order-tags">
+                                    <span className={`tag status-tag ${order.status}`}>
+                                        <StatusIcon size={12} />
+                                        {formatStatus(order.status)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="order-details">
+                                <div className="detail-row">
+                                    <Users size={16} className="detail-icon" />
+                                    <span>{order.customer_name}</span>
+                                </div>
+
+                                {order.customer_phone && (
+                                    <div className="detail-row">
+                                        <Phone size={16} className="detail-icon" />
+                                        <span>{order.customer_phone}</span>
+                                    </div>
+                                )}
+
+                                {order.assigned_dealer_name && (
+                                    <div className="detail-row">
+                                        <Star size={16} className="detail-icon" />
+                                        <span>نماینده: {order.assigned_dealer_name}</span>
+                                    </div>
+                                )}
+
+                                <div className="detail-row">
+                                    <span className="detail-label">تعداد اقلام:</span>
+                                    <span>{order.items?.length || 0}</span>
+                                </div>
+
+                                {order.quoted_total && (
+                                    <div className="detail-row">
+                                        <CreditCard size={16} className="detail-icon" />
+                                        <span className="total-amount">
+                                            {order.quoted_total.toLocaleString('fa-IR')} ریال
+                                        </span>
+                                    </div>
                                 )}
                             </div>
 
@@ -464,121 +503,102 @@ const AdminOrdersPage = () => {
                                     <p>💬 {order.customer_comment.substring(0, 80)}...</p>
                                 </div>
                             )}
-                        </div>
 
-                        <div className="order-actions">
-                            <NeoBrutalistButton
-                                text="مشاهده جزئیات"
-                                color="blue-400"
-                                textColor="white"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedOrder(order);
-                                }}
-                                className="view-details-btn"
-                            />
-
-                            {order.status === 'pending_pricing' && (
+                            <div className="card-actions">
                                 <NeoBrutalistButton
-                                    text="قیمت‌گذاری"
-                                    color="yellow-400"
-                                    textColor="black"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedOrder(order);
-                                    }}
-                                    className="pricing-btn"
+                                    text="مشاهده جزئیات"
+                                    color="blue-400"
+                                    textColor="white"
+                                    onClick={() => setSelectedOrder(order)}
                                 />
-                            )}
 
-                            {order.status === 'confirmed' && (
-                                <NeoBrutalistButton
-                                    text="تکمیل سفارش"
-                                    color="green-400"
-                                    textColor="black"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedOrder(order);
-                                    }}
-                                    className="complete-btn"
-                                />
-                            )}
-                        </div>
-                    </NeoBrutalistCard>
-                ))}
+                                {order.status === 'pending_pricing' && (
+                                    <NeoBrutalistButton
+                                        text="قیمت‌گذاری"
+                                        color="yellow-400"
+                                        textColor="black"
+                                        onClick={() => setSelectedOrder(order)}
+                                    />
+                                )}
+
+                                {order.status === 'confirmed' && (
+                                    <NeoBrutalistButton
+                                        text="تکمیل سفارش"
+                                        color="green-400"
+                                        textColor="black"
+                                        onClick={() => setSelectedOrder(order)}
+                                    />
+                                )}
+                            </div>
+                        </NeoBrutalistCard>
+                    );
+                })}
             </div>
 
             {/* Empty State */}
             {filteredOrders.length === 0 && !loading && (
-                <div className="empty-state">
-                    <NeoBrutalistCard className="empty-card">
-                        <div className="empty-content">
-                            <div className="empty-icon">📋</div>
-                            <h3>سفارشی یافت نشد</h3>
-                            <p>
-                                {orders.length === 0
-                                    ? 'هنوز هیچ سفارشی ثبت نشده است.'
-                                    : 'بر اساس فیلترهای انتخاب شده، سفارشی یافت نشد.'
-                                }
-                            </p>
-                            {orders.length > 0 && (
-                                <NeoBrutalistButton
-                                    text="پاک کردن فیلترها"
-                                    color="blue-400"
-                                    textColor="white"
-                                    onClick={clearAllFilters}
-                                    className="clear-filters-btn"
-                                />
-                            )}
-                        </div>
-                    </NeoBrutalistCard>
-                </div>
-            )}
-
-            {/* Quick Action Buttons */}
-            <div className="quick-actions">
-                <NeoBrutalistCard className="quick-actions-card">
-                    <h3>عملیات سریع</h3>
-                    <div className="quick-actions-grid">
-                        <NeoBrutalistButton
-                            text={`⏱️ در انتظار قیمت‌گذاری (${orderStats.pending_pricing || 0})`}
-                            color="yellow-400"
-                            textColor="black"
-                            onClick={() => setStatusFilter('pending_pricing')}
-                            className="quick-filter-btn"
-                        />
-                        <NeoBrutalistButton
-                            text={`👥 بدون نماینده (${orderStats.without_dealer || 0})`}
-                            color="orange-400"
-                            textColor="black"
-                            onClick={() => setDealerFilter('unassigned')}
-                            className="quick-filter-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="📊 گزارش سفارشات"
-                            color="purple-400"
-                            textColor="white"
-                            onClick={() => navigate('/admin/reports/orders')}
-                            className="report-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="📤 خروجی Excel"
-                            color="green-400"
-                            textColor="black"
-                            onClick={() => {
-                                // Export filtered orders to Excel
-                                window.open(`/api/admin/orders/export/?${new URLSearchParams({
-                                    status: statusFilter,
-                                    customer: customerFilter,
-                                    dealer: dealerFilter,
-                                    date: dateFilter
-                                })}`, '_blank');
-                            }}
-                            className="export-btn"
-                        />
+                <NeoBrutalistCard className="empty-state-card">
+                    <div className="empty-content">
+                        <Package size={48} className="empty-icon" />
+                        <h3>سفارشی یافت نشد</h3>
+                        <p>
+                            {orders.length === 0
+                                ? 'هنوز هیچ سفارشی ثبت نشده است.'
+                                : 'بر اساس فیلترهای انتخاب شده، سفارشی یافت نشد.'
+                            }
+                        </p>
+                        {orders.length > 0 && (
+                            <NeoBrutalistButton
+                                text="پاک کردن فیلترها"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={clearAllFilters}
+                            />
+                        )}
                     </div>
                 </NeoBrutalistCard>
-            </div>
+            )}
+
+            {/* Quick Actions */}
+            <NeoBrutalistCard className="quick-actions-card">
+                <div className="quick-actions-header">
+                    <h3>عملیات سریع</h3>
+                </div>
+                <div className="quick-actions-grid">
+                    <NeoBrutalistButton
+                        text={`⏱️ در انتظار قیمت‌گذاری (${orderStats.pending_pricing || 0})`}
+                        color="yellow-400"
+                        textColor="black"
+                        onClick={() => setStatusFilter('pending_pricing')}
+                    />
+                    <NeoBrutalistButton
+                        text={`👥 بدون نماینده (${orderStats.without_dealer || 0})`}
+                        color="orange-400"
+                        textColor="black"
+                        onClick={() => setDealerFilter('unassigned')}
+                    />
+                    <NeoBrutalistButton
+                        text="📊 گزارش سفارشات"
+                        color="purple-400"
+                        textColor="white"
+                        onClick={() => navigate('/admin/reports/orders')}
+                    />
+                    <NeoBrutalistButton
+                        text="📤 خروجی Excel"
+                        color="green-400"
+                        textColor="black"
+                        onClick={() => {
+                            // Export filtered orders to Excel
+                            window.open(`/api/admin/orders/export/?${new URLSearchParams({
+                                status: statusFilter,
+                                customer: customerFilter,
+                                dealer: dealerFilter,
+                                date: dateFilter
+                            })}`, '_blank');
+                        }}
+                    />
+                </div>
+            </NeoBrutalistCard>
 
             {/* Order Detail Modal */}
             <NeoBrutalistModal

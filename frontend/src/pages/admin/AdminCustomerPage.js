@@ -65,7 +65,7 @@ const AdminCustomersPage = () => {
     const fetchCustomers = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await API.get('/admin/customers/');
+            const response = await API.get('/admin/customers/' );
             console.log('👥 Admin customers fetched:', response.data);
             setCustomers(response.data);
             calculateStats(response.data);
@@ -777,9 +777,13 @@ const AdminCustomersPage = () => {
                         <div className="form-group">
                             <NeoBrutalistToggle
                                 checked={formData.is_dealer}
-                                onChange={(e) => setFormData(prev => ({ ...prev, is_dealer: e.target.checked }))}
+                                onChange={(e) => {
+                                    const checked = e?.target?.checked ?? e;
+                                    setFormData(prev => ({ ...prev, is_dealer: checked }));
+                                }}
                                 label="نماینده فروش"
                             />
+
                         </div>
                         {formData.is_dealer && (
                             <div className="form-group">
@@ -801,7 +805,10 @@ const AdminCustomersPage = () => {
                     <div className="form-group">
                         <NeoBrutalistToggle
                             checked={formData.is_active}
-                            onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                            onChange={(e) => {
+                                const checked = e?.target?.checked ?? e;
+                                setFormData(prev => ({ ...prev, is_active: checked }));
+                            }}
                             label="حساب فعال"
                         />
                     </div>

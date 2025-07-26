@@ -203,6 +203,7 @@
     margin: 0 0 1rem 0;
     color: #1a1a1a;
     text-transform: uppercase;
+    justify-content: center;
 }
 
 .card-content p {

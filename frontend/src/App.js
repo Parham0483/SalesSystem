@@ -20,6 +20,7 @@ import AdminOrdersPage  from "./pages/admin/AdminOrdersPage";
 import AdminAnnouncementsPage from "./pages/admin/AdminAnnouncementsPage";
 import AdminProductPage from "./pages/admin/AdminProductPage";
 import AdminCustomersPage from "./pages/admin/AdminCustomerPage";
+import AdminDealersPage from "./pages/admin/AdminDealersPage";
 
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
@@ -106,6 +107,7 @@ function App() {
                     <AdminRoute><AdminAnnouncementsPage /></AdminRoute>
                 } />
                 <Route path="/admin/customers" element={<AdminRoute><AdminCustomersPage /></AdminRoute>} />
+                <Route path="/admin/dealers" element={<AdminRoute><AdminDealersPage /></AdminRoute>} />
                 <Route path="/admin/reports" element={
                     <AdminRoute><div>Reports Page (To be built)</div></AdminRoute>
                 } />
