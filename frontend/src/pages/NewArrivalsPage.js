@@ -131,7 +131,7 @@ const NewArrivalsPage = () => {
                     </div>
                     <div className="header-actions">
                         <NeoBrutalistButton
-                            text="کاتالوگ محصولات"
+                            text="کاتالوگ"
                             color="blue-400"
                             textColor="white"
                             onClick={() => navigate('/product')}

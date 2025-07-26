@@ -12,6 +12,8 @@ const DealerDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [dealerStats, setDealerStats] = useState(null);
+    const [recentProducts, setRecentProducts] = useState([]);
+    const [recentAnnouncements, setRecentAnnouncements] = useState([]);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -32,6 +34,8 @@ const DealerDashboard = () => {
 
         fetchAssignedOrders();
         fetchDealerStats();
+        fetchRecentProducts();
+        fetchRecentAnnouncements();
     }, [navigate]);
 
     const fetchAssignedOrders = async () => {
@@ -83,6 +87,26 @@ const DealerDashboard = () => {
         }
     };
 
+    const fetchRecentProducts = async () => {
+        try {
+            const response = await API.get('/products/new-arrivals/');
+            console.log('🆕 Recent products fetched for dealer:', response.data);
+            setRecentProducts(response.data.slice(0, 6));
+        } catch (err) {
+            console.error('❌ Error fetching recent products:', err);
+        }
+    };
+
+    const fetchRecentAnnouncements = async () => {
+        try {
+            const response = await API.get('/shipment-announcements/');
+            console.log('📢 Recent announcements fetched for dealer:', response.data);
+            setRecentAnnouncements(response.data.slice(0, 3));
+        } catch (err) {
+            console.error('❌ Error fetching announcements:', err);
+        }
+    };
+
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -125,6 +149,11 @@ const DealerDashboard = () => {
         setSelectedOrder(order);
     };
 
+    const formatPrice = (price) => {
+        if (!price || price === 0) return 'تماس بگیرید';
+        return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
     if (loading) {
         return (
             <div className="dealer-dashboard" style={{ padding: '2rem', textAlign: 'center' }}>
@@ -154,11 +183,25 @@ const DealerDashboard = () => {
                 <div className="user-info">
                     <h1 style={{ margin: 0, fontSize: '2.5rem' }}>پنل نماینده فروش</h1>
                     <span className="welcome-text" style={{ color: '#666' }}>
-                        سفارشات تخصیص داده شده
-                        {dealerStats?.dealer && ` - ${dealerStats.dealer.name}`}
+                        {dealerStats?.dealer && `${dealerStats.dealer.name} - `}
+                        مشاهده سفارشات و محصولات
                     </span>
                 </div>
                 <div className="header-actions">
+                    <NeoBrutalistButton
+                        text="محموله‌های جدید"
+                        color="blue-400"
+                        textColor="white"
+                        onClick={() => navigate('/product/newarrivals')}
+                        className="new-arrivals-btn"
+                    />
+                    <NeoBrutalistButton
+                        text="کاتالوگ محصولات"
+                        color="purple-400"
+                        textColor="white"
+                        onClick={() => navigate('/product')}
+                        className="products-btn"
+                    />
                     <NeoBrutalistButton
                         text="خروج"
                         color="red-400"
@@ -169,7 +212,7 @@ const DealerDashboard = () => {
                 </div>
             </div>
 
-            {/* Stats Cards - Removed commission rate as requested */}
+            {/* Stats Cards */}
             {dealerStats?.stats && (
                 <div className="stats-grid" style={{
                     display: 'grid',
@@ -206,6 +249,54 @@ const DealerDashboard = () => {
                     fontWeight: 'bold'
                 }}>
                     <span>⚠️ {error}</span>
+                </div>
+            )}
+
+            {/* Recent Announcements for Dealers */}
+            {recentAnnouncements.length > 0 && (
+                <div className="recent-announcements-section" style={{ marginBottom: '2rem' }}>
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>🚢 آخرین محموله‌ها</h2>
+                        <NeoBrutalistButton
+                            text="مشاهده همه"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/product/newarrivals')}
+                            className="view-all-btn"
+                        />
+                    </div>
+                    <div className="announcements-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                        {recentAnnouncements.map(announcement => (
+                            <NeoBrutalistCard
+                                key={announcement.id}
+                                className="announcement-preview-card"
+                                onClick={() => navigate('/product/newarrivals')}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <div className="announcement-preview-header">
+                                    <h3 style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{announcement.title}</h3>
+                                    {announcement.is_featured && (
+                                        <span style={{
+                                            backgroundColor: '#fbbf24',
+                                            color: '#000',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '4px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            ویژه
+                                        </span>
+                                    )}
+                                </div>
+                                <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
+                                    {announcement.description.substring(0, 100)}...
+                                </p>
+                                <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                    {new Date(announcement.created_at).toLocaleDateString('fa-IR')}
+                                </div>
+                            </NeoBrutalistCard>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -316,16 +407,63 @@ const DealerDashboard = () => {
                     }}>
                         <h3>هیچ سفارشی تخصیص نیافته</h3>
                         <p>تا کنون هیچ سفارشی به شما تخصیص داده نشده است.</p>
-                        <NeoBrutalistButton
-                            text="بروزرسانی"
-                            color="blue-400"
-                            textColor="white"
-                            onClick={fetchAssignedOrders}
-                            style={{ marginTop: '1rem' }}
-                        />
+                        <div style={{ marginTop: '1rem' }}>
+                            <NeoBrutalistButton
+                                text="بروزرسانی"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={fetchAssignedOrders}
+                                style={{ marginRight: '1rem' }}
+                            />
+                            <NeoBrutalistButton
+                                text="مشاهده محصولات"
+                                color="green-400"
+                                textColor="black"
+                                onClick={() => navigate('/product')}
+                            />
+                        </div>
                     </NeoBrutalistCard>
                 </div>
             )}
+
+            {/* Quick Actions */}
+            <div className="quick-actions-section" style={{ marginTop: '2rem' }}>
+                <NeoBrutalistCard className="quick-actions-card">
+                    <h3 className="actions-title">خدمات سریع</h3>
+                    <div className="actions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                        <NeoBrutalistButton
+                            text="📦 کاتالوگ کامل"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/product')}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="🚢 محموله‌های جدید"
+                            color="purple-400"
+                            textColor="white"
+                            onClick={() => navigate('/product/newarrivals')}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="📞 تماس برای پشتیبانی"
+                            color="yellow-400"
+                            textColor="black"
+                            onClick={() => {
+                                window.open('tel:+989123456789', '_self');
+                            }}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="🔄 بروزرسانی سفارشات"
+                            color="green-400"
+                            textColor="black"
+                            onClick={fetchAssignedOrders}
+                            className="quick-action-btn"
+                        />
+                    </div>
+                </NeoBrutalistCard>
+            </div>
 
             {/* Order Detail Modal - Now using DealerOrderDetailPage */}
             <NeoBrutalistModal

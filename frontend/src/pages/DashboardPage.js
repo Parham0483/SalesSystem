@@ -16,6 +16,8 @@ const DashboardPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [activeTab, setActiveTab] = useState('active'); // 'active', 'completed', 'rejected'
+    const [recentProducts, setRecentProducts] = useState([]);
+    const [recentAnnouncements, setRecentAnnouncements] = useState([]);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -32,6 +34,8 @@ const DashboardPage = () => {
 
         if (checkAuth()) {
             fetchOrders();
+            fetchRecentProducts();
+            fetchRecentAnnouncements();
         }
     }, [navigate]);
 
@@ -53,6 +57,26 @@ const DashboardPage = () => {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchRecentProducts = async () => {
+        try {
+            const response = await API.get('/products/new-arrivals/');
+            console.log('🆕 Recent products fetched:', response.data);
+            setRecentProducts(response.data.slice(0, 6)); // Show 6 recent products
+        } catch (error) {
+            console.error('❌ Error fetching recent products:', error);
+        }
+    };
+
+    const fetchRecentAnnouncements = async () => {
+        try {
+            const response = await API.get('/shipment-announcements/');
+            console.log('📢 Recent announcements fetched:', response.data);
+            setRecentAnnouncements(response.data.slice(0, 3)); // Show 3 recent announcements
+        } catch (error) {
+            console.error('❌ Error fetching announcements:', error);
         }
     };
 
@@ -151,6 +175,11 @@ const DashboardPage = () => {
         }
     };
 
+    const formatPrice = (price) => {
+        if (!price || price === 0) return 'تماس بگیرید';
+        return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
     const filteredOrders = getFilteredOrders();
 
     if (loading) {
@@ -172,6 +201,20 @@ const DashboardPage = () => {
                     <span className="welcome-text">{getUserInfo()?.name} خوش آمدی</span>
                 </div>
                 <div className="header-actions">
+                    <NeoBrutalistButton
+                        text="محموله‌های جدید"
+                        color="blue-400"
+                        textColor="white"
+                        onClick={() => navigate('/product/newarrivals')}
+                        className="new-arrivals-btn"
+                    />
+                    <NeoBrutalistButton
+                        text="کاتالوگ"
+                        color="purple-400"
+                        textColor="white"
+                        onClick={() => navigate('/product')}
+                        className="products-btn"
+                    />
                     <NeoBrutalistButton
                         text="ایجاد سفارش"
                         color="yellow-400"
@@ -213,6 +256,127 @@ const DashboardPage = () => {
                         onClick={() => setError('')}
                         className="close-message-btn"
                     />
+                </div>
+            )}
+
+            {/* Recent Announcements Section */}
+            {recentAnnouncements.length > 0 && (
+                <div className="recent-announcements-section" style={{ marginBottom: '2rem' }}>
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>🚢 آخرین محموله‌ها</h2>
+                        <NeoBrutalistButton
+                            text="مشاهده همه"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/product/newarrivals')}
+                            className="view-all-btn"
+                        />
+                    </div>
+                    <div className="announcements-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                        {recentAnnouncements.map(announcement => (
+                            <NeoBrutalistCard
+                                key={announcement.id}
+                                className="announcement-preview-card"
+                                onClick={() => navigate('/product/newarrivals')}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <div className="announcement-preview-header">
+                                    <h3 style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{announcement.title}</h3>
+                                    {announcement.is_featured && (
+                                        <span style={{
+                                            backgroundColor: '#fbbf24',
+                                            color: '#000',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '4px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 'bold'
+                                        }}>
+                                            ویژه
+                                        </span>
+                                    )}
+                                </div>
+                                <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
+                                    {announcement.description.substring(0, 100)}...
+                                </p>
+                                {announcement.images && announcement.images.length > 0 && (
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <img
+                                            src={announcement.images[0].image}
+                                            alt={announcement.title}
+                                            style={{
+                                                width: '100%',
+                                                height: '120px',
+                                                objectFit: 'cover',
+                                                borderRadius: '8px'
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                                <div style={{ fontSize: '0.8rem', color: '#888' }}>
+                                    {new Date(announcement.created_at).toLocaleDateString('fa-IR')}
+                                </div>
+                            </NeoBrutalistCard>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Recent Products Section */}
+            {recentProducts.length > 0 && (
+                <div className="recent-products-section" style={{ marginBottom: '2rem' }}>
+                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>📦 محصولات جدید</h2>
+                        <NeoBrutalistButton
+                            text="مشاهده کاتالوگ"
+                            color="green-400"
+                            textColor="black"
+                            onClick={() => navigate('/product')}
+                            className="view-catalog-btn"
+                        />
+                    </div>
+                    <div className="products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                        {recentProducts.map(product => (
+                            <NeoBrutalistCard
+                                key={product.id}
+                                className="product-preview-card"
+                                onClick={() => navigate('/product')}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <div className="product-preview-image" style={{ marginBottom: '1rem' }}>
+                                    <img
+                                        src={product.image_url || 'https://placehold.co/200x150/e2e8f0/a0aec0?text=محصول'}
+                                        alt={product.name}
+                                        style={{
+                                            width: '100%',
+                                            height: '150px',
+                                            objectFit: 'cover',
+                                            borderRadius: '8px'
+                                        }}
+                                    />
+                                </div>
+                                <h4 style={{ fontSize: '1rem', margin: '0 0 0.5rem 0' }}>{product.name}</h4>
+                                <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 1rem 0' }}>
+                                    {product.description?.substring(0, 80)}...
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 'bold', color: '#059669' }}>
+                                        {formatPrice(product.base_price)}
+                                    </span>
+                                    {product.category_name && (
+                                        <span style={{
+                                            backgroundColor: '#e0e7ff',
+                                            color: '#3730a3',
+                                            padding: '0.25rem 0.5rem',
+                                            borderRadius: '4px',
+                                            fontSize: '0.75rem'
+                                        }}>
+                                            {product.category_name}
+                                        </span>
+                                    )}
+                                </div>
+                            </NeoBrutalistCard>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -262,7 +426,7 @@ const DashboardPage = () => {
                         <div className="order-card-info">
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
 
-                            {/* 🎯 NEW: Show who priced the order */}
+                            {/* Show who priced the order */}
                             {order.priced_by_name && (
                                 <div style={{
                                     backgroundColor: '#e0f2fe',
@@ -283,7 +447,7 @@ const DashboardPage = () => {
                                 </div>
                             )}
 
-                            {/* 🎯 NEW: Show dealer info if assigned */}
+                            {/* Show dealer info if assigned */}
                             {order.assigned_dealer_name && (
                                 <div style={{
                                     backgroundColor: '#f3e8ff',
@@ -324,7 +488,7 @@ const DashboardPage = () => {
                                 </p>
                             )}
 
-                            {/* 🎯 NEW: Show admin comments for customer transparency */}
+                            {/* Show admin comments for customer transparency */}
                             {order.admin_comment && order.status !== 'pending_pricing' && (
                                 <div style={{
                                     backgroundColor: '#fff7ed',
@@ -399,6 +563,45 @@ const DashboardPage = () => {
                     </NeoBrutalistCard>
                 </div>
             )}
+
+            {/* Quick Actions */}
+            <div className="quick-actions-section" style={{ marginTop: '2rem' }}>
+                <NeoBrutalistCard className="quick-actions-card">
+                    <h3 className="actions-title">خدمات سریع</h3>
+                    <div className="actions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                        <NeoBrutalistButton
+                            text="📋 ثبت سفارش جدید"
+                            color="green-400"
+                            textColor="black"
+                            onClick={() => setShowCreateOrder(true)}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="📦 کاتالوگ کامل"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/product')}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="🚢 محموله‌های جدید"
+                            color="purple-400"
+                            textColor="white"
+                            onClick={() => navigate('/product/newarrivals')}
+                            className="quick-action-btn"
+                        />
+                        <NeoBrutalistButton
+                            text="📞 تماس برای استعلام"
+                            color="yellow-400"
+                            textColor="black"
+                            onClick={() => {
+                                window.open('tel:+989123456789', '_self');
+                            }}
+                            className="quick-action-btn"
+                        />
+                    </div>
+                </NeoBrutalistCard>
+            </div>
 
             {/* Modals */}
             <NeoBrutalistModal
