@@ -17,7 +17,7 @@ class DealerSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'email', 'phone', 'company_name',
             'is_dealer', 'dealer_code', 'dealer_commission_rate',
-            'is_active',  
+            'is_active',
             'assigned_orders_count', 'total_commission_earned',
             'pending_commission', 'date_joined'
         ]
