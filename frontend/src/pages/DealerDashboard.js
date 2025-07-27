@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
+import { useCategories } from '../hooks/useCategories';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import DealerOrderDetailPage from '../component/DealerOrderDetailPage';
@@ -9,12 +10,14 @@ import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
 const DealerDashboard = () => {
     const [orders, setOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const { categories } = useCategories();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [dealerStats, setDealerStats] = useState(null);
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
     const navigate = useNavigate();
+
 
     useEffect(() => {
         const userDataString = localStorage.getItem('userData');

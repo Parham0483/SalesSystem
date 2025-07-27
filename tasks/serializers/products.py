@@ -11,8 +11,10 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ['id', 'image', 'alt_text', 'order', 'is_primary']
 
 
+# tasks/serializers/products.py - Updated ProductSerializer and CategorySerializer
+
 class ProductCategorySerializer(serializers.ModelSerializer):
-    """Serializer for product categories"""
+    """Serializer for product categories with Persian support"""
     products_count = serializers.SerializerMethodField()
     display_name = serializers.SerializerMethodField()
 
@@ -20,22 +22,25 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         model = ProductCategory
         fields = [
             'id', 'name', 'name_fa', 'display_name', 'description',
-            'slug', 'is_active', 'order', 'products_count'
+            'slug', 'is_active', 'order', 'products_count', 'parent',
+            'image', 'created_at'
         ]
+        read_only_fields = ['created_at', 'slug']
 
     def get_products_count(self, obj):
         return obj.products.filter(is_active=True).count()
 
     def get_display_name(self, obj):
+        """Return Persian name if available, otherwise English name"""
         return obj.name_fa if obj.name_fa else obj.name
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Enhanced product serializer matching your model structure"""
+    """Enhanced product serializer with Persian category names for all users"""
     image_url = serializers.SerializerMethodField()
-    stock_status = serializers.ReadOnlyField()  # Use model property
-    is_out_of_stock = serializers.ReadOnlyField()  # Use model property
-    category_name = serializers.ReadOnlyField()  # Use model property
+    stock_status = serializers.ReadOnlyField()
+    is_out_of_stock = serializers.ReadOnlyField()
+    category_name = serializers.SerializerMethodField()
     category_details = serializers.SerializerMethodField()
     days_since_created = serializers.SerializerMethodField()
 
@@ -43,13 +48,13 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'image', 'image_url',
+            'weight', 'origin', 'image', 'image_url',
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'category_name']
+        read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
 
     def get_image_url(self, obj):
         """Get the primary image URL with full domain"""
@@ -59,7 +64,6 @@ class ProductSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.image.url)
             else:
-                # Fallback - hardcode your backend URL if no request context
                 from django.conf import settings
                 base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
                 return f"{base_url}{obj.image.url}"
@@ -75,25 +79,64 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return None
 
+    def get_category_name(self, obj):
+        """Return Persian category name for ALL users"""
+        if obj.category:
+            return obj.category.display_name
+        return None
+
     def get_category_details(self, obj):
-        """Get category details"""
+        """Get complete category details with Persian names for ALL users"""
         if obj.category:
             return {
                 'id': obj.category.id,
                 'name': obj.category.name,
                 'name_fa': obj.category.name_fa,
-                'display_name': obj.category.display_name
+                'display_name': obj.category.display_name,
+                'slug': obj.category.slug,
+                'description': obj.category.description
             }
         return None
 
     def get_days_since_created(self, obj):
         """Get days since product was created"""
+        from django.utils import timezone
         return (timezone.now() - obj.created_at).days
+
+    def validate_image(self, value):
+        """Custom validation for image field"""
+        # If it's a string (URL), it means no new image is being uploaded
+        if isinstance(value, str):
+            # Return None to indicate no change to image
+            return None
+
+        # If it's a file, validate it
+        if hasattr(value, 'read'):
+            # Additional file validation can go here
+            return value
+
+        return value
+
+    def update(self, instance, validated_data):
+        """Custom update method to handle image properly"""
+        # Remove image from validated_data if it's None (no new image)
+        image = validated_data.pop('image', 'no_change')
+
+        # Update other fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # Only update image if a new one was provided
+        if image != 'no_change' and image is not None:
+            instance.image = image
+
+        instance.save()
+        return instance
 
     def create(self, validated_data):
         """Create product with automatic SKU generation if needed"""
         if not validated_data.get('sku'):
-            # Generate SKU automatically
+            from django.utils import timezone
             sku = f"PRD-{timezone.now().strftime('%Y%m%d')}-{Product.objects.count() + 1:04d}"
             validated_data['sku'] = sku
 
@@ -118,41 +161,66 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
 
+# Add debugging to your ShipmentAnnouncementSerializer
+
 class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
-    """Serializer for shipment announcements"""
+    """SIMPLIFIED Shipment Announcement Serializer - READ ONLY"""
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     image_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     products_count = serializers.ReadOnlyField()
-    related_products_info = serializers.SerializerMethodField()
 
     class Meta:
         model = ShipmentAnnouncement
         fields = [
-            'id', 'title', 'description', 'image', 'image_url',
+            'id', 'title', 'description', 'image_url', 'images',
+            'origin_country', 'shipment_date', 'estimated_arrival', 'product_categories',
             'created_at', 'created_by', 'created_by_name',
-            'is_active', 'is_featured', 'products_count',
-            'related_products', 'related_products_info'
+            'is_active', 'is_featured', 'products_count', 'view_count'
         ]
-        read_only_fields = ['created_at', 'created_by', 'products_count']
+        read_only_fields = [
+            'id', 'created_at', 'created_by', 'created_by_name',
+            'products_count', 'view_count', 'image_url', 'images'
+        ]
 
     def get_image_url(self, obj):
-        return obj.get_image_url()
+        """Get main image URL"""
+        request = self.context.get('request')
+        if obj.image:
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
-    def get_related_products_info(self, obj):
-        """Get basic info about related products"""
-        products = obj.related_products.filter(is_active=True)[:5]  # Limit to 5
-        return [
-            {
-                'id': product.id,
-                'name': product.name,
-                'image_url': product.get_primary_image_url(),
-                'base_price': product.base_price,
-                'stock': product.stock,
-                'stock_status': product.stock_status
-            }
-            for product in products
-        ]
+    def get_images(self, obj):
+        """Return all images in the format frontend expects"""
+        request = self.context.get('request')
+        images = []
 
+
+        # Add main image first if exists
+        if obj.image:
+            image_url = obj.image.url
+            if request:
+                image_url = request.build_absolute_uri(image_url)
+            images.append({'image': image_url})
+
+        # Add additional images
+        additional_images = obj.images.all().order_by('order')
+
+        for img in additional_images:
+            image_url = img.image.url
+            if request:
+                image_url = request.build_absolute_uri(image_url)
+            images.append({'image': image_url})
+
+        print(f"📤 Final images array: {images}")
+        return images
+
+    def to_representation(self, instance):
+        """Add debugging to see what's being returned"""
+        data = super().to_representation(instance)
+        return data
 
 class ProductStockUpdateSerializer(serializers.Serializer):
     """Serializer for stock updates"""

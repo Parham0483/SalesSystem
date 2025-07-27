@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
+import {useCategories} from "../hooks/useCategories";
 import NeoBrutalistModal from "../component/NeoBrutalist/NeoBrutalistModal";
 import CreateOrderPage from '../component/CreateOrderPage';
 import OrderDetailPage from '../component/OrderDetailPage';
@@ -19,6 +20,7 @@ const DashboardPage = () => {
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
     const navigate = useNavigate();
+    const { categories } = useCategories();
 
     useEffect(() => {
         const checkAuth = () => {
@@ -273,7 +275,7 @@ const DashboardPage = () => {
                         />
                     </div>
                     <div className="announcements-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-                        {recentAnnouncements.map(announcement => (
+                        {recentAnnouncements.slice(0, 2).map(announcement => (
                             <NeoBrutalistCard
                                 key={announcement.id}
                                 className="announcement-preview-card"
@@ -291,8 +293,8 @@ const DashboardPage = () => {
                                             fontSize: '0.75rem',
                                             fontWeight: 'bold'
                                         }}>
-                                            ویژه
-                                        </span>
+                                ویژه
+                            </span>
                                     )}
                                 </div>
                                 <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
@@ -314,65 +316,6 @@ const DashboardPage = () => {
                                 )}
                                 <div style={{ fontSize: '0.8rem', color: '#888' }}>
                                     {new Date(announcement.created_at).toLocaleDateString('fa-IR')}
-                                </div>
-                            </NeoBrutalistCard>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Recent Products Section */}
-            {recentProducts.length > 0 && (
-                <div className="recent-products-section" style={{ marginBottom: '2rem' }}>
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>📦 محصولات جدید</h2>
-                        <NeoBrutalistButton
-                            text="مشاهده کاتالوگ"
-                            color="green-400"
-                            textColor="black"
-                            onClick={() => navigate('/product')}
-                            className="view-catalog-btn"
-                        />
-                    </div>
-                    <div className="products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                        {recentProducts.map(product => (
-                            <NeoBrutalistCard
-                                key={product.id}
-                                className="product-preview-card"
-                                onClick={() => navigate('/product')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <div className="product-preview-image" style={{ marginBottom: '1rem' }}>
-                                    <img
-                                        src={product.image_url || 'https://placehold.co/200x150/e2e8f0/a0aec0?text=محصول'}
-                                        alt={product.name}
-                                        style={{
-                                            width: '100%',
-                                            height: '150px',
-                                            objectFit: 'cover',
-                                            borderRadius: '8px'
-                                        }}
-                                    />
-                                </div>
-                                <h4 style={{ fontSize: '1rem', margin: '0 0 0.5rem 0' }}>{product.name}</h4>
-                                <p style={{ fontSize: '0.85rem', color: '#666', margin: '0 0 1rem 0' }}>
-                                    {product.description?.substring(0, 80)}...
-                                </p>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontWeight: 'bold', color: '#059669' }}>
-                                        {formatPrice(product.base_price)}
-                                    </span>
-                                    {product.category_name && (
-                                        <span style={{
-                                            backgroundColor: '#e0e7ff',
-                                            color: '#3730a3',
-                                            padding: '0.25rem 0.5rem',
-                                            borderRadius: '4px',
-                                            fontSize: '0.75rem'
-                                        }}>
-                                            {product.category_name}
-                                        </span>
-                                    )}
                                 </div>
                             </NeoBrutalistCard>
                         ))}

@@ -8,10 +8,10 @@ from django.utils import timezone
 from django.db.models import Q, Count, Sum
 from datetime import timedelta
 from ..serializers.products import (
-    ProductSerializer, ProductCategorySerializer, ProductImageSerializer,
-    ShipmentAnnouncementSerializer, ProductStockUpdateSerializer,
-    ProductSearchSerializer, ProductBulkUpdateSerializer
+    ProductSerializer, ProductCategorySerializer, ProductImageSerializer, ProductStockUpdateSerializer,
+    ProductSearchSerializer, ProductBulkUpdateSerializer, ShipmentAnnouncementSerializer
 )
+
 from ..models import Product, ShipmentAnnouncement, ProductCategory, ProductImage
 
 
@@ -311,7 +311,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['GET'])
     def categories(self, request):
-        """Get all product categories"""
+        """Get all product categories - UPDATED for all users"""
         categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
 
         category_data = []
@@ -319,14 +319,19 @@ class ProductViewSet(viewsets.ModelViewSet):
             category_data.append({
                 'id': category.id,
                 'name': category.name,
+                'name_fa': category.name_fa,  # Persian name for everyone
+                'display_name': category.display_name,  # Computed property
                 'description': category.description,
                 'image_url': category.image.url if category.image else None,
                 'products_count': category.products_count,
                 'parent_id': category.parent_id,
+                'slug': category.slug,
                 'subcategories': [
                     {
                         'id': sub.id,
                         'name': sub.name,
+                        'name_fa': sub.name_fa,  # Persian name for subcategories too
+                        'display_name': sub.display_name,
                         'products_count': sub.products_count
                     } for sub in category.subcategories.filter(is_active=True)
                 ]
@@ -389,13 +394,15 @@ class ProductViewSet(viewsets.ModelViewSet):
         })
 
 
+# Replace your ShipmentAnnouncementViewSet with this CLEAN version (no logs)
+
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
-    """ViewSet for shipment announcements"""
+    """Clean ViewSet for shipment announcements"""
     authentication_classes = [JWTAuthentication]
     serializer_class = ShipmentAnnouncementSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'recent', 'featured']:
             permission_classes = [IsAuthenticated]
         else:
             permission_classes = [IsAdminUser]
@@ -409,21 +416,203 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
                 is_active=True
             ).order_by('-is_featured', '-created_at')
 
-    def perform_create(self, serializer):
-        """Set created_by when creating announcement"""
-        serializer.save(created_by=self.request.user)
-
     def create(self, request, *args, **kwargs):
-        """Admin creates a new announcement"""
+        """Create announcement without using DRF serializer for files"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
             }, status=status.HTTP_403_FORBIDDEN)
 
-        return super().create(request, *args, **kwargs)
+        try:
+            # Extract and validate images
+            images = request.FILES.getlist('images')
+
+            # Validate image files
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            max_size = 5 * 1024 * 1024  # 5MB
+
+            for image in images:
+                if image.content_type not in allowed_types:
+                    return Response({
+                        'error': f'فرمت فایل {image.name} پشتیبانی نمی‌شود. فقط JPEG, PNG, GIF, WebP مجاز هستند.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if image.size > max_size:
+                    return Response({
+                        'error': f'حجم فایل {image.name} بیش از 5MB است.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Convert boolean strings to actual booleans
+            is_active = str(request.data.get('is_active', 'true')).lower() in ['true', '1', 'yes']
+            is_featured = str(request.data.get('is_featured', 'false')).lower() in ['true', '1', 'yes']
+
+            # Clean up date fields
+            shipment_date = request.data.get('shipment_date')
+            if shipment_date == '':
+                shipment_date = None
+
+            estimated_arrival = request.data.get('estimated_arrival')
+            if estimated_arrival == '':
+                estimated_arrival = None
+
+            # Validate required fields
+            title = request.data.get('title', '').strip()
+            description = request.data.get('description', '').strip()
+
+            if not title:
+                return Response({
+                    'error': 'عنوان اطلاعیه الزامی است'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not description:
+                return Response({
+                    'error': 'توضیحات الزامی است'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create announcement directly using Django ORM
+            announcement = ShipmentAnnouncement.objects.create(
+                title=title,
+                description=description,
+                origin_country=request.data.get('origin_country', '').strip(),
+                shipment_date=shipment_date,
+                estimated_arrival=estimated_arrival,
+                product_categories=request.data.get('product_categories', '').strip(),
+                is_active=is_active,
+                is_featured=is_featured,
+                created_by=request.user
+            )
+
+            # Handle images if provided
+            if images:
+                # Set first image as main image
+                announcement.image = images[0]
+                announcement.save()
+
+                # Handle additional images (if more than 1 image uploaded)
+                from ..models import ShipmentAnnouncementImage
+                for i, image_file in enumerate(images[1:], start=1):
+                    ShipmentAnnouncementImage.objects.create(
+                        announcement=announcement,
+                        image=image_file,
+                        order=i,
+                        alt_text=f"Image {i + 1} for {announcement.title}"
+                    )
+
+            # Return success response using the serializer for output only
+            serializer = self.get_serializer(announcement)
+            return Response({
+                'message': 'Announcement created successfully',
+                'announcement': serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'error': f'خطا در ایجاد اطلاعیه: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def update(self, request, *args, **kwargs):
+        """Update announcement without using DRF serializer for files"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            # Extract and validate images if provided
+            images = request.FILES.getlist('images')
+
+            if images:
+                # Validate image files
+                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                max_size = 5 * 1024 * 1024  # 5MB
+
+                for image in images:
+                    if image.content_type not in allowed_types:
+                        return Response({
+                            'error': f'فرمت فایل {image.name} پشتیبانی نمی‌شود. فقط JPEG, PNG, GIF, WebP مجاز هستند.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    if image.size > max_size:
+                        return Response({
+                            'error': f'حجم فایل {image.name} بیش از 5MB است.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update fields directly on the instance
+            if 'title' in request.data:
+                title = request.data.get('title', '').strip()
+                if not title:
+                    return Response({
+                        'error': 'عنوان اطلاعیه الزامی است'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                instance.title = title
+
+            if 'description' in request.data:
+                description = request.data.get('description', '').strip()
+                if not description:
+                    return Response({
+                        'error': 'توضیحات الزامی است'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                instance.description = description
+
+            if 'origin_country' in request.data:
+                instance.origin_country = request.data.get('origin_country', '').strip()
+
+            if 'product_categories' in request.data:
+                instance.product_categories = request.data.get('product_categories', '').strip()
+
+            if 'shipment_date' in request.data:
+                shipment_date = request.data.get('shipment_date')
+                instance.shipment_date = None if shipment_date == '' else shipment_date
+
+            if 'estimated_arrival' in request.data:
+                estimated_arrival = request.data.get('estimated_arrival')
+                instance.estimated_arrival = None if estimated_arrival == '' else estimated_arrival
+
+            if 'is_active' in request.data:
+                instance.is_active = str(request.data.get('is_active', 'true')).lower() in ['true', '1', 'yes']
+
+            if 'is_featured' in request.data:
+                instance.is_featured = str(request.data.get('is_featured', 'false')).lower() in ['true', '1', 'yes']
+
+            # Save the updated instance
+            instance.save()
+
+            # Handle image updates if new images provided
+            if images:
+                # Clear existing additional images
+                instance.images.all().delete()
+
+                # Set first image as main image
+                instance.image = images[0]
+                instance.save()
+
+                # Add additional images
+                from ..models import ShipmentAnnouncementImage
+                for i, image_file in enumerate(images[1:], start=1):
+                    ShipmentAnnouncementImage.objects.create(
+                        announcement=instance,
+                        image=image_file,
+                        order=i,
+                        alt_text=f"Image {i + 1} for {instance.title}"
+                    )
+
+            # Return success response using the serializer for output only
+            serializer = self.get_serializer(instance)
+            return Response({
+                'message': 'Announcement updated successfully',
+                'announcement': serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': f'خطا در به‌روزرسانی اطلاعیه: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def list(self, request, *args, **kwargs):
-        """List announcements with related products"""
+        """List announcements"""
         announcements = self.get_queryset()
 
         # Limit to recent announcements for customers
@@ -433,44 +622,15 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(announcements, many=True)
         return Response(serializer.data)
 
-    def get_image_url(self, obj):
-        """Get the primary image URL"""
-        request = self.context.get('request')
-
-        if obj.image:
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            else:
-                # Fallback if no request context
-                return obj.image.url
-
-        # Check for additional images
-        primary_image = obj.additional_images.filter(is_primary=True).first() if hasattr(obj,
-                                                                                         'additional_images') else None
-        if primary_image and primary_image.image:
-            if request:
-                return request.build_absolute_uri(primary_image.image.url)
-            else:
-                return primary_image.image.url
-
-        return None
-
     @action(detail=False, methods=['GET'])
     def recent(self, request):
         """Get recent announcements (last 7 days)"""
         week_ago = timezone.now() - timedelta(days=7)
-        announcements = self.get_queryset().filter(created_at__gte=week_ago)
+        limit = int(request.query_params.get('limit', 20))
+        announcements = self.get_queryset().filter(created_at__gte=week_ago)[:limit]
 
-        return Response([
-            {
-                'id': ann.id,
-                'title': ann.title,
-                'description': ann.description[:200] + '...' if len(ann.description) > 200 else ann.description,
-                'image': ann.get_image_url(),
-                'created_at': ann.created_at,
-                'products_count': ann.products_count
-            } for ann in announcements
-        ])
+        serializer = self.get_serializer(announcements, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['GET'])
     def featured(self, request):
@@ -479,6 +639,52 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(announcements, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['POST'], url_path='bulk-action')
+    def bulk_action(self, request):
+        """Perform bulk actions on announcements"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        action = request.data.get('action')
+        announcement_ids = request.data.get('announcement_ids', [])
+
+        if not action or not announcement_ids:
+            return Response({
+                'error': 'Action and announcement_ids are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        announcements = ShipmentAnnouncement.objects.filter(id__in=announcement_ids)
+        if not announcements.exists():
+            return Response({
+                'error': 'No announcements found with provided IDs'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        updated_count = 0
+        try:
+            if action == 'activate':
+                updated_count = announcements.update(is_active=True)
+            elif action == 'deactivate':
+                updated_count = announcements.update(is_active=False)
+            elif action == 'delete':
+                updated_count = announcements.count()
+                announcements.delete()
+            else:
+                return Response({
+                    'error': f'Unknown action: {action}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            return Response({
+                'message': f'Bulk {action} completed successfully',
+                'updated_count': updated_count
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Error performing bulk action: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for product categories"""
@@ -486,14 +692,48 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ProductCategorySerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'products']:
+        # READ operations available to all authenticated users
+        if self.action in ['list', 'retrieve', 'products', 'with_products']:
             permission_classes = [IsAuthenticated]
         else:
+            # CREATE/UPDATE/DELETE only for admins
             permission_classes = [IsAdminUser]
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         return ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
+
+    def list(self, request):
+        """List all categories with Persian names for everyone"""
+        categories = self.get_queryset()
+
+        # Enhanced response with Persian names
+        category_data = []
+        for category in categories:
+            category_data.append({
+                'id': category.id,
+                'name': category.name,
+                'name_fa': category.name_fa,
+                'display_name': category.display_name,
+                'description': category.description,
+                'slug': category.slug,
+                'image_url': category.image.url if category.image else None,
+                'products_count': category.products_count,
+                'order': category.order,
+                'parent_id': category.parent_id,
+                'created_at': category.created_at,
+                'subcategories': [
+                    {
+                        'id': sub.id,
+                        'name': sub.name,
+                        'name_fa': sub.name_fa,
+                        'display_name': sub.display_name,
+                        'products_count': sub.products_count
+                    } for sub in category.subcategories.filter(is_active=True)
+                ]
+            })
+
+        return Response(category_data)
 
     @action(detail=True, methods=['GET'])
     def products(self, request, pk=None):
@@ -509,8 +749,11 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
             'category': {
                 'id': category.id,
                 'name': category.name,
+                'name_fa': category.name_fa,  # Persian name
+                'display_name': category.display_name,
                 'description': category.description,
-                'image_url': category.image.url if category.image else None
+                'image_url': category.image.url if category.image else None,
+                'slug': category.slug
             },
             'products_count': products.count(),
             'products': serializer.data
@@ -523,8 +766,19 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
             active_products_count=Count('products', filter=Q(products__is_active=True))
         ).filter(active_products_count__gt=0)
 
-        serializer = self.get_serializer(categories, many=True)
-        return Response(serializer.data)
+        category_data = []
+        for category in categories:
+            category_data.append({
+                'id': category.id,
+                'name': category.name,
+                'name_fa': category.name_fa,
+                'display_name': category.display_name,
+                'description': category.description,
+                'products_count': category.active_products_count,
+                'image_url': category.image.url if category.image else None
+            })
+
+        return Response(category_data)
 
 
 class ProductImageViewSet(viewsets.ModelViewSet):

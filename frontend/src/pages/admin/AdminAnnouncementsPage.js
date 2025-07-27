@@ -68,12 +68,10 @@ const AdminAnnouncementsPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/announcements/');
-            console.log('📢 Admin announcements fetched:', response.data);
             setAnnouncements(response.data);
             calculateStats(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching announcements:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -84,6 +82,22 @@ const AdminAnnouncementsPage = () => {
             setLoading(false);
         }
     }, []);
+
+    const debugImageData = (announcement) => {
+        console.log('🖼️ Debugging images for announcement:', announcement.id);
+        console.log('📋 Full announcement data:', announcement);
+        console.log('🔍 Images array:', announcement.images);
+        console.log('🔍 Image URL field:', announcement.image_url);
+
+        if (announcement.images && announcement.images.length > 0) {
+            announcement.images.forEach((img, index) => {
+                console.log(`📸 Image ${index + 1}:`, img);
+                console.log(`🔗 Image URL ${index + 1}:`, img.image);
+            });
+        } else {
+            console.log('❌ No images found in announcement.images');
+        }
+    };
 
     useEffect(() => {
         fetchAnnouncements();
@@ -176,7 +190,13 @@ const AdminAnnouncementsPage = () => {
     const handleOpenModal = (announcement = null) => {
         setEditingAnnouncement(announcement);
         if (announcement) {
-            setFormData({ ...announcement });
+            // Format dates for input fields
+            const formattedAnnouncement = {
+                ...announcement,
+                shipment_date: announcement.shipment_date ? announcement.shipment_date.split('T')[0] : '',
+                estimated_arrival: announcement.estimated_arrival ? announcement.estimated_arrival.split('T')[0] : ''
+            };
+            setFormData(formattedAnnouncement);
             setImagePreviews(announcement.images ? announcement.images.map(img => img.image) : []);
         } else {
             setFormData({
@@ -213,25 +233,70 @@ const AdminAnnouncementsPage = () => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
+
         if (files.length) {
-            setImageFiles(files);
-            const previews = files.map(file => URL.createObjectURL(file));
+            // Validate file types and sizes
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+
+            const validFiles = [];
+            const invalidFiles = [];
+
+            files.forEach(file => {
+                if (!allowedTypes.includes(file.type)) {
+                    invalidFiles.push(`${file.name}: نوع فایل پشتیبانی نمی‌شود`);
+                } else if (file.size > maxSize) {
+                    invalidFiles.push(`${file.name}: حجم فایل بیش از 5MB است`);
+                } else {
+                    validFiles.push(file);
+                }
+            });
+
+            if (invalidFiles.length > 0) {
+                setError(`فایل‌های زیر معتبر نیستند:\n${invalidFiles.join('\n')}`);
+                e.target.value = ''; // Clear the input
+                return;
+            }
+
+            setImageFiles(validFiles);
+            const previews = validFiles.map(file => URL.createObjectURL(file));
             setImagePreviews(previews);
+            setError(''); // Clear any previous errors
         }
     };
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
+
+        if (!formData.title?.trim()) {
+            setError('عنوان اطلاعیه الزامی است');
+            return;
+        }
+
+        if (!formData.description?.trim()) {
+            setError('توضیحات الزامی است');
+            return;
+        }
+
         try {
-            const submissionForm = new FormData()
+            const submissionForm = new FormData();
+
+            // Add all form fields except images and read-only fields
+            const excludeFields = ['images', 'id', 'created_at', 'updated_at', 'created_by', 'created_by_name', 'products_count', 'view_count', 'image_url'];
 
             Object.keys(formData).forEach(key => {
-                if (!['images', 'id'].includes(key) && formData[key] !== null && formData[key] !== undefined) {
-                    submissionForm.append(key, formData[key]);
+                if (!excludeFields.includes(key) && formData[key] !== null && formData[key] !== undefined) {
+                    // Handle boolean fields
+                    if (key === 'is_active' || key === 'is_featured') {
+                        submissionForm.append(key, formData[key] ? 'true' : 'false');
+                    } else {
+                        submissionForm.append(key, formData[key]);
+                    }
                 }
             });
 
-            imageFiles.forEach(file => {
+            // Add images
+            imageFiles.forEach((file) => {
                 submissionForm.append('images', file);
             });
 
@@ -240,27 +305,16 @@ const AdminAnnouncementsPage = () => {
                 : '/admin/announcements/';
             const method = editingAnnouncement ? 'patch' : 'post';
 
-            console.log('📤 Submitting announcement:', {
-                url,
-                method,
-                formDataKeys: Array.from(submissionForm.keys()),
-                isEditing: !!editingAnnouncement
-            });
-
             const response = await API[method](url, submissionForm, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
             });
-            console.log('✅ Announcement saved successfully:', response.data);
 
             fetchAnnouncements();
-
             handleCloseModal();
 
         } catch (err) {
-            console.error('❌ Error saving announcement:', err);
-
             let errorMessage = 'خطا در ذخیره اطلاعیه';
 
             if (err.response?.data) {
@@ -299,7 +353,6 @@ const AdminAnnouncementsPage = () => {
                 await API.delete(`/admin/announcements/${id}/`);
                 fetchAnnouncements();
             } catch (err) {
-                console.error('Error deleting announcement', err);
                 setError('خطا در حذف اطلاعیه');
             }
         }
@@ -321,15 +374,15 @@ const AdminAnnouncementsPage = () => {
                 is_active: !currentStatus
             });
 
-            // Refresh to ensure consistency (this is normal and expected)
+            // Refresh to ensure consistency
             fetchAnnouncements();
         } catch (err) {
-            console.error('Error toggling announcement status', err);
             setError('خطا در تغییر وضعیت اطلاعیه');
             // Revert on error
             fetchAnnouncements();
         }
     };
+
     const handleToggleFeatured = async (announcementId, currentFeatured) => {
         try {
             // Update local state immediately
@@ -346,10 +399,9 @@ const AdminAnnouncementsPage = () => {
                 is_featured: !currentFeatured
             });
 
-            // Refresh to ensure consistency (this is normal)
+            // Refresh to ensure consistency
             fetchAnnouncements();
         } catch (err) {
-            console.error('Error toggling featured status', err);
             setError('خطا در تغییر وضعیت ویژه اطلاعیه');
             fetchAnnouncements();
         }
@@ -383,14 +435,10 @@ const AdminAnnouncementsPage = () => {
         }
 
         try {
-            console.log('🔄 Performing bulk action:', { action, ids: selectedAnnouncements });
-
             const response = await API.post('/admin/announcements/bulk-action/', {
                 action,
                 announcement_ids: selectedAnnouncements
             });
-
-            console.log('✅ Bulk action completed:', response.data);
 
             // Refresh the announcements list
             fetchAnnouncements();
@@ -403,8 +451,6 @@ const AdminAnnouncementsPage = () => {
             setError('');
 
         } catch (err) {
-            console.error('❌ Error performing bulk action:', err);
-
             let errorMessage = 'خطا در انجام عملیات گروهی';
             if (err.response?.data?.error) {
                 errorMessage = err.response.data.error;
@@ -784,7 +830,6 @@ const AdminAnnouncementsPage = () => {
                             )}
                         </div>
 
-                        {/*  TOGGLE ACTIONS */}
                         <div className="announcement-actions">
                             <div className="toggle-actions">
                                 <NeoBrutalistToggle
@@ -792,14 +837,14 @@ const AdminAnnouncementsPage = () => {
                                     onChange={(e) => handleToggleStatus(announcement.id, announcement.is_active)}
                                     label="فعال"
                                     color="green"
-                                    size = 'medium'
+                                    size="medium"
                                 />
                                 <NeoBrutalistToggle
                                     checked={announcement.is_featured}
                                     onChange={(e) => handleToggleFeatured(announcement.id, announcement.is_featured)}
                                     label="ویژه"
                                     color="yellow"
-                                    size = 'medium'
+                                    size="medium"
                                 />
                             </div>
                             <div className="action-buttons">
@@ -918,27 +963,36 @@ const AdminAnnouncementsPage = () => {
                     </div>
 
                     <div className="form-group">
-                        <label>تصاویر محموله (می‌توانید چند تصویر انتخاب کنید)</label>
+                        <label>تصاویر محموله</label>
                         <input
                             type="file"
                             onChange={handleFileChange}
                             multiple
-                            accept="image/*"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                             className="file-input"
                         />
-                        <div className="image-previews-container">
-                            {imagePreviews.map((src, i) => (
-                                <img key={i} src={src} alt={`preview ${i}`} className="image-preview" />
-                            ))}
-                        </div>
-                        {editingAnnouncement && (
+                        <p className="file-help-text">
+                            فرمت‌های مجاز: JPEG, PNG, GIF, WebP - حداکثر 5MB برای هر فایل
+                        </p>
+
+                        {imagePreviews.length > 0 && (
+                            <div className="image-previews-container">
+                                {imagePreviews.map((src, i) => (
+                                    <div key={i} className="image-preview-wrapper">
+                                        <img src={src} alt={`preview ${i}`} className="image-preview" />
+                                        <span className="image-preview-label">تصویر {i + 1}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {editingAnnouncement && imagePreviews.length === 0 && (
                             <p className="form-note">
-                                توجه: آپلود تصاویر جدید، تصاویر قبلی را پاک کرده و این موارد را جایگزین می‌کند.
+                                برای تغییر تصاویر، فایل‌های جدید انتخاب کنید. عدم انتخاب فایل، تصاویر فعلی را حفظ می‌کند.
                             </p>
                         )}
                     </div>
 
-                    {/* FIXED FORM TOGGLES */}
                     <div className="form-row">
                         <div className="form-group">
                             <NeoBrutalistToggle

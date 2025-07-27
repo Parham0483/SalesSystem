@@ -1,7 +1,7 @@
-// frontend/src/pages/NewArrivalsPage.js - COMPLETE UPDATED Customer View
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../component/api';
+import { useCategories } from '../hooks/useCategories';
 import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
@@ -10,6 +10,7 @@ import '../styles/component/NewArrivalsPage.css';
 const NewArrivalsPage = () => {
     const [shipmentAnnouncements, setShipmentAnnouncements] = useState([]);
     const [featuredProducts, setFeaturedProducts] = useState([]);
+    const { categories } = useCategories();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
@@ -23,12 +24,9 @@ const NewArrivalsPage = () => {
 
     const fetchShipmentAnnouncements = async () => {
         try {
-            console.log('🚢 Fetching shipment announcements...');
             const response = await API.get('/shipment-announcements/');
-            console.log('✅ Shipment announcements fetched:', response.data);
             setShipmentAnnouncements(response.data);
         } catch (err) {
-            console.error('❌ Error fetching shipment announcements:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -40,12 +38,9 @@ const NewArrivalsPage = () => {
 
     const fetchFeaturedProducts = async () => {
         try {
-            // Get recent products that might be featured
             const response = await API.get('/products/new-arrivals/');
-            console.log('🆕 Featured products fetched:', response.data);
-            setFeaturedProducts(response.data.slice(0, 6)); // Limit to 6 featured items
+            setFeaturedProducts(response.data.slice(0, 6));
         } catch (err) {
-            console.error('❌ Error fetching featured products:', err);
             // Don't set error for featured products - they're optional
         } finally {
             setLoading(false);
@@ -73,7 +68,6 @@ const NewArrivalsPage = () => {
     };
 
     const handleOrderInquiry = (productName, announcementTitle) => {
-        // Navigate to create order with inquiry about this product/announcement
         navigate('/orders/create', {
             state: {
                 inquiryMode: true,
@@ -207,55 +201,60 @@ const NewArrivalsPage = () => {
                                     </div>
                                 </div>
 
-                                {/* Enhanced Multiple Images Support */}
-                                {announcement.images && announcement.images.length > 0 && (
-                                    <div className="shipment-images">
-                                        {announcement.images.length === 1 ? (
-                                            <div className="single-image">
-                                                <img
-                                                    src={announcement.images[0].image}
-                                                    alt={announcement.title}
-                                                    className="shipment-image"
-                                                    onError={(e) => {
-                                                        e.target.style.display = 'none';
-                                                    }}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="multiple-images">
-                                                <div className="main-image">
+                                {/* Enhanced Image Display */}
+                                <div className="shipment-images-container">
+                                    {announcement.images && announcement.images.length > 0 ? (
+                                        <div className="shipment-images">
+                                            {announcement.images.length === 1 ? (
+                                                <div className="single-image">
                                                     <img
                                                         src={announcement.images[0].image}
                                                         alt={announcement.title}
-                                                        className="shipment-image"
-                                                        onError={(e) => {
-                                                            e.target.style.display = 'none';
-                                                        }}
+                                                        className="shipment-image main-image"
                                                     />
                                                 </div>
-                                                <div className="thumbnail-grid">
-                                                    {announcement.images.slice(1, 4).map((img, idx) => (
-                                                        <div key={idx} className="thumbnail">
-                                                            <img
-                                                                src={img.image}
-                                                                alt={`${announcement.title} ${idx + 2}`}
-                                                                className="thumbnail-image"
-                                                                onError={(e) => {
-                                                                    e.target.style.display = 'none';
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    ))}
-                                                    {announcement.images.length > 4 && (
-                                                        <div className="more-images">
-                                                            <span>+{announcement.images.length - 4}</span>
+                                            ) : (
+                                                <div className="multiple-images">
+                                                    <div className="main-image-wrapper">
+                                                        <img
+                                                            src={announcement.images[0].image}
+                                                            alt={announcement.title}
+                                                            className="shipment-image main-image"
+                                                        />
+                                                        {announcement.images.length > 1 && (
+                                                            <div className="image-count-badge">
+                                                                {announcement.images.length} تصویر
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {announcement.images.length > 1 && (
+                                                        <div className="thumbnail-preview">
+                                                            {announcement.images.slice(1, 4).map((img, idx) => (
+                                                                <div key={idx} className="thumbnail-item">
+                                                                    <img
+                                                                        src={img.image}
+                                                                        alt={`${announcement.title} ${idx + 2}`}
+                                                                        className="thumbnail-image"
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                            {announcement.images.length > 4 && (
+                                                                <div className="more-images-indicator">
+                                                                    +{announcement.images.length - 4}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="no-image-placeholder">
+                                            <div className="placeholder-icon">📷</div>
+                                            <span>تصویری موجود نیست</span>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="shipment-content">
                                     <p className="shipment-description">
@@ -265,7 +264,6 @@ const NewArrivalsPage = () => {
                                         }
                                     </p>
 
-                                    {/* Enhanced Shipment Details */}
                                     <div className="shipment-details">
                                         {announcement.origin_country && (
                                             <div className="detail-item">
@@ -305,7 +303,7 @@ const NewArrivalsPage = () => {
                                         )}
                                     </div>
 
-                                    {/* Related Products Preview - NO STOCK NUMBERS */}
+                                    {/* Related Products Preview */}
                                     {announcement.related_products_info && announcement.related_products_info.length > 0 && (
                                         <div className="related-products-preview">
                                             <h4 className="related-title">محصولات این محموله:</h4>
@@ -358,7 +356,6 @@ const NewArrivalsPage = () => {
                     </div>
                 </div>
             )}
-
 
             {/* Empty State */}
             {shipmentAnnouncements.length === 0 && featuredProducts.length === 0 && !loading && (
@@ -432,7 +429,7 @@ const NewArrivalsPage = () => {
                 </NeoBrutalistCard>
             </div>
 
-            {/* Enhanced Shipment Detail Modal */}
+            {/* Enhanced Modal with Image Gallery */}
             <NeoBrutalistModal
                 isOpen={!!selectedAnnouncement}
                 onClose={() => setSelectedAnnouncement(null)}
@@ -449,9 +446,6 @@ const NewArrivalsPage = () => {
                                         src={selectedAnnouncement.images[currentImageIndex].image}
                                         alt={`${selectedAnnouncement.title} - تصویر ${currentImageIndex + 1}`}
                                         className="main-modal-image"
-                                        onError={(e) => {
-                                            e.target.style.display = 'none';
-                                        }}
                                     />
 
                                     {selectedAnnouncement.images.length > 1 && (
@@ -558,7 +552,7 @@ const NewArrivalsPage = () => {
                                 </div>
                             </div>
 
-                            {/* Related Products Full List - NO STOCK NUMBERS */}
+                            {/* Related Products Full List */}
                             {selectedAnnouncement.related_products_info && selectedAnnouncement.related_products_info.length > 0 && (
                                 <div className="modal-related-products">
                                     <h4>محصولات این محموله:</h4>
@@ -589,8 +583,6 @@ const NewArrivalsPage = () => {
                                     </div>
                                 </div>
                             )}
-
-
                         </div>
                     </div>
                 )}

@@ -72,7 +72,6 @@ const AdminProductsPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/products/');
-            console.log('📦 Admin products fetched:', response.data);
             setProducts(response.data);
             calculateStats(response.data);
             //extractCategories(response.data);
@@ -96,22 +95,49 @@ const AdminProductsPage = () => {
     }, [fetchProducts]);
 
     const calculateStats = (productsList) => {
+
+        const totalValue = productsList.reduce((sum, p) => {
+            // Convert to numbers and handle null/undefined values
+            const price = parseFloat(p.base_price) || 0;
+            const stock = parseInt(p.stock) || 0;
+            const productValue = price * stock;
+
+            // Debug individual product values
+            if (productValue > 0) {
+            }
+            return sum + productValue;
+        }, 0);
+
+
         const stats = {
             total: productsList.length,
             active: productsList.filter(p => p.is_active).length,
             inactive: productsList.filter(p => !p.is_active).length,
-            lowStock: productsList.filter(p => p.stock > 0 && p.stock <= 10).length,
+            lowStock: productsList.filter(p => p.stock > 0 && p.stock <= 50).length,
             outOfStock: productsList.filter(p => p.stock === 0).length,
             featured: productsList.filter(p => p.is_featured).length,
-            totalValue: productsList.reduce((sum, p) => sum + (p.base_price * p.stock), 0)
+            totalValue: totalValue
         };
+
         setProductStats(stats);
+    };
+
+
+    const formatTotalValue = (value) => {
+        if (value >= 1000000000) {
+            return `${(value / 1000000000).toFixed(1)}B`;
+        } else if (value >= 1000000) {
+            return `${(value / 1000000).toFixed(1)}M`;
+        } else if (value >= 1000) {
+            return `${(value / 1000).toFixed(1)}K`;
+        } else {
+            return value.toLocaleString('fa-IR');
+        }
     };
 
     const fetchCategories = async () => {
         try {
             const response = await API.get('/admin/products/categories/');
-            console.log('📂 Categories fetched:', response.data);
             setCategories(response.data);
         } catch (err) {
             console.error('❌ Error fetching categories:', err);
@@ -124,11 +150,6 @@ const AdminProductsPage = () => {
             ]);
         }
     };
-
-    //const extractCategories = (productsList) => {
-    //    const uniqueCategories = [...new Set(productsList.map(p => p.category).filter(Boolean))];
-    //    setCategories(uniqueCategories);
-    //};
 
     useEffect(() => {
         let filtered = [...products];
@@ -151,7 +172,7 @@ const AdminProductsPage = () => {
         if (stockFilter !== 'all') {
             filtered = filtered.filter(p => {
                 if (stockFilter === 'out_of_stock') return p.stock === 0;
-                if (stockFilter === 'low_stock') return p.stock > 0 && p.stock <= 10;
+                if (stockFilter === 'low_stock') return p.stock > 0 && p.stock <= 50;
                 if (stockFilter === 'in_stock') return p.stock > 10;
                 return true;
             });
@@ -240,8 +261,25 @@ const AdminProductsPage = () => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) {
+            // Check file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const maxSize = 5 * 1024 * 1024; // 5MB
+
+            if (!allowedTypes.includes(file.type)) {
+                setError('فرمت فایل پشتیبانی نمی‌شود. لطفا فایل JPEG، PNG، GIF یا WebP انتخاب کنید.');
+                e.target.value = ''; // Clear the input
+                return;
+            }
+
+            if (file.size > maxSize) {
+                setError('حجم فایل نباید بیشتر از 5 مگابایت باشد.');
+                e.target.value = ''; // Clear the input
+                return;
+            }
+
             setImageFile(file);
             setImagePreview(URL.createObjectURL(file));
+            setError(''); // Clear any previous errors
         }
     };
 
@@ -249,12 +287,25 @@ const AdminProductsPage = () => {
         e.preventDefault();
         const formData = new FormData();
 
+        // List of fields to exclude when sending to backend
+        const excludeFields = ['image_url', 'id', 'created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'days_since_created', 'category_name', 'category_details'];
+
+        // Add only the fields that should be sent to backend
         Object.keys(productFormData).forEach(key => {
-            if (!['image_url', 'id'].includes(key) && productFormData[key] !== null)  {
-                formData.append(key, productFormData[key]);
+            if (!excludeFields.includes(key) && productFormData[key] !== null && productFormData[key] !== undefined) {
+                // Handle category field specially - ensure it's a number or null
+                if (key === 'category') {
+                    const categoryValue = productFormData[key];
+                    if (categoryValue !== null && categoryValue !== '') {
+                        formData.append(key, parseInt(categoryValue, 10));
+                    }
+                } else {
+                    formData.append(key, productFormData[key]);
+                }
             }
         });
 
+        // Only append image if a new file was selected
         if (imageFile) {
             formData.append('image', imageFile);
         }
@@ -263,9 +314,12 @@ const AdminProductsPage = () => {
         const method = editingProduct ? 'patch' : 'post';
 
         try {
+            console.log('📤 Sending form data:', Object.fromEntries(formData.entries()));
+
             const response = await API[method](url, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
+
             console.log('✅ Product saved successfully:', response.data);
             fetchProducts();
             handleCloseModal();
@@ -368,7 +422,7 @@ const AdminProductsPage = () => {
 
     const getStockStatus = (stock) => {
         if (stock === 0) return { status: 'out', label: 'ناموجود', color: 'red' };
-        if (stock <= 10) return { status: 'low', label: 'موجودی کم', color: 'yellow' };
+        if (stock <= 50) return { status: 'low', label: 'موجودی کم', color: 'yellow' };
         return { status: 'ok', label: 'موجود', color: 'green' };
     };
 
@@ -489,7 +543,7 @@ const AdminProductsPage = () => {
                         <div className="stat-content">
                             <DollarSign className="stat-icon" />
                             <div className="stat-info">
-                                <span className="stat-number">{(productStats.totalValue / 1000000).toFixed(1)}M</span>
+                                <span className="stat-number">{formatTotalValue(productStats.totalValue)}</span>
                                 <span className="stat-label">ارزش کل موجودی</span>
                             </div>
                         </div>

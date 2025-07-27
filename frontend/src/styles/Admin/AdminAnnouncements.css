@@ -440,6 +440,20 @@
     transition: all 0.2s ease;
 }
 
+.preview-thumb {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.images-grid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .preview-thumb:hover {
     transform: scale(1.1);
 }

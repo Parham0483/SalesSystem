@@ -27,12 +27,10 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
 
 function App() {
     useEffect(() => {
-        console.log('🚀 App initialization...');
 
         // Get CSRF token
         axios.get(`${API_URL}csrf/`, { withCredentials: true })
             .then(() => {
-                console.log('✅ CSRF token obtained');
             })
             .catch(err => console.error('❌ CSRF fetch failed:', err));
 
@@ -42,22 +40,14 @@ function App() {
             const refresh_token = localStorage.getItem('refresh_token');
             const userData = localStorage.getItem('userData');
 
-            console.log('🔍 App - Auth initialization:', {
-                hasAccessToken: !!access_token,
-                hasRefreshToken: !!refresh_token,
-                hasUserData: !!userData,
-                accessToken: access_token ? `${access_token.substring(0, 20)}...` : null
-            });
 
             if (access_token && refresh_token && userData) {
                 // Set the authorization header for all future requests
                 axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-                console.log('✅ Authorization header set for existing session');
 
                 // Verify token is still valid
                 axios.post(`${API_URL}auth/token/verify/`, { token: access_token })
                     .then(() => {
-                        console.log('✅ Existing token is valid');
                     })
                     .catch((error) => {
                         console.log('❌ Existing token is invalid:', error.response?.data);

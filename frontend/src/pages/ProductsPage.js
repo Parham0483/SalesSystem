@@ -34,7 +34,6 @@ const ProductsPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/products/');
-            console.log('📦 Products fetched:', response.data);
             setProducts(response.data);
             setError('');
         } catch (err) {
@@ -53,7 +52,6 @@ const ProductsPage = () => {
     const fetchCategories = async () => {
         try {
             const response = await API.get('/categories/');
-            console.log('📂 Categories fetched:', response.data);
             setCategories(response.data);
         } catch (err) {
             console.error('❌ Error fetching categories:', err);
