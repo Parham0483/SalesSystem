@@ -76,8 +76,26 @@ class Customer(AbstractBaseUser, PermissionsMixin):
 
     def save(self, *args, **kwargs):
         if self.is_dealer and not self.dealer_code:
-            self.dealer_code = f"DLR{self.id or ''}{timezone.now().strftime('%Y%m')}"
-        super().save(*args, **kwargs)
+            # First save to get the ID
+            super().save(*args, **kwargs)
+
+            # Now generate dealer_code with the actual ID
+            import random
+            timestamp = timezone.now().strftime('%Y%m%d')
+            random_suffix = random.randint(100, 999)
+
+            # Create unique dealer code: DLR + ID + timestamp + random
+            self.dealer_code = f"DLR{self.id:04d}{timestamp}{random_suffix}"
+
+            # Check for uniqueness (just in case)
+            while Customer.objects.filter(dealer_code=self.dealer_code).exists():
+                random_suffix = random.randint(100, 999)
+                self.dealer_code = f"DLR{self.id:04d}{timestamp}{random_suffix}"
+
+            # Save again with the dealer_code
+            super().save(update_fields=['dealer_code'])
+        else:
+            super().save(*args, **kwargs)
 
     @property
     def assigned_orders_count(self):
@@ -730,6 +748,15 @@ class EmailNotification(models.Model):
         ('order_rejected', 'Order Rejected'),
         ('order_completed', 'Order Completed'),
         ('dealer_assigned', 'Dealer Assigned'),
+
+        #Dealer assignment types
+        ('dealer_assigned', 'Dealer Assigned'),
+        ('dealer_removed', 'Dealer Removed'),
+
+        # Announcementtypes
+    ('new_arrival_customer', 'New Arrival - Customer'),
+    ('new_arrival_dealer', 'New Arrival - Dealer'),
+    ('announcement_updated', 'Announcement Updated'),
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications')
@@ -740,8 +767,29 @@ class EmailNotification(models.Model):
     is_successful = models.BooleanField(default=False)
     error_message = models.TextField(blank=True, null=True)
 
+    announcement = models.ForeignKey(
+        'ShipmentAnnouncement',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        help_text="Related announcement for announcement emails"
+    )
+
+    dealer = models.ForeignKey(
+        'Customer',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='received_notifications',
+        help_text="Dealer who received the notification"
+    )
+
     def __str__(self):
-        return f"{self.get_email_type_display()} - {self.recipient_email} - Order #{self.order.id}"
+        if self.order:
+            return f"{self.get_email_type_display()} - {self.recipient_email} - Order #{self.order.id}"
+        elif self.announcement:
+            return f"{self.get_email_type_display()} - {self.recipient_email} - Announcement #{self.announcement.id}"
+        else:
+            return f"{self.get_email_type_display()} - {self.recipient_email}"
 
     class Meta:
         db_table = 'email_notifications'

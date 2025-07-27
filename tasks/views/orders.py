@@ -239,7 +239,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='assign-dealer')
     def assign_dealer(self, request, *args, **kwargs):
-        """ENHANCED: Admin assigns a dealer with custom commission rate support"""
+        """ENHANCED: Admin assigns a dealer with email notifications"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -274,7 +274,18 @@ class OrderViewSet(viewsets.ModelViewSet):
                         order.dealer_notes = dealer_notes
                         order.save()
 
+                    # NEW: Send email notification to dealer
+                    email_sent = NotificationService.notify_dealer_assignment(
+                        order=order,
+                        dealer=dealer,
+                        custom_commission_rate=custom_commission_rate
+                    )
+
                     print(f"✅ Dealer {dealer.name} assigned to Order #{order.id} with {effective_rate}% commission")
+                    if email_sent:
+                        print(f"📧 Assignment notification email sent to {dealer.email}")
+                    else:
+                        print(f"❌ Failed to send assignment notification to {dealer.email}")
 
                     return Response({
                         'message': f'Dealer {dealer.name} assigned successfully with {effective_rate}% commission',
@@ -285,7 +296,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                             'commission_rate': float(effective_rate),
                             'dealer_code': dealer.dealer_code,
                             'is_custom_rate': custom_commission_rate is not None
-                        }
+                        },
+                        'email_notification_sent': email_sent
                     }, status=status.HTTP_200_OK)
                 else:
                     return Response({
@@ -308,25 +320,52 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='remove-dealer')
     def remove_dealer(self, request, *args, **kwargs):
-        """Admin removes dealer from an order"""
+        """ENHANCED: Admin removes dealer with email notifications"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
             }, status=status.HTTP_403_FORBIDDEN)
 
         order = self.get_object()
+        removal_reason = request.data.get('reason', '')
+
+        # Store dealer info before removal for email notification
+        old_dealer = order.assigned_dealer
+
         success = order.remove_dealer(request.user)
 
-        if success:
+        if success and old_dealer:
+            # NEW: Send email notification to removed dealer
+            email_sent = NotificationService.notify_dealer_removal(
+                order=order,
+                dealer=old_dealer,
+                removed_by=request.user,
+                reason=removal_reason
+            )
+
+            print(f"✅ Dealer {old_dealer.name} removed from Order #{order.id}")
+            if email_sent:
+                print(f"📧 Removal notification email sent to {old_dealer.email}")
+            else:
+                print(f"❌ Failed to send removal notification to {old_dealer.email}")
+
             return Response({
-                'message': 'Dealer removed successfully',
-                'order': OrderDetailSerializer(order).data
+                'message': f'Dealer {old_dealer.name} removed successfully',
+                'order': OrderDetailSerializer(order).data,
+                'removed_dealer': {
+                    'name': old_dealer.name,
+                    'email': old_dealer.email,
+                    'dealer_code': old_dealer.dealer_code
+                },
+                'email_notification_sent': email_sent
             }, status=status.HTTP_200_OK)
         else:
             return Response({
                 'message': 'No dealer was assigned to this order',
-                'order': OrderDetailSerializer(order).data
+                'order': OrderDetailSerializer(order).data,
+                'email_notification_sent': False
             }, status=status.HTTP_200_OK)
+
 
     @action(detail=True, methods=['POST'], url_path='update-dealer-notes')
     def update_dealer_notes(self, request, *args, **kwargs):

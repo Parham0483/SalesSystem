@@ -214,7 +214,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
                 image_url = request.build_absolute_uri(image_url)
             images.append({'image': image_url})
 
-        print(f"📤 Final images array: {images}")
+
         return images
 
     def to_representation(self, instance):

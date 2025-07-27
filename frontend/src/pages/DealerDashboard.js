@@ -46,14 +46,11 @@ const DealerDashboard = () => {
         setError('');
 
         try {
-            console.log('📤 Fetching assigned orders...');
             const response = await API.get('/orders/my-assigned-orders/');
-            console.log('✅ Assigned orders response:', response.data);
 
             setOrders(response.data.orders || []);
 
             if (response.data.summary) {
-                console.log('📊 Order summary:', response.data.summary);
             }
 
         } catch (err) {
@@ -80,9 +77,7 @@ const DealerDashboard = () => {
 
     const fetchDealerStats = async () => {
         try {
-            console.log('📤 Fetching dealer stats...');
             const response = await API.get('/orders/dealer-dashboard-stats/');
-            console.log('✅ Dealer stats:', response.data);
             setDealerStats(response.data);
         } catch (err) {
             console.error('❌ Error fetching dealer stats:', err);
@@ -93,7 +88,6 @@ const DealerDashboard = () => {
     const fetchRecentProducts = async () => {
         try {
             const response = await API.get('/products/new-arrivals/');
-            console.log('🆕 Recent products fetched for dealer:', response.data);
             setRecentProducts(response.data.slice(0, 6));
         } catch (err) {
             console.error('❌ Error fetching recent products:', err);
@@ -103,7 +97,6 @@ const DealerDashboard = () => {
     const fetchRecentAnnouncements = async () => {
         try {
             const response = await API.get('/shipment-announcements/');
-            console.log('📢 Recent announcements fetched for dealer:', response.data);
             setRecentAnnouncements(response.data.slice(0, 3));
         } catch (err) {
             console.error('❌ Error fetching announcements:', err);
@@ -143,12 +136,6 @@ const DealerDashboard = () => {
     };
 
     const handleOrderClick = (order) => {
-        console.log('🎯 Order clicked:', {
-            orderId: order.id,
-            status: order.status,
-            hasDealer: order.has_dealer,
-            dealerName: order.assigned_dealer_name
-        });
         setSelectedOrder(order);
     };
 

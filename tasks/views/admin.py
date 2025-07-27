@@ -18,6 +18,7 @@ from ..serializers.products import ProductSerializer, ShipmentAnnouncementSerial
 from ..serializers.orders import OrderDetailSerializer
 from ..serializers.dealers import DealerSerializer, DealerCommissionSerializer
 
+from ..services.notification_service import NotificationService
 
 class AdminDashboardViewSet(viewsets.ViewSet):
     """Admin dashboard statistics and overview"""
@@ -743,7 +744,7 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['POST'], url_path='pay-commissions')
     def pay_commissions(self, request):
-        """Mark commissions as paid"""
+        """ENHANCED: Mark commissions as paid with email notifications"""
         commission_ids = request.data.get('commission_ids', [])
         payment_reference = request.data.get('payment_reference', '')
 
@@ -752,28 +753,154 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
                 'error': 'No commissions selected'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        commissions = DealerCommission.objects.filter(id__in=commission_ids)
-        updated_count = commissions.update(
-            is_paid=True,
-            paid_at=timezone.now(),
-            payment_reference=payment_reference
-        )
+        try:
+            # Get commissions and group by dealer
+            commissions = DealerCommission.objects.filter(
+                id__in=commission_ids,
+                is_paid=False  # Only pay unpaid commissions
+            ).select_related('dealer', 'order')
 
-        total_amount = commissions.aggregate(
-            total=Sum('commission_amount')
-        )['total'] or Decimal('0.00')
+            if not commissions.exists():
+                return Response({
+                    'error': 'No unpaid commissions found with provided IDs'
+                }, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({
-            'message': f'{updated_count} commissions marked as paid',
-            'total_amount': float(total_amount),
-            'payment_reference': payment_reference
-        })
+            # Group commissions by dealer
+            from collections import defaultdict
+            dealer_commissions = defaultdict(list)
 
+            for commission in commissions:
+                dealer_commissions[commission.dealer].append(commission)
 
-# tasks/views/admin.py - FIXED AdminAnnouncementViewSet
+            # Mark commissions as paid
+            updated_count = commissions.update(
+                is_paid=True,
+                paid_at=timezone.now(),
+                payment_reference=payment_reference
+            )
+
+            # Calculate total amount
+            total_amount = commissions.aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+
+            # NEW: Send email notifications to each dealer
+            email_results = {}
+            for dealer, dealer_commission_list in dealer_commissions.items():
+                try:
+                    # Refresh commissions from DB to get updated paid_at timestamps
+                    updated_commissions = DealerCommission.objects.filter(
+                        id__in=[c.id for c in dealer_commission_list]
+                    )
+
+                    email_sent = NotificationService.notify_dealer_commission_paid(
+                        dealer=dealer,
+                        commissions_list=updated_commissions,
+                        payment_reference=payment_reference
+                    )
+
+                    dealer_total = sum(c.commission_amount for c in dealer_commission_list)
+                    email_results[dealer.email] = {
+                        'email_sent': email_sent,
+                        'amount': float(dealer_total),
+                        'commissions_count': len(dealer_commission_list)
+                    }
+
+                    if email_sent:
+                        print(f"📧 Commission payment notification sent to {dealer.email} - Amount: {dealer_total}")
+                    else:
+                        print(f"❌ Failed to send commission payment notification to {dealer.email}")
+
+                except Exception as e:
+                    print(f"❌ Error sending commission notification to {dealer.email}: {e}")
+                    email_results[dealer.email] = {
+                        'email_sent': False,
+                        'error': str(e),
+                        'amount': float(sum(c.commission_amount for c in dealer_commission_list)),
+                        'commissions_count': len(dealer_commission_list)
+                    }
+
+            return Response({
+                'message': f'{updated_count} commissions marked as paid',
+                'total_amount': float(total_amount),
+                'payment_reference': payment_reference,
+                'dealers_notified': len(dealer_commissions),
+                'email_notifications': email_results
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Error processing commission payments: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='pay-dealer-commissions')
+    def pay_dealer_commissions(self, request, pk=None):
+        """NEW: Pay all unpaid commissions for a specific dealer"""
+        dealer = self.get_object()
+        payment_reference = request.data.get('payment_reference',
+                                             f'DEALER-PAY-{timezone.now().strftime("%Y%m%d-%H%M%S")}')
+
+        try:
+            # Get all unpaid commissions for this dealer
+            unpaid_commissions = DealerCommission.objects.filter(
+                dealer=dealer,
+                is_paid=False
+            ).select_related('order')
+
+            if not unpaid_commissions.exists():
+                return Response({
+                    'message': f'No unpaid commissions found for dealer {dealer.name}',
+                    'dealer': DealerSerializer(dealer).data
+                })
+
+            # Calculate total
+            total_amount = unpaid_commissions.aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+
+            # Mark as paid
+            updated_count = unpaid_commissions.update(
+                is_paid=True,
+                paid_at=timezone.now(),
+                payment_reference=payment_reference
+            )
+
+            # Refresh commissions from DB to get updated timestamps
+            paid_commissions = DealerCommission.objects.filter(
+                dealer=dealer,
+                payment_reference=payment_reference
+            )
+
+            # Send email notification
+            email_sent = NotificationService.notify_dealer_commission_paid(
+                dealer=dealer,
+                commissions_list=paid_commissions,
+                payment_reference=payment_reference
+            )
+
+            return Response({
+                'message': f'{updated_count} commissions paid to {dealer.name}',
+                'dealer': DealerSerializer(dealer).data,
+                'total_amount': float(total_amount),
+                'payment_reference': payment_reference,
+                'email_notification_sent': email_sent,
+                'commissions_details': [
+                    {
+                        'order_id': c.order.id,
+                        'amount': float(c.commission_amount),
+                        'rate': float(c.commission_rate)
+                    } for c in paid_commissions
+                ]
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Error paying dealer commissions: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class AdminAnnouncementViewSet(viewsets.ModelViewSet):
-    """Admin shipment announcement management - FIXED VERSION"""
+    """Admin shipment announcement management with email notifications"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     serializer_class = ShipmentAnnouncementSerializer
@@ -783,23 +910,82 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
             '-created_at')
 
     def create(self, request, *args, **kwargs):
-        """Handle announcement creation with multiple images - FIXED"""
+        """Create announcement with email notifications"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            # Create the announcement data
-            announcement_data = request.data.copy()
+            # Extract and validate images
+            images = request.FILES.getlist('images')
 
-            # Remove files from data before serialization
-            images = request.FILES.getlist('images', [])
+            # Validate image files
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            max_size = 5 * 1024 * 1024  # 5MB
 
-            # Create serializer with request context
-            serializer = self.get_serializer(data=announcement_data, context={'request': request})
+            for image in images:
+                if image.content_type not in allowed_types:
+                    return Response({
+                        'error': f'فرمت فایل {image.name} پشتیبانی نمی‌شود. فقط JPEG, PNG, GIF, WebP مجاز هستند.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-            if serializer.is_valid():
-                # FIXED: Explicitly set created_by
-                announcement = serializer.save(created_by=request.user)
+                if image.size > max_size:
+                    return Response({
+                        'error': f'حجم فایل {image.name} بیش از 5MB است.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-                # Handle multiple image uploads
-                for i, image_file in enumerate(images):
+            # Convert boolean strings to actual booleans
+            is_active = str(request.data.get('is_active', 'true')).lower() in ['true', '1', 'yes']
+            is_featured = str(request.data.get('is_featured', 'false')).lower() in ['true', '1', 'yes']
+            send_email_notifications = str(request.data.get('send_email_notifications', 'true')).lower() in ['true',
+                                                                                                             '1', 'yes']
+
+            # Clean up date fields
+            shipment_date = request.data.get('shipment_date')
+            if shipment_date == '':
+                shipment_date = None
+
+            estimated_arrival = request.data.get('estimated_arrival')
+            if estimated_arrival == '':
+                estimated_arrival = None
+
+            # Validate required fields
+            title = request.data.get('title', '').strip()
+            description = request.data.get('description', '').strip()
+
+            if not title:
+                return Response({
+                    'error': 'عنوان اطلاعیه الزامی است'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not description:
+                return Response({
+                    'error': 'توضیحات الزامی است'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create announcement directly using Django ORM
+            announcement = ShipmentAnnouncement.objects.create(
+                title=title,
+                description=description,
+                origin_country=request.data.get('origin_country', '').strip(),
+                shipment_date=shipment_date,
+                estimated_arrival=estimated_arrival,
+                product_categories=request.data.get('product_categories', '').strip(),
+                is_active=is_active,
+                is_featured=is_featured,
+                created_by=request.user
+            )
+
+            # Handle images if provided
+            if images:
+                # Set first image as main image
+                announcement.image = images[0]
+                announcement.save()
+
+                # Handle additional images (if more than 1 image uploaded)
+                from ..models import ShipmentAnnouncementImage
+                for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
                         announcement=announcement,
                         image=image_file,
@@ -807,72 +993,207 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
                         alt_text=f"Image {i + 1} for {announcement.title}"
                     )
 
-                return Response({
-                    'message': 'Announcement created successfully',
-                    'announcement': ShipmentAnnouncementSerializer(announcement, context={'request': request}).data
-                }, status=status.HTTP_201_CREATED)
+            # NEW: Send email notifications if requested
+            email_results = {}
+            if send_email_notifications and is_active:
+                print(f"📧 Sending new arrival notifications for announcement: {announcement.title}")
 
+                # Send to customers
+                customer_count = NotificationService.notify_all_customers_new_arrival(announcement)
+                email_results['customers_notified'] = customer_count
+
+                # Send to dealers
+                dealer_count = NotificationService.notify_dealers_new_arrival(announcement)
+                email_results['dealers_notified'] = dealer_count
+
+                print(f"✅ Email notifications sent: {customer_count} customers, {dealer_count} dealers")
+            else:
+                email_results = {
+                    'customers_notified': 0,
+                    'dealers_notified': 0,
+                    'reason': 'Email notifications disabled or announcement inactive'
+                }
+
+            # Return success response using the serializer for output only
+            serializer = self.get_serializer(announcement)
             return Response({
-                'error': 'Invalid data',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': 'Announcement created successfully',
+                'announcement': serializer.data,
+                'email_notifications': email_results
+            }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             print(f"❌ Error creating announcement: {str(e)}")
             return Response({
-                'error': f'Failed to create announcement: {str(e)}'
+                'error': f'خطا در ایجاد اطلاعیه: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, *args, **kwargs):
-        """Handle announcement update with multiple images - FIXED"""
+        """Update announcement with optional email notifications"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         try:
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
 
-            # Get the data and images
-            announcement_data = request.data.copy()
-            images = request.FILES.getlist('images', [])
+            # Check if this is an activation update
+            old_is_active = instance.is_active
+            send_email_notifications = str(request.data.get('send_email_notifications', 'false')).lower() in ['true',
+                                                                                                              '1',
+                                                                                                              'yes']
 
-            # Create serializer with request context
-            serializer = self.get_serializer(
-                instance,
-                data=announcement_data,
-                partial=partial,
-                context={'request': request}
-            )
+            # Extract and validate images if provided
+            images = request.FILES.getlist('images')
 
-            if serializer.is_valid():
-                # Save the announcement (created_by should remain unchanged)
-                announcement = serializer.save()
+            if images:
+                # Validate image files
+                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                max_size = 5 * 1024 * 1024  # 5MB
 
-                # Handle new image uploads if provided
-                if images:
-                    # Delete existing additional images only if new ones are provided
-                    instance.images.all().delete()
+                for image in images:
+                    if image.content_type not in allowed_types:
+                        return Response({
+                            'error': f'فرمت فایل {image.name} پشتیبانی نمی‌شود. فقط JPEG, PNG, GIF, WebP مجاز هستند.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
 
-                    # Add new images
-                    for i, image_file in enumerate(images):
-                        ShipmentAnnouncementImage.objects.create(
-                            announcement=announcement,
-                            image=image_file,
-                            order=i,
-                            alt_text=f"Image {i + 1} for {announcement.title}"
-                        )
+                    if image.size > max_size:
+                        return Response({
+                            'error': f'حجم فایل {image.name} بیش از 5MB است.'
+                        }, status=status.HTTP_400_BAD_REQUEST)
 
-                return Response({
-                    'message': 'Announcement updated successfully',
-                    'announcement': ShipmentAnnouncementSerializer(announcement, context={'request': request}).data
-                })
+            # Update fields directly on the instance
+            if 'title' in request.data:
+                title = request.data.get('title', '').strip()
+                if not title:
+                    return Response({
+                        'error': 'عنوان اطلاعیه الزامی است'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                instance.title = title
 
+            if 'description' in request.data:
+                description = request.data.get('description', '').strip()
+                if not description:
+                    return Response({
+                        'error': 'توضیحات الزامی است'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                instance.description = description
+
+            if 'origin_country' in request.data:
+                instance.origin_country = request.data.get('origin_country', '').strip()
+
+            if 'product_categories' in request.data:
+                instance.product_categories = request.data.get('product_categories', '').strip()
+
+            if 'shipment_date' in request.data:
+                shipment_date = request.data.get('shipment_date')
+                instance.shipment_date = None if shipment_date == '' else shipment_date
+
+            if 'estimated_arrival' in request.data:
+                estimated_arrival = request.data.get('estimated_arrival')
+                instance.estimated_arrival = None if estimated_arrival == '' else estimated_arrival
+
+            if 'is_active' in request.data:
+                instance.is_active = str(request.data.get('is_active', 'true')).lower() in ['true', '1', 'yes']
+
+            if 'is_featured' in request.data:
+                instance.is_featured = str(request.data.get('is_featured', 'false')).lower() in ['true', '1', 'yes']
+
+            # Save the updated instance
+            instance.save()
+
+            # Handle image updates if new images provided
+            if images:
+                # Clear existing additional images
+                instance.images.all().delete()
+
+                # Set first image as main image
+                instance.image = images[0]
+                instance.save()
+
+                # Add additional images
+                from ..models import ShipmentAnnouncementImage
+                for i, image_file in enumerate(images[1:], start=1):
+                    ShipmentAnnouncementImage.objects.create(
+                        announcement=instance,
+                        image=image_file,
+                        order=i,
+                        alt_text=f"Image {i + 1} for {instance.title}"
+                    )
+
+            # NEW: Send email notifications if announcement was just activated
+            email_results = {}
+            if send_email_notifications and not old_is_active and instance.is_active:
+                print(f"📧 Sending activation notifications for announcement: {instance.title}")
+
+                # Send to customers
+                customer_count = NotificationService.notify_all_customers_new_arrival(instance)
+                email_results['customers_notified'] = customer_count
+
+                # Send to dealers
+                dealer_count = NotificationService.notify_dealers_new_arrival(instance)
+                email_results['dealers_notified'] = dealer_count
+
+                print(f"✅ Activation email notifications sent: {customer_count} customers, {dealer_count} dealers")
+            else:
+                email_results = {
+                    'customers_notified': 0,
+                    'dealers_notified': 0,
+                    'reason': 'Email notifications not requested or announcement was already active'
+                }
+
+            # Return success response using the serializer for output only
+            serializer = self.get_serializer(instance)
             return Response({
-                'error': 'Invalid data',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'message': 'Announcement updated successfully',
+                'announcement': serializer.data,
+                'email_notifications': email_results
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             print(f"❌ Error updating announcement: {str(e)}")
             return Response({
-                'error': f'Failed to update announcement: {str(e)}'
+                'error': f'خطا در به‌روزرسانی اطلاعیه: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='send-notifications')
+    def send_notifications(self, request, pk=None):
+        """Manually send email notifications for an existing announcement"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            announcement = self.get_object()
+
+            if not announcement.is_active:
+                return Response({
+                    'error': 'Cannot send notifications for inactive announcement'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            print(f"📧 Manually sending notifications for announcement: {announcement.title}")
+
+            # Send to customers
+            customer_count = NotificationService.notify_all_customers_new_arrival(announcement)
+
+            # Send to dealers
+            dealer_count = NotificationService.notify_dealers_new_arrival(announcement)
+
+            return Response({
+                'message': 'Email notifications sent successfully',
+                'results': {
+                    'customers_notified': customer_count,
+                    'dealers_notified': dealer_count,
+                    'total_sent': customer_count + dealer_count
+                }
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Failed to send notifications: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['POST'], url_path='bulk-action')
