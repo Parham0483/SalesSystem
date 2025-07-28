@@ -21,6 +21,7 @@ import AdminAnnouncementsPage from "./pages/admin/AdminAnnouncementsPage";
 import AdminProductPage from "./pages/admin/AdminProductPage";
 import AdminCustomersPage from "./pages/admin/AdminCustomerPage";
 import AdminDealersPage from "./pages/admin/AdminDealersPage";
+import Profile from "./component/ProfilePage";
 
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
@@ -74,6 +75,7 @@ function App() {
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route path="/profile" element={<Profile />} />
 
                 {/* ADMIN ROUTES - Put these BEFORE general routes */}
                 <Route path="/admin" element={

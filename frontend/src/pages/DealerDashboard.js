@@ -193,6 +193,13 @@ const DealerDashboard = () => {
                         className="products-btn"
                     />
                     <NeoBrutalistButton
+                        text="پروفایل"
+                        color="purple-400"
+                        textColor="white"
+                        onClick={() => navigate('/profile')}
+                        className="profile-btn"
+                    />
+                    <NeoBrutalistButton
                         text="خروج"
                         color="red-400"
                         textColor="white"
