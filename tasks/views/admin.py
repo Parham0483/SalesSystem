@@ -1399,3 +1399,4 @@ class AdminReportsViewSet(viewsets.ViewSet):
         dealer_data.sort(key=lambda x: x['total_sales'], reverse=True)
 
         return Response(dealer_data)
+

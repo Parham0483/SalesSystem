@@ -1,4 +1,5 @@
-# tasks/views/orders.py - COMPLETE FIXED VERSION
+# tasks/views/orders.py - COMPLETE INTEGRATION WITH SMS
+
 from django.db.models import Sum, Q
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
@@ -6,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
+import logging
+
 from ..serializers import (
     OrderCreateSerializer,
     OrderAdminUpdateSerializer,
@@ -19,13 +22,15 @@ from ..serializers.dealers import (
 from ..models import Order, OrderItem, Customer
 from ..services.notification_service import NotificationService
 
+logger = logging.getLogger(__name__)
+
 
 class OrderViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """FIXED: Allow dealers to access their assigned orders"""
+        """Allow dealers to access their assigned orders"""
         user = self.request.user
 
         if user.is_staff:
@@ -55,45 +60,63 @@ class OrderViewSet(viewsets.ModelViewSet):
         return OrderDetailSerializer
 
     def retrieve(self, request, *args, **kwargs):
-        """FIXED: Custom retrieve method with better error handling"""
+        """Custom retrieve method with better error handling"""
         try:
             order = self.get_object()
             serializer = self.get_serializer(order)
 
-            # Log access for debugging
-            print(
+            logger.info(
                 f"🔍 Order {order.id} accessed by {request.user.name} (Staff: {request.user.is_staff}, Dealer: {request.user.is_dealer})")
 
             return Response(serializer.data)
         except Exception as e:
-            print(f"❌ Error retrieving order: {str(e)}")
+            logger.error(f"❌ Error retrieving order: {str(e)}")
             return Response({
                 'error': f'Order not found or access denied: {str(e)}'
             }, status=status.HTTP_404_NOT_FOUND)
 
     def create(self, request, *args, **kwargs):
+        """ENHANCED: Create order with dual email+SMS notification"""
         try:
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 order = serializer.save()
-                NotificationService.notify_admin_new_order(order)
+
+                # Send dual notification (email + SMS)
+                dual_result = NotificationService.send_dual_notification(
+                    order=order,
+                    notification_type='order_submitted'
+                )
+
+                logger.info(f"📧 Email sent: {dual_result['email']['sent']}")
+                logger.info(f"📱 SMS sent: {dual_result['sms']['sent']}")
+
                 return Response({
                     'message': 'Order created successfully',
                     'order_id': order.id,
-                    'status': order.status
+                    'status': order.status,
+                    'notifications': {
+                        'email_sent': dual_result['email']['sent'],
+                        'sms_sent': dual_result['sms']['sent'],
+                        'email_error': dual_result['email'].get('error'),
+                        'sms_error': dual_result['sms'].get('error')
+                    }
                 }, status=status.HTTP_201_CREATED)
+
             return Response({
                 'error': 'Invalid data',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
+
         except Exception as e:
+            logger.error(f"❌ Order creation failed: {str(e)}")
             return Response({
                 'error': f'Order creation failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='submit_pricing')
     def submit_pricing(self, request, *args, **kwargs):
-        """Admin submits pricing for an order"""
+        """ENHANCED: Admin submits pricing with dual notification"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -115,10 +138,22 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             if serializer.is_valid():
                 updated_order = serializer.save()
-                NotificationService.notify_customer_pricing_ready(updated_order)
+
+                # Send dual notification (email + SMS)
+                dual_result = NotificationService.send_dual_notification(
+                    order=updated_order,
+                    notification_type='pricing_ready'
+                )
+
                 return Response({
                     'message': 'Pricing submitted successfully',
-                    'order': OrderDetailSerializer(updated_order).data
+                    'order': OrderDetailSerializer(updated_order).data,
+                    'notifications': {
+                        'email_sent': dual_result['email']['sent'],
+                        'sms_sent': dual_result['sms']['sent'],
+                        'email_error': dual_result['email'].get('error'),
+                        'sms_error': dual_result['sms'].get('error')
+                    }
                 }, status=status.HTTP_200_OK)
 
             return Response({
@@ -127,13 +162,14 @@ class OrderViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
+            logger.error(f"❌ Pricing submission failed: {str(e)}")
             return Response({
                 'error': f'Pricing submission failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='approve')
     def approve_order(self, request, *args, **kwargs):
-        """Customer approves the order pricing"""
+        """ENHANCED: Customer approves order with dual notification"""
         try:
             order = self.get_object()
 
@@ -148,22 +184,36 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             order.customer_approve()
-            NotificationService.notify_customer_order_confirmed(order, include_pdf=True)
+
+            # Send dual notification (email + SMS)
+            dual_result = NotificationService.send_dual_notification(
+                order=order,
+                notification_type='order_confirmed'
+            )
+
+            # Notify admin
             NotificationService.notify_admin_order_status_change(order, 'confirmed', request.user)
 
             return Response({
                 'message': 'Order approved successfully',
-                'order': OrderDetailSerializer(order).data
+                'order': OrderDetailSerializer(order).data,
+                'notifications': {
+                    'email_sent': dual_result['email']['sent'],
+                    'sms_sent': dual_result['sms']['sent'],
+                    'email_error': dual_result['email'].get('error'),
+                    'sms_error': dual_result['sms'].get('error')
+                }
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"❌ Order approval failed: {str(e)}")
             return Response({
                 'error': f'Order approval failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='reject')
     def reject_order(self, request, *args, **kwargs):
-        """Customer rejects the order pricing"""
+        """ENHANCED: Customer rejects order with dual notification"""
         try:
             order = self.get_object()
 
@@ -184,22 +234,36 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             order.customer_reject(rejection_reason)
-            NotificationService.notify_customer_order_rejected(order, rejection_reason)
+
+            # Send dual notification (email + SMS)
+            dual_result = NotificationService.send_dual_notification(
+                order=order,
+                notification_type='order_rejected'
+            )
+
+            # Notify admin
             NotificationService.notify_admin_order_status_change(order, 'rejected', request.user)
 
             return Response({
                 'message': 'Order rejected successfully',
-                'order': OrderDetailSerializer(order).data
+                'order': OrderDetailSerializer(order).data,
+                'notifications': {
+                    'email_sent': dual_result['email']['sent'],
+                    'sms_sent': dual_result['sms']['sent'],
+                    'email_error': dual_result['email'].get('error'),
+                    'sms_error': dual_result['sms'].get('error')
+                }
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"❌ Order rejection failed: {str(e)}")
             return Response({
                 'error': f'Order rejection failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='complete')
     def complete_order(self, request, *args, **kwargs):
-        """Admin completes an order and creates commission"""
+        """ENHANCED: Admin completes order with SMS notification"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -222,24 +286,41 @@ class OrderViewSet(viewsets.ModelViewSet):
                 commission = DealerCommission.create_for_completed_order(order)
                 if commission:
                     commission_created = True
-                    print(
-                        f"💰 Commission created for dealer {order.assigned_dealer.name}: ${commission.commission_amount}")
+                    logger.info(
+                        f"💰 Commission created for dealer {order.assigned_dealer.name}: {commission.commission_amount}")
+
+            # Send completion SMS to customer
+            sms_sent = False
+            if order.customer.phone:
+                completion_sms = f"""سلام {order.customer.name}
+سفارش #{order.id} تکمیل شد!
+از خرید شما متشکریم.
+یان تجارت پویا کویر"""
+
+                sms_sent = NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=completion_sms,
+                    order=order,
+                    sms_type='order_completed'
+                )
 
             return Response({
                 'message': 'Order completed successfully',
                 'order': OrderDetailSerializer(completed_order).data,
                 'invoice_id': invoice.id,
-                'commission_created': commission_created
+                'commission_created': commission_created,
+                'completion_sms_sent': sms_sent
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
+            logger.error(f"❌ Order completion failed: {str(e)}")
             return Response({
                 'error': f'Order completion failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='assign-dealer')
     def assign_dealer(self, request, *args, **kwargs):
-        """ENHANCED: Admin assigns a dealer with email notifications"""
+        """ENHANCED: Admin assigns dealer with email + SMS notifications"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -266,7 +347,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                             'error': f'Dealer {dealer.name} has no default commission rate set. Please provide a custom commission rate.'
                         }, status=status.HTTP_400_BAD_REQUEST)
 
-                # Assign dealer with custom commission rate
+                # Assign dealer
                 success = order.assign_dealer(dealer, request.user, custom_commission_rate)
 
                 if success:
@@ -274,18 +355,37 @@ class OrderViewSet(viewsets.ModelViewSet):
                         order.dealer_notes = dealer_notes
                         order.save()
 
-                    # NEW: Send email notification to dealer
+                    # Send email notification to dealer
                     email_sent = NotificationService.notify_dealer_assignment(
                         order=order,
                         dealer=dealer,
                         custom_commission_rate=custom_commission_rate
                     )
 
-                    print(f"✅ Dealer {dealer.name} assigned to Order #{order.id} with {effective_rate}% commission")
+                    # NEW: Send SMS notification to dealer
+                    sms_sent = False
+                    if dealer.phone:
+                        dealer_sms = f"""سلام {dealer.name}
+سفارش #{order.id} به شما تخصیص داده شد.
+مشتری: {order.customer.name}
+کمیسیون: {effective_rate}%
+وارد پنل شوید.
+یان تجارت پویا کویر"""
+
+                        sms_sent = NotificationService.send_sms_notification(
+                            phone=dealer.phone,
+                            message=dealer_sms,
+                            order=order,
+                            sms_type='dealer_assigned',
+                            dealer=dealer
+                        )
+
+                    logger.info(
+                        f"✅ Dealer {dealer.name} assigned to Order #{order.id} with {effective_rate}% commission")
                     if email_sent:
-                        print(f"📧 Assignment notification email sent to {dealer.email}")
-                    else:
-                        print(f"❌ Failed to send assignment notification to {dealer.email}")
+                        logger.info(f"📧 Assignment notification email sent to {dealer.email}")
+                    if sms_sent:
+                        logger.info(f"📱 Assignment notification SMS sent to {dealer.phone}")
 
                     return Response({
                         'message': f'Dealer {dealer.name} assigned successfully with {effective_rate}% commission',
@@ -293,11 +393,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                         'dealer_info': {
                             'name': dealer.name,
                             'email': dealer.email,
+                            'phone': dealer.phone,
                             'commission_rate': float(effective_rate),
                             'dealer_code': dealer.dealer_code,
                             'is_custom_rate': custom_commission_rate is not None
                         },
-                        'email_notification_sent': email_sent
+                        'notifications': {
+                            'email_sent': email_sent,
+                            'sms_sent': sms_sent
+                        }
                     }, status=status.HTTP_200_OK)
                 else:
                     return Response({
@@ -309,6 +413,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error': 'Dealer not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
+                logger.error(f"❌ Error assigning dealer: {str(e)}")
                 return Response({
                     'error': f'Error assigning dealer: {str(e)}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -320,7 +425,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='remove-dealer')
     def remove_dealer(self, request, *args, **kwargs):
-        """ENHANCED: Admin removes dealer with email notifications"""
+        """ENHANCED: Admin removes dealer with email + SMS notifications"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -329,13 +434,13 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         removal_reason = request.data.get('reason', '')
 
-        # Store dealer info before removal for email notification
+        # Store dealer info before removal for notifications
         old_dealer = order.assigned_dealer
 
         success = order.remove_dealer(request.user)
 
         if success and old_dealer:
-            # NEW: Send email notification to removed dealer
+            # Send email notification to removed dealer
             email_sent = NotificationService.notify_dealer_removal(
                 order=order,
                 dealer=old_dealer,
@@ -343,11 +448,27 @@ class OrderViewSet(viewsets.ModelViewSet):
                 reason=removal_reason
             )
 
-            print(f"✅ Dealer {old_dealer.name} removed from Order #{order.id}")
+            # NEW: Send SMS notification to removed dealer
+            sms_sent = False
+            if old_dealer.phone:
+                removal_sms = f"""سلام {old_dealer.name}
+سفارش #{order.id} از شما حذف شد.
+{f'دلیل: {removal_reason}' if removal_reason else ''}
+یان تجارت پویا کویر"""
+
+                sms_sent = NotificationService.send_sms_notification(
+                    phone=old_dealer.phone,
+                    message=removal_sms,
+                    order=order,
+                    sms_type='dealer_removed',
+                    dealer=old_dealer
+                )
+
+            logger.info(f"✅ Dealer {old_dealer.name} removed from Order #{order.id}")
             if email_sent:
-                print(f"📧 Removal notification email sent to {old_dealer.email}")
-            else:
-                print(f"❌ Failed to send removal notification to {old_dealer.email}")
+                logger.info(f"📧 Removal notification email sent to {old_dealer.email}")
+            if sms_sent:
+                logger.info(f"📱 Removal notification SMS sent to {old_dealer.phone}")
 
             return Response({
                 'message': f'Dealer {old_dealer.name} removed successfully',
@@ -355,17 +476,23 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'removed_dealer': {
                     'name': old_dealer.name,
                     'email': old_dealer.email,
+                    'phone': old_dealer.phone,
                     'dealer_code': old_dealer.dealer_code
                 },
-                'email_notification_sent': email_sent
+                'notifications': {
+                    'email_sent': email_sent,
+                    'sms_sent': sms_sent
+                }
             }, status=status.HTTP_200_OK)
         else:
             return Response({
                 'message': 'No dealer was assigned to this order',
                 'order': OrderDetailSerializer(order).data,
-                'email_notification_sent': False
+                'notifications': {
+                    'email_sent': False,
+                    'sms_sent': False
+                }
             }, status=status.HTTP_200_OK)
-
 
     @action(detail=True, methods=['POST'], url_path='update-dealer-notes')
     def update_dealer_notes(self, request, *args, **kwargs):
@@ -397,7 +524,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['GET'], url_path='my-assigned-orders')
     def my_assigned_orders(self, request):
-        """ENHANCED: Get orders assigned to the current dealer"""
+        """Get orders assigned to the current dealer"""
         if not request.user.is_dealer:
             return Response({
                 'error': 'Permission denied. Dealer access required.'
@@ -492,7 +619,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['GET'], url_path='dealer-dashboard-stats')
     def dealer_dashboard_stats(self, request):
-        """ENHANCED: Get dashboard statistics for dealer"""
+        """Get dashboard statistics for dealer"""
         if not request.user.is_dealer:
             return Response({
                 'error': 'Permission denied. Dealer access required.'
@@ -520,6 +647,41 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({
             'dealer': DealerSerializer(request.user).data,
             'stats': stats
+        })
+
+    # NEW: SMS-specific actions
+    @action(detail=True, methods=['POST'], url_path='send-custom-sms')
+    def send_custom_sms(self, request, *args, **kwargs):
+        """Admin sends custom SMS to customer"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        order = self.get_object()
+        custom_message = request.data.get('message', '')
+
+        if not custom_message:
+            return Response({
+                'error': 'Message is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not order.customer.phone:
+            return Response({
+                'error': 'Customer has no phone number'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        sms_sent = NotificationService.send_sms_notification(
+            phone=order.customer.phone,
+            message=custom_message,
+            order=order,
+            sms_type='admin_custom'
+        )
+
+        return Response({
+            'message': 'Custom SMS sent successfully' if sms_sent else 'Failed to send SMS',
+            'sms_sent': sms_sent,
+            'recipient': order.customer.phone
         })
 
 

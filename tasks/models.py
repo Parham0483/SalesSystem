@@ -796,6 +796,90 @@ class EmailNotification(models.Model):
         ordering = ['-sent_at']
 
 
+class SMSNotification(models.Model):
+    """Track SMS notifications sent via Kavenegar"""
+    SMS_TYPES = [
+        ('order_submitted', 'Order Submitted'),
+        ('pricing_ready', 'Pricing Ready'),
+        ('order_confirmed', 'Order Confirmed'),
+        ('order_rejected', 'Order Rejected'),
+        ('order_completed', 'Order Completed'),
+        ('dealer_assigned', 'Dealer Assigned'),
+        ('new_arrival_customer', 'New Arrival - Customer'),
+        ('new_arrival_dealer', 'New Arrival - Dealer'),
+        ('commission_paid', 'Commission Paid'),
+        ('otp', 'OTP Verification'),
+        ('general', 'General Notification'),
+        ('test', 'Test Message'),
+        ('bulk', 'Bulk Message'),
+    ]
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='sms_notifications',
+        null=True,
+        blank=True,
+        help_text="Related order (if applicable)"
+    )
+
+    announcement = models.ForeignKey(
+        'ShipmentAnnouncement',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='sms_notifications',
+        help_text="Related announcement (if applicable)"
+    )
+
+    dealer = models.ForeignKey(
+        'Customer',
+        null=True, blank=True,
+        on_delete=models.CASCADE,
+        related_name='received_sms_notifications',
+        help_text="Dealer who received the SMS (if applicable)"
+    )
+
+    sms_type = models.CharField(max_length=30, choices=SMS_TYPES, default='general')
+    recipient_phone = models.CharField(max_length=20, help_text="Phone number(s) SMS was sent to")
+    message = models.TextField(max_length=500, help_text="SMS message content")
+
+    # Response tracking
+    is_successful = models.BooleanField(default=False)
+    kavenegar_response = models.TextField(blank=True, null=True, help_text="Kavenegar API response")
+    error_message = models.TextField(blank=True, null=True)
+
+    # Metadata
+    sent_at = models.DateTimeField(auto_now_add=True)
+    cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="SMS cost (if provided by API)"
+    )
+    message_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Kavenegar message ID"
+    )
+
+    def __str__(self):
+        status = "✅" if self.is_successful else "❌"
+        if self.order:
+            return f"{status} SMS {self.get_sms_type_display()} - Order #{self.order.id} - {self.recipient_phone}"
+        elif self.announcement:
+            return f"{status} SMS {self.get_sms_type_display()} - Announcement #{self.announcement.id} - {self.recipient_phone}"
+        else:
+            return f"{status} SMS {self.get_sms_type_display()} - {self.recipient_phone}"
+
+    class Meta:
+        db_table = 'sms_notifications'
+        ordering = ['-sent_at']
+        verbose_name = 'SMS Notification'
+        verbose_name_plural = 'SMS Notifications'
+
+
 class OrderLog(models.Model):
     ACTION_CHOICES = [
         ('order_created', 'Order Created'),

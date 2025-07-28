@@ -5,129 +5,15 @@ from django.urls import reverse
 from django.http import HttpResponse
 from django.db.models import Sum
 from decimal import Decimal
+
+from . import models
 from .models import (
     Customer, Product, Order, OrderItem, Invoice,
     InvoiceTemplate, InvoiceTemplateField, InvoiceSection,
-    EmailNotification, OrderLog, DealerCommission
+    EmailNotification, OrderLog, DealerCommission, SMSNotification
 )
+from .services.sms_service import KavenegarSMSService
 
-
-@admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['name', 'email', 'company_name', 'is_staff', 'is_dealer_display', 'total_orders', 'commission_info',
-                    'date_joined']
-    list_filter = ['is_staff', 'is_dealer', 'date_joined', 'is_active']
-    search_fields = ['name', 'email', 'company_name', 'dealer_code']
-    readonly_fields = ['date_joined', 'last_login', 'dealer_code']
-
-    fieldsets = (
-        ('Basic Information', {
-            'fields': ['name', 'email', 'phone', 'company_name', 'password']
-        }),
-        ('Permissions', {
-            'fields': ['is_active', 'is_staff', 'is_superuser']
-        }),
-        ('Dealer Information', {
-            'fields': ['is_dealer', 'dealer_code', 'dealer_commission_rate'],
-            'classes': ['collapse']
-        }),
-        ('Dates', {
-            'fields': ['date_joined', 'last_login'],
-            'classes': ['collapse']
-        }),
-    )
-
-    actions = ['make_dealer', 'remove_dealer', 'set_commission_rate']
-
-    def is_dealer_display(self, obj):
-        """Display dealer status with styling"""
-        if obj.is_dealer:
-            return format_html(
-                '<span style="color: green; font-weight: bold;">✓ Dealer</span>'
-            )
-        return format_html(
-            '<span style="color: gray;">Regular User</span>'
-        )
-
-    is_dealer_display.short_description = 'Dealer Status'
-
-    def total_orders(self, obj):
-        """Display total orders count for customer"""
-        if obj.is_dealer:
-            count = obj.assigned_orders.count()
-            if count > 0:
-                url = reverse('admin:tasks_order_changelist') + f'?assigned_dealer__id__exact={obj.id}'
-                return format_html('<a href="{}">{} assigned orders</a>', url, count)
-            return '0 assigned orders'
-        else:
-            count = obj.order_set.count()
-            if count > 0:
-                url = reverse('admin:tasks_order_changelist') + f'?customer__id__exact={obj.id}'
-                return format_html('<a href="{}">{} orders</a>', url, count)
-            return '0 orders'
-
-    total_orders.short_description = 'Orders'
-
-    def commission_info(self, obj):
-        """Display commission information for dealers"""
-        if obj.is_dealer:
-            rate = obj.dealer_commission_rate
-            earned = obj.commissions.filter(is_paid=True).aggregate(
-                total=Sum('commission_amount')
-            )['total'] or Decimal('0.00')
-            pending = obj.commissions.filter(is_paid=False).aggregate(
-                total=Sum('commission_amount')
-            )['total'] or Decimal('0.00')
-
-            return format_html(
-                'Rate: {}%<br>Earned: ${:,.2f}<br>Pending: ${:,.2f}',
-                rate, float(earned), float(pending)
-            )
-        return '-'
-
-    commission_info.short_description = 'Commission Info'
-
-    def make_dealer(self, request, queryset):
-        """Admin action to convert users to dealers"""
-        count = 0
-        for user in queryset.filter(is_dealer=False):
-            user.is_dealer = True
-            user.dealer_commission_rate = Decimal('5.00')  # Default 5%
-            user.save()
-            count += 1
-
-        if count > 0:
-            self.message_user(request, f"{count} users converted to dealers with 5% commission rate")
-
-    make_dealer.short_description = "Convert to dealer (5% commission)"
-
-    def remove_dealer(self, request, queryset):
-        """Admin action to remove dealer status"""
-        count = 0
-        for user in queryset.filter(is_dealer=True):
-            user.is_dealer = False
-            user.dealer_commission_rate = Decimal('0.00')
-            user.save()
-            count += 1
-
-        if count > 0:
-            self.message_user(request, f"{count} dealers converted to regular users")
-
-    remove_dealer.short_description = "Remove dealer status"
-
-    def set_commission_rate(self, request, queryset):
-        """Admin action to set commission rate - this would need a custom form"""
-        # For now, just set to 10%
-        count = 0
-        for dealer in queryset.filter(is_dealer=True):
-            dealer.dealer_commission_rate = Decimal('10.00')
-            dealer.save()
-            count += 1
-
-        if count > 0:
-            self.message_user(request, f"Commission rate set to 10% for {count} dealers")
-
-    set_commission_rate.short_description = "Set commission rate to 10%"
 
 
 class OrderItemInline(admin.TabularInline):
@@ -546,3 +432,303 @@ class EmailNotificationAdmin(admin.ModelAdmin):
 admin.site.site_header = "Order Management System with Dealer Network"
 admin.site.site_title = "OMS Admin"
 admin.site.index_title = "Welcome to Order Management System"
+
+
+@admin.register(SMSNotification)
+class SMSNotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'sms_type_colored', 'recipient_phone', 'is_successful_display',
+        'order_link', 'message_preview', 'sent_at', 'cost'
+    ]
+    list_filter = ['sms_type', 'is_successful', 'sent_at']
+    search_fields = ['recipient_phone', 'message', 'order__id', 'error_message']
+    readonly_fields = ['sent_at', 'kavenegar_response', 'message_id']
+
+    fieldsets = (
+        ('SMS Information', {
+            'fields': ['sms_type', 'recipient_phone', 'message']
+        }),
+        ('Status', {
+            'fields': ['is_successful', 'sent_at', 'cost', 'message_id']
+        }),
+        ('Relations', {
+            'fields': ['order', 'announcement', 'dealer'],
+            'classes': ['collapse']
+        }),
+        ('Technical Details', {
+            'fields': ['kavenegar_response', 'error_message'],
+            'classes': ['collapse']
+        }),
+    )
+
+    actions = ['resend_failed_sms', 'export_sms_report']
+
+    def sms_type_colored(self, obj):
+        """Display SMS type with color coding"""
+        colors = {
+            'order_submitted': '#60a5fa',
+            'pricing_ready': '#fbbf24',
+            'order_confirmed': '#34d399',
+            'order_rejected': '#f87171',
+            'order_completed': '#10b981',
+            'dealer_assigned': '#8b5cf6',
+            'otp': '#06b6d4',
+            'test': '#9ca3af',
+        }
+        color = colors.get(obj.sms_type, '#9ca3af')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_sms_type_display()
+        )
+
+    sms_type_colored.short_description = 'SMS Type'
+
+    def is_successful_display(self, obj):
+        """Display success status with icons"""
+        if obj.is_successful:
+            return format_html('<span style="color: green; font-weight: bold;">✅ Sent</span>')
+        else:
+            return format_html('<span style="color: red; font-weight: bold;">❌ Failed</span>')
+
+    is_successful_display.short_description = 'Status'
+
+    def order_link(self, obj):
+        """Display order link if applicable"""
+        if obj.order:
+            url = reverse('admin:tasks_order_change', args=[obj.order.id])
+            return format_html('<a href="{}">Order #{}</a>', url, obj.order.id)
+        elif obj.announcement:
+            return format_html('Announcement #{} - {}', obj.announcement.id, obj.announcement.title[:30])
+        return '-'
+
+    order_link.short_description = 'Related'
+
+    def message_preview(self, obj):
+        """Display message preview"""
+        if len(obj.message) > 50:
+            return f"{obj.message[:50]}..."
+        return obj.message
+
+    message_preview.short_description = 'Message Preview'
+
+    def resend_failed_sms(self, request, queryset):
+        """Resend failed SMS messages"""
+        failed_sms = queryset.filter(is_successful=False)
+
+        if not failed_sms.exists():
+            self.message_user(request, "No failed SMS messages selected")
+            return
+
+        try:
+            sms_service = KavenegarSMSService()
+
+            resent_count = 0
+            for sms in failed_sms:
+                try:
+                    result = sms_service.send_sms(
+                        receptor=sms.recipient_phone,
+                        message=sms.message,
+                        order=sms.order,
+                        sms_type=f"{sms.sms_type}_retry"
+                    )
+                    if result['success']:
+                        resent_count += 1
+                except Exception as e:
+                    continue
+
+            self.message_user(
+                request,
+                f"Attempted to resend {failed_sms.count()} SMS messages. {resent_count} were successful."
+            )
+
+        except Exception as e:
+            self.message_user(
+                request,
+                f"Error resending SMS: {str(e)}",
+                level='ERROR'
+            )
+
+    resend_failed_sms.short_description = "Resend failed SMS messages"
+
+    def export_sms_report(self, request, queryset):
+        """Export SMS report"""
+        total_sent = queryset.filter(is_successful=True).count()
+        total_failed = queryset.filter(is_successful=False).count()
+        total_cost = queryset.filter(cost__isnull=False).aggregate(
+            total=models.Sum('cost')
+        )['total'] or 0
+
+        self.message_user(
+            request,
+            f"SMS Report: {queryset.count()} total, {total_sent} sent, {total_failed} failed. Total cost: {total_cost}"
+        )
+
+    export_sms_report.short_description = "Generate SMS report"
+
+
+@admin.register(Customer)
+class CustomerAdminEnhanced(admin.ModelAdmin):
+
+    list_display = [
+        'name', 'email', 'phone', 'company_name', 'is_staff',
+        'is_dealer_display', 'total_orders', 'commission_info','is_active', 'last_login_display',
+        'profile_completeness', 'date_joined'
+    ]
+
+    list_filter = ['is_staff', 'is_dealer', 'is_active', 'date_joined', 'last_login']
+    search_fields = ['name', 'email', 'company_name', 'phone', 'dealer_code']
+    readonly_fields = ['date_joined', 'last_login', 'dealer_code', 'password']
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ['name', 'email', 'phone', 'company_name']
+        }),
+        ('Account Status', {
+            'fields': ['is_active', 'is_staff', 'is_superuser', 'password']
+        }),
+        ('Dealer Information', {
+            'fields': ['is_dealer', 'dealer_code', 'dealer_commission_rate'],
+            'classes': ['collapse']
+        }),
+        ('Timestamps', {
+            'fields': ['date_joined', 'last_login'],
+            'classes': ['collapse']
+        }),
+    )
+
+    actions = ['send_password_reset', 'activate_users', 'deactivate_users',
+               'make_dealer', 'remove_dealer', 'set_commission_rate']
+
+    def is_dealer_display(self, obj):
+        """Display dealer status with styling"""
+        if obj.is_dealer:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">✓ Dealer</span>'
+            )
+        return format_html('<span style="color: gray;">Customer</span>')
+
+    is_dealer_display.short_description = 'Type'
+
+    def last_login_display(self, obj):
+        """Display last login with formatting"""
+        if obj.last_login:
+            return obj.last_login.strftime('%Y-%m-%d %H:%M')
+        return format_html('<span style="color: red;">Never</span>')
+
+    last_login_display.short_description = 'Last Login'
+
+    def profile_completeness(self, obj):
+        """Show profile completion percentage"""
+        fields = ['name', 'phone', 'company_name']
+        completed = sum(1 for field in fields if getattr(obj, field))
+        percentage = (completed / len(fields)) * 100
+
+        color = 'green' if percentage == 100 else 'orange' if percentage >= 50 else 'red'
+        return format_html(
+            '<span style="color: {};">{:.0f}%</span>',
+            color, percentage
+        )
+
+    profile_completeness.short_description = 'Profile %'
+
+    def send_password_reset(self, request, queryset):
+        """Send password reset to selected users"""
+        # This would integrate with your password reset system
+        count = queryset.count()
+        self.message_user(request, f"Password reset instructions would be sent to {count} users")
+
+    send_password_reset.short_description = "Send password reset instructions"
+
+    def activate_users(self, request, queryset):
+        """Activate selected users"""
+        count = queryset.update(is_active=True)
+        self.message_user(request, f"{count} users activated")
+
+    activate_users.short_description = "Activate selected users"
+
+    def deactivate_users(self, request, queryset):
+        """Deactivate selected users"""
+        count = queryset.update(is_active=False)
+        self.message_user(request, f"{count} users deactivated")
+
+    deactivate_users.short_description = "Deactivate selected users"
+
+
+    def total_orders(self, obj):
+        """Display total orders count for customer"""
+        if obj.is_dealer:
+            count = obj.assigned_orders.count()
+            if count > 0:
+                url = reverse('admin:tasks_order_changelist') + f'?assigned_dealer__id__exact={obj.id}'
+                return format_html('<a href="{}">{} assigned orders</a>', url, count)
+            return '0 assigned orders'
+        else:
+            count = obj.order_set.count()
+            if count > 0:
+                url = reverse('admin:tasks_order_changelist') + f'?customer__id__exact={obj.id}'
+                return format_html('<a href="{}">{} orders</a>', url, count)
+            return '0 orders'
+
+    total_orders.short_description = 'Orders'
+
+    def commission_info(self, obj):
+        """Display commission information for dealers"""
+        if obj.is_dealer:
+            rate = obj.dealer_commission_rate
+            earned = obj.commissions.filter(is_paid=True).aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+            pending = obj.commissions.filter(is_paid=False).aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+
+            return format_html(
+                'Rate: {}%<br>Earned: ${:,.2f}<br>Pending: ${:,.2f}',
+                rate, float(earned), float(pending)
+            )
+        return '-'
+
+    commission_info.short_description = 'Commission Info'
+
+    def make_dealer(self, request, queryset):
+        """Admin action to convert users to dealers"""
+        count = 0
+        for user in queryset.filter(is_dealer=False):
+            user.is_dealer = True
+            user.dealer_commission_rate = Decimal('5.00')  # Default 5%
+            user.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"{count} users converted to dealers with 5% commission rate")
+
+    make_dealer.short_description = "Convert to dealer (5% commission)"
+
+    def remove_dealer(self, request, queryset):
+        """Admin action to remove dealer status"""
+        count = 0
+        for user in queryset.filter(is_dealer=True):
+            user.is_dealer = False
+            user.dealer_commission_rate = Decimal('0.00')
+            user.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"{count} dealers converted to regular users")
+
+    remove_dealer.short_description = "Remove dealer status"
+
+    def set_commission_rate(self, request, queryset):
+        """Admin action to set commission rate - this would need a custom form"""
+        # For now, just set to 10%
+        count = 0
+        for dealer in queryset.filter(is_dealer=True):
+            dealer.dealer_commission_rate = Decimal('10.00')
+            dealer.save()
+            count += 1
+
+        if count > 0:
+            self.message_user(request, f"Commission rate set to 10% for {count} dealers")
+
+    set_commission_rate.short_description = "Set commission rate to 10%"

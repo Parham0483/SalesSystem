@@ -1,10 +1,8 @@
-# tasks/services/notification_service.py - Enhanced with New Arrival, Dealer Assignment, and Commission Payments
-
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils.html import strip_tags
-from ..models import EmailNotification, Customer
+from ..models import EmailNotification, Customer, SMSNotification
 import logging
 import ssl
 from smtplib import SMTP_SSL, SMTPException
@@ -13,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    """Enhanced Persian email notifications with New Arrival, Dealer Assignment, and Commission features"""
+    """Enhanced Persian email + SMS notifications"""
 
     @staticmethod
     def send_email_with_tracking(order=None, email_type=None, recipient_email=None, subject=None, html_content=None,
@@ -66,32 +64,185 @@ class NotificationService:
             notification.save()
             return True
 
-        except SMTPException as e:
-            error_msg = f"SMTP Error: {str(e)}"
-            notification.error_message = error_msg
-            notification.save()
-            logger.error(f"❌ SMTP Error: {email_type} to {recipient_email} - {error_msg}")
-            return False
-
-        except ssl.SSLError as e:
-            error_msg = f"SSL Error: {str(e)}"
-            notification.error_message = error_msg
-            notification.save()
-            logger.error(f"❌ SSL Error: {email_type} to {recipient_email} - {error_msg}")
-            return False
-
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            error_msg = f"Email Error: {str(e)}"
             notification.error_message = error_msg
             notification.save()
             logger.error(f"❌ Email failed: {email_type} to {recipient_email} - {error_msg}")
             return False
 
-    # ========== EXISTING ORDER NOTIFICATIONS ==========
+    @staticmethod
+    def send_sms_notification(phone, message, order=None, sms_type='general', announcement=None, dealer=None):
+        """Send SMS notification using Kavenegar"""
+
+        # Check if SMS is enabled
+        if not getattr(settings, 'SMS_NOTIFICATIONS_ENABLED', False):
+            logger.info("📱 SMS notifications are disabled")
+            return False
+
+        try:
+            from .sms_service import KavenegarSMSService
+
+            # Initialize SMS service
+            sms_service = KavenegarSMSService()
+
+            # Clean phone number
+            clean_phone = KavenegarSMSService.clean_phone_number(phone)
+            if not clean_phone:
+                logger.error(f"❌ Invalid phone number: {phone}")
+                return False
+
+            # Send SMS
+            result = sms_service.send_sms(
+                receptor=clean_phone,
+                message=message,
+                order=order,
+                sms_type=sms_type
+            )
+
+            # Update SMS notification with additional context
+            if result.get('success'):
+                # Find the most recent SMS notification and update it
+                sms_notification = SMSNotification.objects.filter(
+                    recipient_phone=clean_phone,
+                    message=message[:500],
+                    sms_type=sms_type
+                ).order_by('-sent_at').first()
+
+                if sms_notification:
+                    sms_notification.announcement = announcement
+                    sms_notification.dealer = dealer
+                    sms_notification.save()
+
+                logger.info(f"✅ SMS sent successfully to {clean_phone}")
+                return True
+            else:
+                logger.error(f"❌ SMS failed to {clean_phone}: {result.get('error', 'Unknown error')}")
+                return False
+
+        except ImportError:
+            logger.warning("⚠️ SMS service not available - kavenegar package not installed")
+            return False
+        except Exception as e:
+            logger.error(f"❌ SMS service error: {str(e)}")
+            return False
+
+    @staticmethod
+    def send_dual_notification(order, notification_type, custom_sms_message=None, custom_email_data=None):
+        """
+        Send both email and SMS notification for an order
+
+        Args:
+            order: Order object
+            notification_type: Type of notification ('order_submitted', 'pricing_ready', etc.)
+            custom_sms_message: Custom SMS message (optional)
+            custom_email_data: Custom email data (optional)
+
+        Returns:
+            dict: Results of both email and SMS sending
+        """
+        results = {
+            'email': {'sent': False, 'error': None},
+            'sms': {'sent': False, 'error': None}
+        }
+
+        # Send Email Notification
+        try:
+            email_sent = False
+
+            if notification_type == 'order_submitted':
+                email_sent = NotificationService.notify_admin_new_order(order)
+
+                # Also send SMS to customer
+                if order.customer.phone:
+                    sms_message = custom_sms_message or f"""سلام {order.customer.name}
+سفارش #{order.id} با موفقیت ثبت شد.
+منتظر قیمت‌گذاری باشید.
+یان تجارت پویا کویر"""
+
+                    sms_sent = NotificationService.send_sms_notification(
+                        phone=order.customer.phone,
+                        message=sms_message,
+                        order=order,
+                        sms_type=notification_type
+                    )
+                    results['sms']['sent'] = sms_sent
+
+            elif notification_type == 'pricing_ready':
+                email_sent = NotificationService.notify_customer_pricing_ready(order)
+
+                # Send SMS to customer
+                if order.customer.phone:
+                    sms_message = custom_sms_message or f"""سلام {order.customer.name}
+قیمت سفارش #{order.id} آماده است.
+مبلغ: {order.quoted_total:,.0f} ریال
+لطفا وارد سایت شوید.
+یان تجارت پویا کویر"""
+
+                    sms_sent = NotificationService.send_sms_notification(
+                        phone=order.customer.phone,
+                        message=sms_message,
+                        order=order,
+                        sms_type=notification_type
+                    )
+                    results['sms']['sent'] = sms_sent
+
+            elif notification_type == 'order_confirmed':
+                email_sent = NotificationService.notify_customer_order_confirmed(order, include_pdf=True)
+
+                # Send SMS to customer
+                if order.customer.phone:
+                    sms_message = custom_sms_message or f"""سلام {order.customer.name}
+سفارش #{order.id} تایید شد!
+مبلغ: {order.quoted_total:,.0f} ریال
+در حال آماده‌سازی است.
+یان تجارت پویا کویر"""
+
+                    sms_sent = NotificationService.send_sms_notification(
+                        phone=order.customer.phone,
+                        message=sms_message,
+                        order=order,
+                        sms_type=notification_type
+                    )
+                    results['sms']['sent'] = sms_sent
+
+            elif notification_type == 'order_rejected':
+                email_sent = NotificationService.notify_customer_order_rejected(
+                    order, order.customer_rejection_reason or 'No reason provided'
+                )
+
+                # Send SMS to customer
+                if order.customer.phone:
+                    sms_message = custom_sms_message or f"""سلام {order.customer.name}
+متاسفانه سفارش #{order.id} لغو شد.
+برای اطلاعات بیشتر تماس بگیرید.
+یان تجارت پویا کویر"""
+
+                    sms_sent = NotificationService.send_sms_notification(
+                        phone=order.customer.phone,
+                        message=sms_message,
+                        order=order,
+                        sms_type=notification_type
+                    )
+                    results['sms']['sent'] = sms_sent
+
+            elif notification_type == 'dealer_assigned':
+                # This would be handled separately by notify_dealer_assignment
+                email_sent = True  # Assume handled elsewhere
+
+            results['email']['sent'] = email_sent
+
+        except Exception as e:
+            results['email']['error'] = str(e)
+            logger.error(f"❌ Dual notification email failed: {str(e)}")
+
+        return results
+
+    # ========== EXISTING EMAIL METHODS (Updated with SMS integration) ==========
 
     @staticmethod
     def notify_admin_new_order(order):
-        """Step 1: Notify admin when customer submits order"""
+        """Step 1: Notify admin when customer submits order + SMS to customer"""
         try:
             subject = f"سفارش جدید #{order.id} - {order.customer.name}"
 
@@ -116,7 +267,6 @@ class NotificationService:
             success_count = 0
             for admin_email in admin_emails:
                 try:
-                    from django.core.mail import send_mail
                     send_mail(
                         subject=subject,
                         message=message,
@@ -147,6 +297,20 @@ class NotificationService:
                         error_message=str(e)
                     )
 
+            # NEW: Send SMS to customer confirming order submission
+            if order.customer.phone:
+                customer_sms = f"""سلام {order.customer.name}
+سفارش #{order.id} با موفقیت ثبت شد.
+منتظر قیمت‌گذاری باشید.
+یان تجارت پویا کویر"""
+
+                NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=customer_sms,
+                    order=order,
+                    sms_type='order_submitted'
+                )
+
             logger.info(f"📧 Step 1: New order notification sent to {success_count}/{len(admin_emails)} admins")
             return success_count > 0
 
@@ -156,7 +320,7 @@ class NotificationService:
 
     @staticmethod
     def notify_customer_pricing_ready(order):
-        """Step 2: Notify customer when admin completes pricing"""
+        """Step 2: Notify customer when admin completes pricing + SMS"""
         try:
             subject = f"قیمت‌گذاری سفارش #{order.id} آماده است"
 
@@ -180,7 +344,7 @@ class NotificationService:
 با تشکر از اعتماد شما
             """.strip()
 
-            from django.core.mail import send_mail
+            # Send email
             send_mail(
                 subject=subject,
                 message=message,
@@ -196,6 +360,21 @@ class NotificationService:
                 subject=subject,
                 is_successful=True
             )
+
+            # NEW: Send SMS notification
+            if order.customer.phone:
+                sms_message = f"""سلام {order.customer.name}
+قیمت سفارش #{order.id} آماده است.
+مبلغ: {order.quoted_total:,.0f} ریال
+لطفا وارد سایت شوید.
+یان تجارت پویا کویر"""
+
+                NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=sms_message,
+                    order=order,
+                    sms_type='pricing_ready'
+                )
 
             logger.info(f"📧 Step 2: Pricing ready notification sent to {order.customer.email}")
             return True
@@ -214,7 +393,7 @@ class NotificationService:
 
     @staticmethod
     def notify_customer_order_confirmed(order, include_pdf=True):
-        """Step 3a: Notify customer when they confirm order"""
+        """Step 3a: Notify customer when they confirm order + SMS"""
         try:
             subject = f"سفارش #{order.id} تأیید شد"
 
@@ -236,7 +415,7 @@ class NotificationService:
 تیم فروش
             """.strip()
 
-            from django.core.mail import send_mail
+            # Send email
             send_mail(
                 subject=subject,
                 message=message,
@@ -252,6 +431,21 @@ class NotificationService:
                 subject=subject,
                 is_successful=True
             )
+
+            # NEW: Send SMS notification
+            if order.customer.phone:
+                sms_message = f"""سلام {order.customer.name}
+سفارش #{order.id} تایید شد!
+مبلغ: {order.quoted_total:,.0f} ریال
+در حال آماده‌سازی است.
+یان تجارت پویا کویر"""
+
+                NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=sms_message,
+                    order=order,
+                    sms_type='order_confirmed'
+                )
 
             logger.info(f"📧 Step 3a: Order confirmed notification sent to {order.customer.email}")
             return True
@@ -270,7 +464,7 @@ class NotificationService:
 
     @staticmethod
     def notify_customer_order_rejected(order, rejection_reason):
-        """Step 3b: Notify customer when they reject order"""
+        """Step 3b: Notify customer when they reject order + SMS"""
         try:
             subject = f"سفارش #{order.id} رد شد"
 
@@ -293,7 +487,7 @@ class NotificationService:
 تیم فروش
             """.strip()
 
-            from django.core.mail import send_mail
+            # Send email
             send_mail(
                 subject=subject,
                 message=message,
@@ -310,6 +504,20 @@ class NotificationService:
                 is_successful=True
             )
 
+            # NEW: Send SMS notification
+            if order.customer.phone:
+                sms_message = f"""سلام {order.customer.name}
+متاسفانه سفارش #{order.id} لغو شد.
+برای اطلاعات بیشتر تماس بگیرید.
+یان تجارت پویا کویر"""
+
+                NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=sms_message,
+                    order=order,
+                    sms_type='order_rejected'
+                )
+
             logger.info(f"📧 Step 3b: Order rejected notification sent to {order.customer.email}")
             return True
 
@@ -325,6 +533,8 @@ class NotificationService:
             )
             return False
 
+    # ========== EXISTING METHODS (keeping all your existing methods) ==========
+
     @staticmethod
     def safe_date_format(date_field):
         """Safely format date field that might be string or date object"""
@@ -338,7 +548,7 @@ class NotificationService:
 
     @staticmethod
     def notify_all_customers_new_arrival(announcement):
-        """FIXED: Notify all active customers about new arrival announcement"""
+        """UPDATED: Notify all active customers about new arrival announcement + SMS"""
         try:
             # Get all active customers (excluding staff)
             customers = Customer.objects.filter(
@@ -349,6 +559,7 @@ class NotificationService:
             subject = f"🚢 محموله جدید رسید - {announcement.title}"
 
             success_count = 0
+            sms_sent_count = 0
             total_customers = customers.count()
 
             logger.info(f"📧 Starting new arrival notification to {total_customers} customers")
@@ -381,7 +592,7 @@ class NotificationService:
     تیم فروش یان تجارت پویا کویر
                     """.strip()
 
-                    from django.core.mail import send_mail
+                    # Send email
                     send_mail(
                         subject=subject,
                         message=message,
@@ -390,9 +601,9 @@ class NotificationService:
                         fail_silently=False,
                     )
 
-                    # FIXED: Track notification without order
+                    # Track email notification
                     EmailNotification.objects.create(
-                        order=None,  # FIXED: Explicitly set to None
+                        order=None,
                         email_type='new_arrival_customer',
                         recipient_email=customer.email,
                         subject=subject,
@@ -402,11 +613,28 @@ class NotificationService:
 
                     success_count += 1
 
+                    # NEW: Send SMS if customer has phone
+                    if customer.phone:
+                        sms_message = f"""سلام {customer.name}
+محموله جدید "{announcement.title}" رسید!
+برای مشاهده وارد سایت شوید.
+یان تجارت پویا کویر"""
+
+                        sms_sent = NotificationService.send_sms_notification(
+                            phone=customer.phone,
+                            message=sms_message,
+                            announcement=announcement,
+                            sms_type='new_arrival_customer'
+                        )
+
+                        if sms_sent:
+                            sms_sent_count += 1
+
                 except Exception as e:
                     logger.error(f"❌ Failed to send new arrival notification to {customer.email}: {e}")
-                    # FIXED: Track failed notification without order
+                    # Track failed email notification
                     EmailNotification.objects.create(
-                        order=None,  # FIXED: Explicitly set to None
+                        order=None,
                         email_type='new_arrival_customer',
                         recipient_email=customer.email,
                         subject=subject,
@@ -416,6 +644,7 @@ class NotificationService:
                     )
 
             logger.info(f"📧 New arrival notification sent to {success_count}/{total_customers} customers")
+            logger.info(f"📱 SMS sent to {sms_sent_count} customers")
             return success_count
 
         except Exception as e:

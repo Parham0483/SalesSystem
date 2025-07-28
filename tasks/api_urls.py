@@ -12,6 +12,12 @@ from tasks.views.admin import (
     AdminCustomerViewSet, AdminDealerViewSet, AdminAnnouncementViewSet,
     AdminReportsViewSet
 )
+from tasks.views.profile import (
+    UserProfileViewSet,
+    request_password_reset,
+    verify_reset_otp,
+    reset_password
+)
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -32,6 +38,7 @@ router.register(r'admin/customers', AdminCustomerViewSet, basename='admin-custom
 router.register(r'admin/dealers', AdminDealerViewSet, basename='admin-dealers')
 router.register(r'admin/announcements', AdminAnnouncementViewSet, basename='admin-announcements')
 router.register(r'admin/reports', AdminReportsViewSet, basename='admin-reports')
+router.register(r'profile', UserProfileViewSet, basename='profile')
 
 # URL patterns for authentication and API endpoints
 urlpatterns = [
@@ -44,6 +51,11 @@ urlpatterns = [
     # JWT token endpoints
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+
+    #Password Reset URLs
+    path('auth/password-reset/request/', request_password_reset, name='password_reset_request'),
+    path('auth/password-reset/verify-otp/', verify_reset_otp, name='password_reset_verify'),
+    path('auth/password-reset/reset/', reset_password, name='password_reset_complete'),
 
     # API endpoints from the router
     path('', include(router.urls)),
