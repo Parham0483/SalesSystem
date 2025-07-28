@@ -7,12 +7,14 @@ import CreateOrderPage from '../component/CreateOrderPage';
 import OrderDetailPage from '../component/OrderDetailPage';
 import NeoBrutalistCard from "../component/NeoBrutalist/NeoBrutalistCard";
 import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
+import ProfilePage from "../component/ProfilePage";
 import '../styles/Main/dashboard.css';
 
 const DashboardPage = () => {
     const [orders, setOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showCreateOrder, setShowCreateOrder] = useState(false);
+    const [showProfileModal, setShowProfileModal] = useState(false);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -228,7 +230,7 @@ const DashboardPage = () => {
                         text="پروفایل"
                         color="purple-400"
                         textColor="white"
-                        onClick={() => navigate('/profile')}
+                        onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
                     />
                     <NeoBrutalistButton
@@ -575,6 +577,15 @@ const DashboardPage = () => {
                         onOrderUpdated={handleOrderCreated}
                     />
                 )}
+            </NeoBrutalistModal>
+
+            <NeoBrutalistModal
+                isOpen={showProfileModal}
+                onClose={() => setShowProfileModal(false)}
+                title="پروفایل کاربری"
+                size="large"
+            >
+                <ProfilePage />
             </NeoBrutalistModal>
         </div>
     );

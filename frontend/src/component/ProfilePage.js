@@ -7,7 +7,7 @@ import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistModal from './NeoBrutalist/NeoBrutalistModal';
 import '../styles/component/profile.css'
 
-const ProfilePage = () => {
+const ProfilePage = ({ isModal = false }) => {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -159,7 +159,8 @@ const ProfilePage = () => {
 
     return (
         <div className="profile-container">
-            {/* Header */}
+            {/* Conditionally render the header */}
+            {!isModal && (
             <div className="profile-header">
                 <div className="profile-title">
                     <h1>پروفایل کاربری</h1>
@@ -182,7 +183,7 @@ const ProfilePage = () => {
                     />
                 </div>
             </div>
-
+            )}
             {/* Messages */}
             {message && (
                 <div className="message-banner success">

@@ -6,10 +6,12 @@ import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
 import DealerOrderDetailPage from '../component/DealerOrderDetailPage';
 import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
+import ProfilePage from '../component/ProfilePage';
 
 const DealerDashboard = () => {
     const [orders, setOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
     const { categories } = useCategories();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -196,7 +198,7 @@ const DealerDashboard = () => {
                         text="پروفایل"
                         color="purple-400"
                         textColor="white"
-                        onClick={() => navigate('/profile')}
+                        onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
                     />
                     <NeoBrutalistButton
@@ -494,6 +496,14 @@ const DealerDashboard = () => {
                         />
                     </div>
                 )}
+            </NeoBrutalistModal>
+            <NeoBrutalistModal
+                isOpen={showProfileModal}
+                onClose={() => setShowProfileModal(false)}
+                title="پروفایل کاربری"
+                size="large"
+            >
+                <ProfilePage />
             </NeoBrutalistModal>
         </div>
     );
