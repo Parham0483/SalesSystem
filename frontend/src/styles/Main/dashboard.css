@@ -42,7 +42,14 @@
     gap: 1rem;
     align-items: center;
 }
-
+.profile-btn, .products-btn ,
+.new-arrivals-btn, .logout-btn{
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 .create-order-btn {
     padding: 12px 24px ;
     font-size: 16px ;

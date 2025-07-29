@@ -586,7 +586,7 @@ class OrderItem(models.Model):
 
     # Admin pricing fields
     quoted_unit_price = models.DecimalField(
-        max_digits=10,
+        max_digits=15,
         decimal_places=2,
         default=Decimal('0.00'),
         help_text="Price quoted by admin"

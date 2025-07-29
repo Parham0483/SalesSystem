@@ -1,18 +1,19 @@
-// src/pages/ProfilePage.js - Main Profile Page
+// src/component/ProfilePage.js - Enhanced Neo-Brutalist Profile Page
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import NeoBrutalistModal from './NeoBrutalist/NeoBrutalistModal';
-import '../styles/component/profile.css'
+import '../styles/component/profile.css';
 
 const ProfilePage = ({ isModal = false }) => {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
-    const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'orders', 'notifications', 'security'
+    const [activeTab, setActiveTab] = useState('profile');
     const [editing, setEditing] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [ordersData, setOrdersData] = useState(null);
@@ -133,126 +134,139 @@ const ProfilePage = ({ isModal = false }) => {
 
     if (loading) {
         return (
-            <div className="profile-container">
-                <div className="profile-header">
-                    <h1>در حال بارگیری...</h1>
-                </div>
+            <div className="enhanced-profile-container">
+                <NeoBrutalistCard className="profile-loading-card">
+                    <div className="profile-loading-content">
+                        <div className="profile-loading-spinner">🔄</div>
+                        <h2>در حال بارگیری...</h2>
+                    </div>
+                </NeoBrutalistCard>
             </div>
         );
     }
 
     if (!profile) {
         return (
-            <div className="profile-container">
-                <div className="profile-header">
-                    <h1>خطا در بارگیری پروفایل</h1>
-                    <NeoBrutalistButton
-                        text="بازگشت به داشبورد"
-                        color="blue-400"
-                        textColor="white"
-                        onClick={() => navigate('/dashboard')}
-                    />
-                </div>
+            <div className="enhanced-profile-container">
+                <NeoBrutalistCard className="profile-error-card">
+                    <div className="profile-error-content">
+                        <span className="profile-error-icon">❌</span>
+                        <h3>خطا در بارگیری پروفایل</h3>
+                        <NeoBrutalistButton
+                            text="بازگشت به داشبورد"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => navigate('/dashboard')}
+                        />
+                    </div>
+                </NeoBrutalistCard>
             </div>
         );
     }
 
     return (
-        <div className="profile-container">
-            {/* Conditionally render the header */}
+        <div className="enhanced-profile-page">
+            {/* Header - only show if not in modal */}
             {!isModal && (
-            <div className="profile-header">
-                <div className="profile-title">
-                    <h1>پروفایل کاربری</h1>
-                    <span className="profile-subtitle">{profile.name}</span>
+                <div className="enhanced-profile-header">
+                    <div className="profile-header-content">
+                        <div className="profile-title-section">
+                            <h1 className="enhanced-profile-title"> پروفایل کاربری</h1>
+                            <div className="profile-user-welcome">
+                                <span className="profile-welcome-text">خوش آمدید،</span>
+                                <span className="profile-user-name">{profile.name}</span>
+                            </div>
+                        </div>
+                        <div className="profile-header-actions">
+                            <NeoBrutalistButton
+                                text="خروج"
+                                color="red-400"
+                                textColor="white"
+                                onClick={handleLogout}
+                                className="profile-logout-btn"
+                            />
+                        </div>
+                    </div>
                 </div>
-                <div className="header-actions">
-
-                    <NeoBrutalistButton
-                        text="خروج"
-                        color="red-400"
-                        textColor="white"
-                        onClick={handleLogout}
-                        className="logout-btn"
-                    />
-                </div>
-            </div>
             )}
+
             {/* Messages */}
             {message && (
-                <div className="message-banner success">
+                <div className="profile-status-message profile-success">
+                    <span className="profile-status-icon">✅</span>
                     <span>{message}</span>
                     <NeoBrutalistButton
                         text="×"
                         color="white"
                         textColor="black"
                         onClick={() => setMessage('')}
-                        className="close-btn"
+                        className="profile-close-btn"
                     />
                 </div>
             )}
 
             {error && (
-                <div className="message-banner error">
+                <div className="profile-status-message profile-error">
+                    <span className="profile-status-icon">⚠️</span>
                     <span>{error}</span>
                     <NeoBrutalistButton
                         text="×"
                         color="white"
                         textColor="black"
                         onClick={() => setError('')}
-                        className="close-btn"
+                        className="profile-close-btn"
                     />
                 </div>
             )}
 
-            {/* Tabs */}
-            <div className="profile-tabs">
+            {/* Navigation Tabs */}
+            <div className="enhanced-profile-navigation">
                 <NeoBrutalistButton
                     text="اطلاعات شخصی"
                     color={activeTab === 'profile' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('profile')}
-                    className="tab-btn"
+                    className="profile-nav-tab"
                 />
                 <NeoBrutalistButton
                     text="خلاصه سفارشات"
                     color={activeTab === 'orders' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('orders')}
-                    className="tab-btn"
+                    className="profile-nav-tab"
                 />
                 <NeoBrutalistButton
                     text="تاریخچه اطلاع‌رسانی"
                     color={activeTab === 'notifications' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('notifications')}
-                    className="tab-btn"
+                    className="profile-nav-tab"
                 />
                 <NeoBrutalistButton
                     text="امنیت"
                     color={activeTab === 'security' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('security')}
-                    className="tab-btn"
+                    className="profile-nav-tab"
                 />
             </div>
 
             {/* Tab Content */}
-            <div className="profile-content">
-                {/* Profile Tab */}
+            <div className="enhanced-profile-content">
+                {/* Profile Information Tab */}
                 {activeTab === 'profile' && (
-                    <div className="profile-tab">
-                        <NeoBrutalistCard className="profile-info-card">
-                            <div className="card-header">
-                                <h2>اطلاعات شخصی</h2>
+                    <div className="profile-info-tab">
+                        {/* Main Profile Card */}
+                        <NeoBrutalistCard className="enhanced-profile-info-card">
+                            <div className="profile-card-header">
+                                <h2 className="profile-card-title"> اطلاعات شخصی</h2>
                                 <NeoBrutalistButton
-                                    text={editing ? 'لغو' : 'ویرایش'}
+                                    text={editing ? 'لغو' : ' ویرایش'}
                                     color={editing ? 'red-400' : 'blue-400'}
                                     textColor="white"
                                     onClick={() => {
                                         setEditing(!editing);
                                         if (editing) {
-                                            // Reset form data
                                             setFormData({
                                                 name: profile.name,
                                                 phone: profile.phone || '',
@@ -260,120 +274,145 @@ const ProfilePage = ({ isModal = false }) => {
                                             });
                                         }
                                     }}
+                                    className="profile-edit-toggle-btn"
                                 />
                             </div>
 
                             {editing ? (
-                                <form onSubmit={handleUpdateProfile} className="profile-form">
-                                    <div className="form-group">
-                                        <label>نام:</label>
-                                        <input
-                                            type="text"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            required
-                                            className="form-input"
-                                        />
+                                <form onSubmit={handleUpdateProfile} className="enhanced-profile-edit-form">
+                                    <div className="profile-form-grid">
+                                        <div className="profile-form-group">
+                                            <label className="profile-form-label">نام:</label>
+                                            <NeoBrutalistInput
+                                                type="text"
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                placeholder="نام و نام خانوادگی"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="profile-form-group">
+                                            <label className="profile-form-label">شماره تماس:</label>
+                                            <NeoBrutalistInput
+                                                type="tel"
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                placeholder="09121234567"
+                                            />
+                                        </div>
+
+                                        <div className="profile-form-group profile-form-full-width">
+                                            <label className="profile-form-label">نام شرکت:</label>
+                                            <NeoBrutalistInput
+                                                type="text"
+                                                value={formData.company_name}
+                                                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                                                placeholder="نام شرکت (اختیاری)"
+                                            />
+                                        </div>
                                     </div>
 
-                                    <div className="form-group">
-                                        <label>شماره تماس:</label>
-                                        <input
-                                            type="tel"
-                                            value={formData.phone}
-                                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                            placeholder="09121234567"
-                                            className="form-input"
-                                        />
-                                    </div>
-
-                                    <div className="form-group">
-                                        <label>نام شرکت:</label>
-                                        <input
-                                            type="text"
-                                            value={formData.company_name}
-                                            onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                                            className="form-input"
-                                        />
-                                    </div>
-
-                                    <div className="form-actions">
+                                    <div className="profile-form-actions">
                                         <NeoBrutalistButton
                                             text="ذخیره تغییرات"
                                             color="green-400"
-                                            textColor="white"
+                                            textColor="black"
                                             type="submit"
+                                            className="profile-save-btn"
                                         />
                                     </div>
                                 </form>
                             ) : (
-                                <div className="profile-info">
-                                    <div className="info-grid">
-                                        <div className="info-item">
-                                            <strong>نام:</strong> {profile.name}
+                                <div className="enhanced-profile-display">
+                                    <div className="profile-info-grid">
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> نام:</span>
+                                            <span className="profile-info-value">{profile.name}</span>
                                         </div>
-                                        <div className="info-item">
-                                            <strong>ایمیل:</strong> {profile.email}
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> ایمیل:</span>
+                                            <span className="profile-info-value">{profile.email}</span>
                                         </div>
-                                        <div className="info-item">
-                                            <strong>شماره تماس:</strong> {profile.phone || 'وارد نشده'}
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> شماره تماس:</span>
+                                            <span className="profile-info-value">{profile.phone || 'وارد نشده'}</span>
                                         </div>
-                                        <div className="info-item">
-                                            <strong>شرکت:</strong> {profile.company_name || 'وارد نشده'}
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> شرکت:</span>
+                                            <span className="profile-info-value">{profile.company_name || 'وارد نشده'}</span>
                                         </div>
-                                        <div className="info-item">
-                                            <strong>نوع حساب:</strong> {profile.is_dealer ? 'نماینده فروش' : 'مشتری'}
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> نوع حساب:</span>
+                                            <span className="profile-info-value profile-account-type">
+                                                {profile.is_dealer ? ' نماینده فروش' : ' مشتری'}
+                                            </span>
                                         </div>
-                                        <div className="info-item">
-                                            <strong>عضویت:</strong> {new Date(profile.date_joined).toLocaleDateString('fa-IR')}
+                                        <div className="profile-info-item">
+                                            <span className="profile-info-label"> عضویت:</span>
+                                            <span className="profile-info-value">{new Date(profile.date_joined).toLocaleDateString('fa-IR')}</span>
                                         </div>
                                         {profile.last_login && (
-                                            <div className="info-item">
-                                                <strong>آخرین ورود:</strong> {new Date(profile.last_login).toLocaleDateString('fa-IR')}
+                                            <div className="profile-info-item">
+                                                <span className="profile-info-label"> آخرین ورود:</span>
+                                                <span className="profile-info-value">{new Date(profile.last_login).toLocaleDateString('fa-IR')}</span>
                                             </div>
                                         )}
                                     </div>
-
-                                    {profile.is_dealer && (
-                                        <div className="dealer-info">
-                                            <h3>اطلاعات نمایندگی</h3>
-                                            <div className="info-grid">
-                                                <div className="info-item">
-                                                    <strong>کد نماینده:</strong> {profile.dealer_code}
-                                                </div>
-                                                <div className="info-item">
-                                                    <strong>درصد کمیسیون:</strong> {profile.dealer_commission_rate}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </NeoBrutalistCard>
 
-                        {/* Statistics */}
-                        {profile.statistics && (
-                            <NeoBrutalistCard className="stats-card">
-                                <h3>آمار حساب کاربری</h3>
-                                <div className="stats-grid">
-                                    <div className="stat-item">
-                                        <span className="stat-value">{profile.statistics.total_orders || 0}</span>
-                                        <span className="stat-label">کل سفارشات</span>
+                        {/* Dealer Information Card */}
+                        {profile.is_dealer && (
+                            <NeoBrutalistCard className="enhanced-dealer-info-card">
+                                <div className="profile-card-header">
+                                    <h3 className="profile-card-title">اطلاعات نمایندگی</h3>
+                                </div>
+                                <div className="profile-dealer-details">
+                                    <div className="profile-dealer-grid">
+                                        <div className="profile-dealer-item">
+                                            <span className="profile-dealer-label">کد نماینده:</span>
+                                            <span className="profile-dealer-value">{profile.dealer_code}</span>
+                                        </div>
+                                        <div className="profile-dealer-item">
+                                            <span className="profile-dealer-label"> درصد کمیسیون:</span>
+                                            <span className="profile-dealer-value profile-commission-rate">{profile.dealer_commission_rate}%</span>
+                                        </div>
                                     </div>
-                                    <div className="stat-item">
-                                        <span className="stat-value">{profile.statistics.completed_orders || 0}</span>
-                                        <span className="stat-label">تکمیل شده</span>
+                                </div>
+                            </NeoBrutalistCard>
+                        )}
+
+                        {/* Statistics Card */}
+                        {profile.statistics && (
+                            <NeoBrutalistCard className="enhanced-statistics-card">
+                                <div className="profile-card-header">
+                                    <h3 className="profile-card-title"> آمار حساب کاربری</h3>
+                                </div>
+                                <div className="profile-stats-grid">
+                                    <div className="profile-stat-item">
+                                        <div className="profile-stat-icon">📦</div>
+                                        <div className="profile-stat-number">{profile.statistics.total_orders || 0}</div>
+                                        <div className="profile-stat-label">کل سفارشات</div>
+                                    </div>
+                                    <div className="profile-stat-item">
+                                        <div className="profile-stat-icon">✅</div>
+                                        <div className="profile-stat-number">{profile.statistics.completed_orders || 0}</div>
+                                        <div className="profile-stat-label">تکمیل شده</div>
                                     </div>
                                     {profile.statistics.total_spent && (
-                                        <div className="stat-item">
-                                            <span className="stat-value">{formatPrice(profile.statistics.total_spent)}</span>
-                                            <span className="stat-label">کل خرید</span>
+                                        <div className="profile-stat-item">
+                                            <div className="profile-stat-icon"></div>
+                                            <div className="profile-stat-number">{formatPrice(profile.statistics.total_spent)}</div>
+                                            <div className="profile-stat-label">کل خرید</div>
                                         </div>
                                     )}
                                     {profile.statistics.total_commission_earned && (
-                                        <div className="stat-item">
-                                            <span className="stat-value">{formatPrice(profile.statistics.total_commission_earned)}</span>
-                                            <span className="stat-label">کمیسیون کسب شده</span>
+                                        <div className="profile-stat-item">
+                                            <div className="profile-stat-icon">💰</div>
+                                            <div className="profile-stat-number">{formatPrice(profile.statistics.total_commission_earned)}</div>
+                                            <div className="profile-stat-label">کمیسیون کسب شده</div>
                                         </div>
                                     )}
                                 </div>
@@ -382,69 +421,79 @@ const ProfilePage = ({ isModal = false }) => {
                     </div>
                 )}
 
-                {/* Orders Tab */}
+                {/* Orders Summary Tab */}
                 {activeTab === 'orders' && (
-                    <div className="orders-tab">
+                    <div className="profile-orders-tab">
                         {ordersData ? (
                             <>
-                                <NeoBrutalistCard className="orders-summary-card">
-                                    <h3>خلاصه سفارشات</h3>
-                                    <div className="summary-grid">
-                                        <div className="summary-item">
-                                            <span className="summary-value">{ordersData.summary.total_orders}</span>
-                                            <span className="summary-label">کل سفارشات</span>
+                                <NeoBrutalistCard className="enhanced-orders-summary-card">
+                                    <div className="profile-card-header">
+                                        <h3 className="profile-card-title">خلاصه سفارشات</h3>
+                                        <NeoBrutalistButton
+                                            text="مشاهده همه"
+                                            color="blue-400"
+                                            textColor="white"
+                                            onClick={() => navigate('/dashboard')}
+                                            className="profile-view-all-btn"
+                                        />
+                                    </div>
+                                    <div className="profile-orders-summary-grid">
+                                        <div className="profile-summary-item profile-summary-total">
+                                            <div className="profile-summary-icon">📦</div>
+                                            <div className="profile-summary-number">{ordersData.summary.total_orders}</div>
+                                            <div className="profile-summary-label">کل سفارشات</div>
                                         </div>
-                                        <div className="summary-item">
-                                            <span className="summary-value">{ordersData.summary.pending_orders}</span>
-                                            <span className="summary-label">در انتظار قیمت‌گذاری</span>
+                                        <div className="profile-summary-item profile-summary-pending">
+                                            <div className="profile-summary-icon">⏳</div>
+                                            <div className="profile-summary-number">{ordersData.summary.pending_orders}</div>
+                                            <div className="profile-summary-label">در انتظار قیمت‌گذاری</div>
                                         </div>
-                                        <div className="summary-item">
-                                            <span className="summary-value">{ordersData.summary.waiting_approval}</span>
-                                            <span className="summary-label">در انتظار تأیید</span>
+                                        <div className="profile-summary-item profile-summary-waiting">
+                                            <div className="profile-summary-icon">⌛</div>
+                                            <div className="profile-summary-number">{ordersData.summary.waiting_approval}</div>
+                                            <div className="profile-summary-label">در انتظار تأیید</div>
                                         </div>
-                                        <div className="summary-item">
-                                            <span className="summary-value">{ordersData.summary.completed_orders}</span>
-                                            <span className="summary-label">تکمیل شده</span>
+                                        <div className="profile-summary-item profile-summary-completed">
+                                            <div className="profile-summary-icon">✅</div>
+                                            <div className="profile-summary-number">{ordersData.summary.completed_orders}</div>
+                                            <div className="profile-summary-label">تکمیل شده</div>
                                         </div>
                                         {ordersData.summary.total_spent && (
-                                            <div className="summary-item">
-                                                <span className="summary-value">{formatPrice(ordersData.summary.total_spent)}</span>
-                                                <span className="summary-label">کل خرید</span>
+                                            <div className="profile-summary-item profile-summary-total-spent">
+
+                                                <div className="profile-summary-amount">{formatPrice(ordersData.summary.total_spent)}</div>
+                                                <div className="profile-summary-label">کل خرید</div>
                                             </div>
                                         )}
                                     </div>
                                 </NeoBrutalistCard>
 
                                 {ordersData.recent_orders.length > 0 && (
-                                    <NeoBrutalistCard className="recent-orders-card">
-                                        <div className="card-header">
-                                            <h3>آخرین سفارشات</h3>
-                                            <NeoBrutalistButton
-                                                text="مشاهده همه"
-                                                color="blue-400"
-                                                textColor="white"
-                                                onClick={() => navigate('/dashboard')}
-                                            />
+                                    <NeoBrutalistCard className="enhanced-recent-orders-card">
+                                        <div className="profile-card-header">
+                                            <h3 className="profile-card-title">آخرین سفارشات</h3>
                                         </div>
-                                        <div className="recent-orders-list">
+                                        <div className="profile-recent-orders-list">
                                             {ordersData.recent_orders.map(order => (
-                                                <div key={order.id} className="recent-order-item">
-                                                    <div className="order-info">
-                                                        <strong>سفارش #{order.id}</strong>
-                                                        <span className="order-date">
-                                                            {new Date(order.created_at).toLocaleDateString('fa-IR')}
-                                                        </span>
-                                                    </div>
-                                                    <div className="order-status">
-                                                        <span className={`status-badge ${order.status}`}>
-                                                            {order.status === 'completed' ? 'تکمیل شده' :
-                                                                order.status === 'pending_pricing' ? 'در انتظار قیمت' :
-                                                                    order.status === 'waiting_customer_approval' ? 'در انتظار تأیید' :
-                                                                        'نامشخص'}
-                                                        </span>
-                                                        <span className="order-total">
-                                                            {formatPrice(order.total)}
-                                                        </span>
+                                                <div key={order.id} className="profile-recent-order-item">
+                                                    <div className="profile-order-info">
+                                                        <div className="profile-order-header">
+                                                            <strong className="profile-order-id">سفارش #{order.id}</strong>
+                                                            <span className={`profile-order-status profile-order-status-${order.status.replace(/_/g, '-')}`}>
+                                                                {order.status === 'completed' ? '✅ تکمیل شده' :
+                                                                    order.status === 'pending_pricing' ? '⏳ در انتظار قیمت' :
+                                                                        order.status === 'waiting_customer_approval' ? '⌛ در انتظار تأیید' :
+                                                                            'نامشخص'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="profile-order-details">
+                                                            <span className="profile-order-date">
+                                                                 {new Date(order.created_at).toLocaleDateString('fa-IR')}
+                                                            </span>
+                                                            <span className="profile-order-total">
+                                                                💰 {formatPrice(order.total)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -453,56 +502,66 @@ const ProfilePage = ({ isModal = false }) => {
                                 )}
                             </>
                         ) : (
-                            <div className="loading-state">در حال بارگیری...</div>
+                            <NeoBrutalistCard className="profile-loading-card">
+                                <div className="profile-loading-content">
+                                    <div className="profile-loading-spinner">🔄</div>
+                                    <span>در حال بارگیری...</span>
+                                </div>
+                            </NeoBrutalistCard>
                         )}
                     </div>
                 )}
 
                 {/* Notifications Tab */}
                 {activeTab === 'notifications' && (
-                    <div className="notifications-tab">
+                    <div className="profile-notifications-tab">
                         {notificationsData ? (
                             <>
-                                <NeoBrutalistCard className="notifications-summary-card">
-                                    <h3>خلاصه اطلاع‌رسانی‌ها</h3>
-                                    <div className="notification-stats">
-                                        <div className="stat-item">
-                                            <span className="stat-value">{notificationsData.email_notifications.length}</span>
-                                            <span className="stat-label">📧 ایمیل</span>
+                                <NeoBrutalistCard className="enhanced-notifications-summary-card">
+                                    <div className="profile-card-header">
+                                        <h3 className="profile-card-title">🔔 خلاصه اطلاع‌رسانی‌ها</h3>
+                                    </div>
+                                    <div className="profile-notifications-stats">
+                                        <div className="profile-notification-stat">
+                                            <div className="profile-stat-label">ایمیل</div>
+                                            <div className="profile-stat-number">📧&nbsp;&nbsp;&nbsp;&nbsp;{notificationsData.email_notifications.length}</div>
+
                                         </div>
-                                        <div className="stat-item">
-                                            <span className="stat-value">{notificationsData.sms_notifications.length}</span>
-                                            <span className="stat-label">📱 پیامک</span>
+                                        <div className="profile-notification-stat">
+                                            <div className="profile-stat-label">پیامک</div>
+                                            <div className="profile-stat-number">📱&nbsp;&nbsp;&nbsp;&nbsp;{notificationsData.sms_notifications.length}</div>
                                         </div>
-                                        <div className="stat-item">
-                                            <span className="stat-value">{notificationsData.total_notifications}</span>
-                                            <span className="stat-label">کل اطلاع‌رسانی‌ها</span>
+                                        <div className="profile-notification-stat profile-notification-stat-total">
+                                            <div className="profile-stat-label">کل اطلاع‌رسانی‌ها</div>
+                                            <div className="profile-stat-number">🔔&nbsp;&nbsp;&nbsp;&nbsp;{notificationsData.total_notifications}</div>
                                         </div>
                                     </div>
                                 </NeoBrutalistCard>
 
-                                <div className="notifications-lists">
+                                <div className="profile-notifications-lists">
                                     {/* Email Notifications */}
                                     {notificationsData.email_notifications.length > 0 && (
-                                        <NeoBrutalistCard className="notifications-list-card">
-                                            <h4>📧 اطلاع‌رسانی‌های ایمیل</h4>
-                                            <div className="notifications-list">
+                                        <NeoBrutalistCard className="enhanced-notifications-list-card">
+                                            <div className="profile-card-header">
+                                                <h4 className="profile-card-title"> اطلاع‌رسانی‌های ایمیل</h4>
+                                            </div>
+                                            <div className="profile-notifications-list">
                                                 {notificationsData.email_notifications.slice(0, 10).map(notification => (
-                                                    <div key={`email-${notification.id}`} className="notification-item">
-                                                        <div className="notification-header">
-                                                            <span className="notification-type">
+                                                    <div key={`email-${notification.id}`} className="profile-notification-item">
+                                                        <div className="profile-notification-header">
+                                                            <span className="profile-notification-type">
                                                                 {getNotificationIcon('email')} {getNotificationTypeText(notification.email_type)}
                                                             </span>
-                                                            <span className={`notification-status ${notification.is_successful ? 'success' : 'failed'}`}>
+                                                            <span className={`profile-notification-status ${notification.is_successful ? 'profile-notification-success' : 'profile-notification-failed'}`}>
                                                                 {notification.is_successful ? '✅' : '❌'}
                                                             </span>
                                                         </div>
-                                                        <div className="notification-content">
-                                                            <div className="notification-subject">{notification.subject}</div>
-                                                            <div className="notification-meta">
-                                                                <span>{new Date(notification.sent_at).toLocaleDateString('fa-IR')}</span>
+                                                        <div className="profile-notification-content">
+                                                            <div className="profile-notification-subject">{notification.subject}</div>
+                                                            <div className="profile-notification-meta">
+                                                                <span>تاریخ: {new Date(notification.sent_at).toLocaleDateString('fa-IR')}</span>
                                                                 {notification.order_id && (
-                                                                    <span>سفارش #{notification.order_id}</span>
+                                                                    <span> سفارش #{notification.order_id}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -514,25 +573,27 @@ const ProfilePage = ({ isModal = false }) => {
 
                                     {/* SMS Notifications */}
                                     {notificationsData.sms_notifications.length > 0 && (
-                                        <NeoBrutalistCard className="notifications-list-card">
-                                            <h4>📱 اطلاع‌رسانی‌های پیامک</h4>
-                                            <div className="notifications-list">
+                                        <NeoBrutalistCard className="enhanced-notifications-list-card">
+                                            <div className="profile-card-header">
+                                                <h4 className="profile-card-title"> اطلاع‌رسانی‌های پیامک</h4>
+                                            </div>
+                                            <div className="profile-notifications-list">
                                                 {notificationsData.sms_notifications.slice(0, 10).map(notification => (
-                                                    <div key={`sms-${notification.id}`} className="notification-item">
-                                                        <div className="notification-header">
-                                                            <span className="notification-type">
+                                                    <div key={`sms-${notification.id}`} className="profile-notification-item">
+                                                        <div className="profile-notification-header">
+                                                            <span className="profile-notification-type">
                                                                 {getNotificationIcon('sms')} {getNotificationTypeText(null, notification.sms_type)}
                                                             </span>
-                                                            <span className={`notification-status ${notification.is_successful ? 'success' : 'failed'}`}>
+                                                            <span className={`profile-notification-status ${notification.is_successful ? 'profile-notification-success' : 'profile-notification-failed'}`}>
                                                                 {notification.is_successful ? '✅' : '❌'}
                                                             </span>
                                                         </div>
-                                                        <div className="notification-content">
-                                                            <div className="notification-message">{notification.message}</div>
-                                                            <div className="notification-meta">
-                                                                <span>{new Date(notification.sent_at).toLocaleDateString('fa-IR')}</span>
+                                                        <div className="profile-notification-content">
+                                                            <div className="profile-notification-message">{notification.message}</div>
+                                                            <div className="profile-notification-meta">
+                                                                <span>تاریخ: {new Date(notification.sent_at).toLocaleDateString('fa-IR')}</span>
                                                                 {notification.order_id && (
-                                                                    <span>سفارش #{notification.order_id}</span>
+                                                                    <span> سفارش #{notification.order_id}</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -544,52 +605,64 @@ const ProfilePage = ({ isModal = false }) => {
                                 </div>
                             </>
                         ) : (
-                            <div className="loading-state">در حال بارگیری...</div>
+                            <NeoBrutalistCard className="profile-loading-card">
+                                <div className="profile-loading-content">
+                                    <div className="profile-loading-spinner">🔄</div>
+                                    <span>در حال بارگیری...</span>
+                                </div>
+                            </NeoBrutalistCard>
                         )}
                     </div>
                 )}
 
                 {/* Security Tab */}
                 {activeTab === 'security' && (
-                    <div className="security-tab">
-                        <NeoBrutalistCard className="security-card">
-                            <h3>🔒 تنظیمات امنیتی</h3>
-                            <div className="security-actions">
-                                <div className="security-item">
-                                    <div className="security-info">
+                    <div className="profile-security-tab">
+                        <NeoBrutalistCard className="enhanced-security-card">
+                            <div className="profile-card-header">
+                                <h3 className="profile-card-title"> تنظیمات امنیتی</h3>
+                            </div>
+                            <div className="profile-security-actions">
+                                <div className="profile-security-item">
+                                    <div className="profile-security-icon"></div>
+                                    <div className="profile-security-info">
                                         <h4>تغییر رمز عبور</h4>
-                                        <p>برای حفظ امنیت حساب خود، رمز عبور را به‌طور مرتب تغییر دهید</p>
+                                        <p>برای حفظ امنیت حساب خود، رمز عبور را به‌طور مرتب تغییر دهید.</p>
                                     </div>
                                     <NeoBrutalistButton
                                         text="تغییر رمز عبور"
                                         color="orange-400"
-                                        textColor="white"
+                                        textColor="black"
                                         onClick={() => setShowPasswordModal(true)}
+                                        className="profile-security-btn"
                                     />
                                 </div>
 
-                                <div className="security-item">
-                                    <div className="security-info">
+                                <div className="profile-security-item">
+                                    <div className="profile-security-icon"></div>
+                                    <div className="profile-security-info">
                                         <h4>آخرین ورود</h4>
                                         <p>
                                             {profile.last_login
-                                                ? new Date(profile.last_login).toLocaleDateString('fa-IR')
-                                                : 'اطلاعات موجود نیست'
+                                                ? `آخرین فعالیت شما در تاریخ ${new Date(profile.last_login).toLocaleDateString('fa-IR')} ثبت شده است.`
+                                                : 'اطلاعاتی در مورد آخرین ورود شما وجود ندارد.'
                                             }
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="security-item">
-                                    <div className="security-info">
+                                <div className="profile-security-item">
+                                    <div className="profile-security-icon"></div>
+                                    <div className="profile-security-info">
                                         <h4>خروج از همه دستگاه‌ها</h4>
-                                        <p>در صورت مشکوک بودن فعالیت حساب، از همه دستگاه‌ها خارج شوید</p>
+                                        <p>اگر فعالیت مشکوکی در حساب خود مشاهده کردید، می‌توانید از تمام دستگاه‌های دیگر خارج شوید.</p>
                                     </div>
                                     <NeoBrutalistButton
                                         text="خروج از همه"
                                         color="red-400"
                                         textColor="white"
                                         onClick={handleLogout}
+                                        className="profile-security-btn"
                                     />
                                 </div>
                             </div>
@@ -602,16 +675,19 @@ const ProfilePage = ({ isModal = false }) => {
             <NeoBrutalistModal
                 isOpen={showPasswordModal}
                 onClose={() => setShowPasswordModal(false)}
-                title="تغییر رمز عبور"
+                title=" تغییر رمز عبور"
                 size="medium"
             >
                 <ChangePasswordForm
                     onSuccess={() => {
                         setShowPasswordModal(false);
-                        setMessage('رمز عبور با موفقیت تغییر یافت');
+                        setMessage('رمز عبور با موفقیت تغییر یافت.');
                         setTimeout(() => setMessage(''), 3000);
                     }}
-                    onError={(error) => setError(error)}
+                    onError={(err) => {
+                        setError(err);
+                        setTimeout(() => setError(''), 5000);
+                    }}
                 />
             </NeoBrutalistModal>
         </div>
@@ -629,80 +705,85 @@ const ChangePasswordForm = ({ onSuccess, onError }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        onError(''); // Clear previous errors
 
         if (formData.new_password !== formData.confirm_password) {
-            onError('رمزهای عبور جدید مطابقت ندارند');
+            onError('رمزهای عبور جدید با یکدیگر مطابقت ندارند.');
             return;
         }
 
         if (formData.new_password.length < 8) {
-            onError('رمز عبور باید حداقل 8 کاراکتر باشد');
+            onError('رمز عبور جدید باید حداقل 8 کاراکتر باشد.');
             return;
         }
 
         setLoading(true);
         try {
-            await API.post('/profile/change-password/', formData);
+            await API.post('/profile/change-password/', {
+                current_password: formData.current_password,
+                new_password: formData.new_password,
+            });
             onSuccess();
+            setFormData({ current_password: '', new_password: '', confirm_password: '' });
         } catch (error) {
             console.error('❌ Error changing password:', error);
-            if (error.response?.data?.error) {
-                onError(error.response.data.error);
-            } else {
-                onError('خطا در تغییر رمز عبور');
-            }
+            const errorMsg = error.response?.data?.error || 'خطایی در هنگام تغییر رمز عبور رخ داد. لطفاً رمز عبور فعلی خود را بررسی کنید.';
+            onError(errorMsg);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="password-form">
-            <div className="form-group">
-                <label>رمز عبور فعلی:</label>
-                <input
-                    type="password"
-                    value={formData.current_password}
-                    onChange={(e) => setFormData({ ...formData, current_password: e.target.value })}
-                    required
-                    className="form-input"
-                />
-            </div>
+        <div className="change-password-form-container">
+            <form onSubmit={handleSubmit} className="change-password-form">
+                <div className="profile-form-group">
+                    <label className="profile-form-label">رمز عبور فعلی:</label>
+                    <NeoBrutalistInput
+                        type="password"
+                        value={formData.current_password}
+                        onChange={(e) => setFormData({ ...formData, current_password: e.target.value })}
+                        placeholder="رمز عبور فعلی را وارد کنید"
+                        required
+                    />
+                </div>
 
-            <div className="form-group">
-                <label>رمز عبور جدید:</label>
-                <input
-                    type="password"
-                    value={formData.new_password}
-                    onChange={(e) => setFormData({ ...formData, new_password: e.target.value })}
-                    required
-                    minLength={8}
-                    className="form-input"
-                />
-            </div>
+                <div className="profile-form-group">
+                    <label className="profile-form-label">رمز عبور جدید:</label>
+                    <NeoBrutalistInput
+                        type="password"
+                        value={formData.new_password}
+                        onChange={(e) => setFormData({ ...formData, new_password: e.target.value })}
+                        placeholder="رمز عبور جدید (حداقل 8 کاراکتر)"
+                        required
+                        minLength={8}
+                    />
+                </div>
 
-            <div className="form-group">
-                <label>تأیید رمز عبور جدید:</label>
-                <input
-                    type="password"
-                    value={formData.confirm_password}
-                    onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
-                    required
-                    minLength={8}
-                    className="form-input"
-                />
-            </div>
+                <div className="profile-form-group">
+                    <label className="profile-form-label">تأیید رمز عبور جدید:</label>
+                    <NeoBrutalistInput
+                        type="password"
+                        value={formData.confirm_password}
+                        onChange={(e) => setFormData({ ...formData, confirm_password: e.target.value })}
+                        placeholder="رمز عبور جدید را مجدداً وارد کنید"
+                        required
+                        minLength={8}
+                    />
+                </div>
 
-            <div className="form-actions">
-                <NeoBrutalistButton
-                    text={loading ? 'در حال تغییر...' : 'تغییر رمز عبور'}
-                    color="green-400"
-                    textColor="white"
-                    type="submit"
-                    disabled={loading}
-                />
-            </div>
-        </form>
+                <div className="profile-form-actions">
+                    <NeoBrutalistButton
+                        text={loading ? 'در حال تغییر...' : ' تغییر رمز عبور'}
+                        color="green-400"
+                        textColor="black"
+                        type="submit"
+                        disabled={loading}
+                        className="profile-save-btn"
+                    />
+                </div>
+            </form>
+        </div>
     );
 };
 

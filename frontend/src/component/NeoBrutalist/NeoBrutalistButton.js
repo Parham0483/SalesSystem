@@ -14,7 +14,6 @@ const NeoBrutalistButton = ({
             className={`neo-brutalist-btn ${className}`}
             style={{
                 backgroundColor: `var(--${color})`,
-                color: textColor
             }}
             onClick={onClick}
             {...props}

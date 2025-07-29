@@ -206,6 +206,13 @@ const DashboardPage = () => {
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
+                        text="خروج"
+                        color="red-400"
+                        textColor="white"
+                        onClick={handleLogout}
+                        className="logout-btn"
+                    />
+                    <NeoBrutalistButton
                         text="محموله‌های جدید"
                         color="blue-400"
                         textColor="white"
@@ -214,7 +221,7 @@ const DashboardPage = () => {
                     />
                     <NeoBrutalistButton
                         text="کاتالوگ"
-                        color="purple-400"
+                        color="green-400"
                         textColor="white"
                         onClick={() => navigate('/product')}
                         className="products-btn"
@@ -233,13 +240,7 @@ const DashboardPage = () => {
                         onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
                     />
-                    <NeoBrutalistButton
-                        text="خروج"
-                        color="red-400"
-                        textColor="white"
-                        onClick={handleLogout}
-                        className="logout-btn"
-                    />
+
                 </div>
             </div>
 

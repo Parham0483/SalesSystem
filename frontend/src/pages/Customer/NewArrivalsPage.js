@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../component/api';
+import { useAuth } from '../../hooks/useAuth';
 import { useCategories } from '../../hooks/useCategories';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
@@ -16,6 +17,7 @@ const NewArrivalsPage = () => {
     const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const navigate = useNavigate();
+    const { isDealer } = useAuth();
 
     useEffect(() => {
         fetchShipmentAnnouncements();
@@ -131,20 +133,21 @@ const NewArrivalsPage = () => {
                             onClick={() => navigate('/product')}
                             className="catalog-btn"
                         />
-                        <NeoBrutalistButton
-                            text="ثبت سفارش"
-                            color="green-400"
-                            textColor="black"
-                            onClick={() => navigate('/orders/create')}
-                            className="order-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="داشبورد"
-                            color="yellow-400"
-                            textColor="black"
-                            onClick={() => navigate('/dashboard')}
-                            className="dashboard-btn"
-                        />
+                        {!isDealer && (
+                            <NeoBrutalistButton
+                                text="ثبت سفارش"
+                                color="yellow-400"
+                                textColor="black"
+                                onClick={() => navigate('/orders/create')}
+                                className="create-order-btn"
+                            />
+                        )}
+
+                        {!isDealer && (
+                            <NeoBrutalistButton text="داشبورد" color="yellow-400" textColor="black" onClick={() => navigate('/dashboard')} className="dashboard-btn" />
+                        )}
+                        {isDealer && (<NeoBrutalistButton text="داشبورد" color="yellow-400" textColor="black" onClick={() => navigate('/dealer')} className="dashboard-btn" />
+                        )}
                         <NeoBrutalistButton
                             text="خروج"
                             color="red-400"
@@ -392,13 +395,14 @@ const NewArrivalsPage = () => {
                 <NeoBrutalistCard className="quick-actions-card">
                     <h3 className="actions-title">خدمات سریع</h3>
                     <div className="actions-grid">
-                        <NeoBrutalistButton
+                        {!isDealer && (<NeoBrutalistButton
                             text="📋 ثبت سفارش جدید"
                             color="green-400"
                             textColor="black"
                             onClick={() => navigate('/orders/create')}
                             className="quick-action-btn"
-                        />
+                        />)}
+
 
                         <NeoBrutalistButton
                             text="📦 کاتالوگ کامل"
@@ -418,13 +422,13 @@ const NewArrivalsPage = () => {
                             className="quick-action-btn"
                         />
 
-                        <NeoBrutalistButton
-                            text="📨 سفارشات من"
+                        {!isDealer && (<NeoBrutalistButton
+                            text="📨 سفارشات "
                             color="purple-400"
                             textColor="white"
                             onClick={() => navigate('/orders')}
                             className="quick-action-btn"
-                        />
+                        />)}
                     </div>
                 </NeoBrutalistCard>
             </div>

@@ -181,6 +181,13 @@ const DealerDashboard = () => {
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
+                        text="خروج"
+                        color="red-400"
+                        textColor="white"
+                        onClick={handleLogout}
+                        className="logout-btn"
+                    />
+                    <NeoBrutalistButton
                         text="محموله‌های جدید"
                         color="blue-400"
                         textColor="white"
@@ -188,25 +195,19 @@ const DealerDashboard = () => {
                         className="new-arrivals-btn"
                     />
                     <NeoBrutalistButton
-                        text="کاتالوگ محصولات"
+                        text="کاتالوگ"
                         color="purple-400"
                         textColor="white"
                         onClick={() => navigate('/product')}
                         className="products-btn"
                     />
+
                     <NeoBrutalistButton
                         text="پروفایل"
-                        color="purple-400"
+                        color="yellow-400"
                         textColor="white"
                         onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
-                    />
-                    <NeoBrutalistButton
-                        text="خروج"
-                        color="red-400"
-                        textColor="white"
-                        onClick={handleLogout}
-                        className="logout-btn"
                     />
                 </div>
             </div>
@@ -432,14 +433,14 @@ const DealerDashboard = () => {
                     <div className="actions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                         <NeoBrutalistButton
                             text="📦 کاتالوگ کامل"
-                            color="blue-400"
+                            color="purple-400"
                             textColor="white"
                             onClick={() => navigate('/product')}
                             className="quick-action-btn"
                         />
                         <NeoBrutalistButton
                             text="🚢 محموله‌های جدید"
-                            color="purple-400"
+                            color="blue-400"
                             textColor="white"
                             onClick={() => navigate('/product/newarrivals')}
                             className="quick-action-btn"
