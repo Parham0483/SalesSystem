@@ -13,6 +13,7 @@ const DealerDashboard = () => {
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const { categories } = useCategories();
+    const [activeTab, setActiveTab] = useState('active');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [dealerStats, setDealerStats] = useState(null);
@@ -252,7 +253,7 @@ const DealerDashboard = () => {
                 </div>
             )}
 
-            {/* Recent Announcements for Dealers */}
+            {/* Recent Announcements Section */}
             {recentAnnouncements.length > 0 && (
                 <div className="recent-announcements-section" style={{ marginBottom: '2rem' }}>
                     <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -266,7 +267,7 @@ const DealerDashboard = () => {
                         />
                     </div>
                     <div className="announcements-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-                        {recentAnnouncements.map(announcement => (
+                        {recentAnnouncements.slice(0, 2).map(announcement => (
                             <NeoBrutalistCard
                                 key={announcement.id}
                                 className="announcement-preview-card"
@@ -284,13 +285,27 @@ const DealerDashboard = () => {
                                             fontSize: '0.75rem',
                                             fontWeight: 'bold'
                                         }}>
-                                            ویژه
-                                        </span>
+                                ویژه
+                            </span>
                                     )}
                                 </div>
                                 <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
                                     {announcement.description.substring(0, 100)}...
                                 </p>
+                                {announcement.images && announcement.images.length > 0 && (
+                                    <div style={{ marginBottom: '1rem' }}>
+                                        <img
+                                            src={announcement.images[0].image}
+                                            alt={announcement.title}
+                                            style={{
+                                                width: '100%',
+                                                height: '120px',
+                                                objectFit: 'cover',
+                                                borderRadius: '8px'
+                                            }}
+                                        />
+                                    </div>
+                                )}
                                 <div style={{ fontSize: '0.8rem', color: '#888' }}>
                                     {new Date(announcement.created_at).toLocaleDateString('fa-IR')}
                                 </div>
@@ -299,6 +314,30 @@ const DealerDashboard = () => {
                     </div>
                 </div>
             )}
+
+            <div className="dashboard-tabs">
+                <NeoBrutalistButton
+                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(o.status)).length})`}
+                    color={activeTab === 'active' ? 'yellow-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('active')}
+                    className="tab-btn"
+                />
+                <NeoBrutalistButton
+                    text={`تکمیل شده (${orders.filter(o => o.status === 'completed').length})`}
+                    color={activeTab === 'completed' ? 'green-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('completed')}
+                    className="tab-btn"
+                />
+                <NeoBrutalistButton
+                    text={`رد شده (${orders.filter(o => ['rejected', 'cancelled'].includes(o.status)).length})`}
+                    color={activeTab === 'rejected' ? 'red-400' : 'gray-400'}
+                    textColor="black"
+                    onClick={() => setActiveTab('rejected')}
+                    className="tab-btn"
+                />
+            </div>
 
             {/* Orders Grid */}
             <div className="orders-grid" style={{
