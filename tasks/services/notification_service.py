@@ -73,7 +73,7 @@ class NotificationService:
 
     @staticmethod
     def send_sms_notification(phone, message, order=None, sms_type='general', announcement=None, dealer=None):
-        """Send SMS notification using Kavenegar"""
+        """Send SMS notification - FIXED to prevent duplicates"""
 
         # Check if SMS is enabled
         if not getattr(settings, 'SMS_NOTIFICATIONS_ENABLED', False):
@@ -86,34 +86,31 @@ class NotificationService:
             # Initialize SMS service
             sms_service = KavenegarSMSService()
 
-            # Clean phone number
-            clean_phone = KavenegarSMSService.clean_phone_number(phone)
+            # Clean phone number for Iranian format
+            clean_phone = sms_service.clean_iranian_phone(phone)
+
             if not clean_phone:
-                logger.error(f"❌ Invalid phone number: {phone}")
+                logger.error(f"❌ Invalid phone number: '{phone}' -> could not clean")
                 return False
+
+            logger.info(f"📱 SMS: {phone} -> {clean_phone}")
+
+            # FIXED: Check for duplicates before sending
+            if sms_service.is_duplicate_sms(clean_phone, message, sms_type):
+                logger.warning(f"⚠️ Duplicate SMS prevented for {clean_phone} - {sms_type}")
+                return True  # Return True because technically it "succeeded" (already sent)
 
             # Send SMS
             result = sms_service.send_sms(
                 receptor=clean_phone,
                 message=message,
                 order=order,
-                sms_type=sms_type
+                sms_type=sms_type,
+                announcement=announcement,
+                dealer=dealer
             )
 
-            # Update SMS notification with additional context
             if result.get('success'):
-                # Find the most recent SMS notification and update it
-                sms_notification = SMSNotification.objects.filter(
-                    recipient_phone=clean_phone,
-                    message=message[:500],
-                    sms_type=sms_type
-                ).order_by('-sent_at').first()
-
-                if sms_notification:
-                    sms_notification.announcement = announcement
-                    sms_notification.dealer = dealer
-                    sms_notification.save()
-
                 logger.info(f"✅ SMS sent successfully to {clean_phone}")
                 return True
             else:
@@ -158,7 +155,7 @@ class NotificationService:
                     sms_message = custom_sms_message or f"""سلام {order.customer.name}
 سفارش #{order.id} با موفقیت ثبت شد.
 منتظر قیمت‌گذاری باشید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                     sms_sent = NotificationService.send_sms_notification(
                         phone=order.customer.phone,
@@ -177,7 +174,7 @@ class NotificationService:
 قیمت سفارش #{order.id} آماده است.
 مبلغ: {order.quoted_total:,.0f} ریال
 لطفا وارد سایت شوید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                     sms_sent = NotificationService.send_sms_notification(
                         phone=order.customer.phone,
@@ -196,7 +193,7 @@ class NotificationService:
 سفارش #{order.id} تایید شد!
 مبلغ: {order.quoted_total:,.0f} ریال
 در حال آماده‌سازی است.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                     sms_sent = NotificationService.send_sms_notification(
                         phone=order.customer.phone,
@@ -216,7 +213,7 @@ class NotificationService:
                     sms_message = custom_sms_message or f"""سلام {order.customer.name}
 متاسفانه سفارش #{order.id} لغو شد.
 برای اطلاعات بیشتر تماس بگیرید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                     sms_sent = NotificationService.send_sms_notification(
                         phone=order.customer.phone,
@@ -238,28 +235,26 @@ class NotificationService:
 
         return results
 
-    # ========== EXISTING EMAIL METHODS (Updated with SMS integration) ==========
-
     @staticmethod
     def notify_admin_new_order(order):
-        """Step 1: Notify admin when customer submits order + SMS to customer"""
+        """FIXED: Step 1 - Notify admin when customer submits order (EMAIL ONLY)"""
         try:
             subject = f"سفارش جدید #{order.id} - {order.customer.name}"
 
             message = f"""
-سفارش جدیدی در سیستم ثبت شده است:
+    سفارش جدیدی در سیستم ثبت شده است:
 
-شماره سفارش: #{order.id}
-نام مشتری: {order.customer.name}
-ایمیل مشتری: {order.customer.email}
-شرکت: {order.customer.company_name or 'ندارد'}
-تاریخ ثبت: {order.created_at.strftime('%Y/%m/%d %H:%M')}
-تعداد اقلام: {order.items.count()} محصول
+    شماره سفارش: #{order.id}
+    نام مشتری: {order.customer.name}
+    ایمیل مشتری: {order.customer.email}
+    شرکت: {order.customer.company_name or 'ندارد'}
+    تاریخ ثبت: {order.created_at.strftime('%Y/%m/%d %H:%M')}
+    تعداد اقلام: {order.items.count()} محصول
 
-{f'نظر مشتری: {order.customer_comment}' if order.customer_comment else ''}
+    {f'نظر مشتری: {order.customer_comment}' if order.customer_comment else ''}
 
-لطفاً وارد پنل مدیریت شوید و قیمت‌گذاری را انجام دهید.
-پنل مدیریت: {settings.FRONTEND_URL}/admin
+    لطفاً وارد پنل مدیریت شوید و قیمت‌گذاری را انجام دهید.
+    پنل مدیریت: {settings.FRONTEND_URL}/admin
             """.strip()
 
             admin_emails = getattr(settings, 'ADMIN_EMAIL_LIST', ['admin@company.com'])
@@ -297,21 +292,8 @@ class NotificationService:
                         error_message=str(e)
                     )
 
-            # NEW: Send SMS to customer confirming order submission
-            if order.customer.phone:
-                customer_sms = f"""سلام {order.customer.name}
-سفارش #{order.id} با موفقیت ثبت شد.
-منتظر قیمت‌گذاری باشید.
-یان تجارت پویا کویر"""
 
-                NotificationService.send_sms_notification(
-                    phone=order.customer.phone,
-                    message=customer_sms,
-                    order=order,
-                    sms_type='order_submitted'
-                )
-
-            logger.info(f"📧 Step 1: New order notification sent to {success_count}/{len(admin_emails)} admins")
+            logger.info(f"📧 Admin email notification sent to {success_count}/{len(admin_emails)} admins")
             return success_count > 0
 
         except Exception as e:
@@ -367,7 +349,7 @@ class NotificationService:
 قیمت سفارش #{order.id} آماده است.
 مبلغ: {order.quoted_total:,.0f} ریال
 لطفا وارد سایت شوید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 NotificationService.send_sms_notification(
                     phone=order.customer.phone,
@@ -438,7 +420,7 @@ class NotificationService:
 سفارش #{order.id} تایید شد!
 مبلغ: {order.quoted_total:,.0f} ریال
 در حال آماده‌سازی است.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 NotificationService.send_sms_notification(
                     phone=order.customer.phone,
@@ -509,7 +491,7 @@ class NotificationService:
                 sms_message = f"""سلام {order.customer.name}
 متاسفانه سفارش #{order.id} لغو شد.
 برای اطلاعات بیشتر تماس بگیرید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 NotificationService.send_sms_notification(
                     phone=order.customer.phone,
@@ -589,7 +571,7 @@ class NotificationService:
     {settings.FRONTEND_URL}/announcements/{announcement.id}
 
     با تشکر،
-    تیم فروش یان تجارت پویا کویر
+    تیم فروش کیان تجارت پویا کویر
                     """.strip()
 
                     # Send email
@@ -618,7 +600,7 @@ class NotificationService:
                         sms_message = f"""سلام {customer.name}
 محموله جدید "{announcement.title}" رسید!
 برای مشاهده وارد سایت شوید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                         sms_sent = NotificationService.send_sms_notification(
                             phone=customer.phone,
@@ -709,7 +691,7 @@ class NotificationService:
     {settings.FRONTEND_URL}/dealer-dashboard
 
     موفق باشید!
-    مدیریت یان تجارت پویا کویر
+    مدیریت کیان تجارت پویا کویر
                     """.strip()
 
                     from django.core.mail import send_mail
@@ -799,7 +781,7 @@ class NotificationService:
 - پیگیری مناسب = کمیسیون بهتر
 
 موفق باشید!
-مدیریت یان تجارت پویا کویر
+مدیریت کیان تجارت پویا کویر
             """.strip()
 
             from django.core.mail import send_mail
@@ -867,7 +849,7 @@ class NotificationService:
 در صورت سؤال، با مدیریت تماس بگیرید.
 
 با احترام،
-مدیریت یان تجارت پویا کویر
+مدیریت کیان تجارت پویا کویر
             """.strip()
 
             from django.core.mail import send_mail
@@ -940,7 +922,7 @@ class NotificationService:
     {settings.FRONTEND_URL}/dealer/commissions
 
     بابت همکاری‌تان متشکریم!
-    مدیریت یان تجارت پویا کویر
+    مدیریت کیان تجارت پویا کویر
 
     📞 در صورت سؤال: {getattr(settings, 'SUPPORT_EMAIL', 'support@company.com')}
             """.strip()

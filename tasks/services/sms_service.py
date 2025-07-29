@@ -1,5 +1,3 @@
-# tasks/services/sms_service.py - FIXED VERSION (Remove timeout parameter)
-
 from kavenegar import KavenegarAPI, APIException, HTTPException
 from django.conf import settings
 from django.utils import timezone
@@ -11,39 +9,22 @@ logger = logging.getLogger(__name__)
 
 
 class KavenegarSMSService:
-    """SMS service using Kavenegar API - FIXED VERSION"""
+    """Simplified SMS service for Iranian domestic numbers only"""
 
     def __init__(self):
         self.api_key = settings.KAVENEGAR_API_KEY
-        self.sender_domestic = settings.KAVENEGAR_SENDER_DOMESTIC
-        self.sender_international = settings.KAVENEGAR_SENDER_INTERNATIONAL
-        self.default_sender = settings.KAVENEGAR_SENDER
+        self.sender_domestic = settings.KAVENEGAR_SENDER_DOMESTIC  # 2000660110
 
         if not self.api_key:
             logger.error("❌ KAVENEGAR_API_KEY not configured in settings")
             raise ValueError("Kavenegar API key is required")
 
-        # FIXED: Remove timeout parameter from KavenegarAPI constructor
         self.api = KavenegarAPI(self.api_key)
-
-    def get_appropriate_sender(self, phone_number):
-        """
-        Choose appropriate sender based on phone number
-        - Iranian numbers: use domestic sender (2000660110)
-        - International numbers: use international sender (0018018949161)
-        """
-        clean_phone = self.clean_phone_number(phone_number)
-
-        if clean_phone and clean_phone.startswith('98'):
-            # Iranian number - use domestic sender
-            return self.sender_domestic
-        else:
-            # International number - use international sender
-            return self.sender_international
 
     def send_sms(self, receptor, message, order=None, sms_type='general', announcement=None, dealer=None):
         """
-        Send SMS with your specific configuration - FIXED VERSION
+        Send SMS - Simplified for Iranian domestic numbers only
+        Expects phone numbers in 09xxxxxxxxx format (11 digits)
         """
 
         # Check if SMS is enabled
@@ -51,19 +32,21 @@ class KavenegarSMSService:
             logger.info("📱 SMS notifications are disabled")
             return {'success': False, 'error': 'SMS notifications disabled'}
 
-        # Clean phone number
-        clean_phone = self.clean_phone_number(receptor)
+        # Clean and validate phone number for Iranian format
+        clean_phone = self.clean_iranian_phone(receptor)
         if not clean_phone:
-            logger.error(f"❌ Invalid phone number: {receptor}")
-            return {'success': False, 'error': 'Invalid phone number format'}
+            logger.error(f"❌ Invalid Iranian phone number: {receptor}")
+            return {'success': False, 'error': f'Invalid Iranian phone number: {receptor}'}
 
-        # Choose appropriate sender
-        sender = self.get_appropriate_sender(clean_phone)
-
-        # Truncate message if too long
-        max_length = getattr(settings, 'SMS_CONFIG', {}).get('max_message_length', 70)
+        # Truncate message if too long (Persian SMS limit)
+        max_length = 150
         if len(message) > max_length:
             message = message[:max_length - 3] + '...'
+
+        # Check for duplicate prevention
+        if self.is_duplicate_sms(clean_phone, message, sms_type):
+            logger.warning(f"⚠️ Duplicate SMS prevented for {clean_phone}")
+            return {'success': False, 'error': 'Duplicate SMS prevented'}
 
         # Create SMS notification record
         notification = SMSNotification.objects.create(
@@ -79,26 +62,26 @@ class KavenegarSMSService:
         try:
             # Check if in test mode
             if getattr(settings, 'SMS_CONFIG', {}).get('use_test_mode', False):
-                test_numbers = getattr(settings, 'SMS_CONFIG', {}).get('test_phone_numbers', [])
-                if clean_phone not in test_numbers:
-                    logger.info(f"📱 Test mode: SMS would be sent to {clean_phone}")
-                    notification.is_successful = True
-                    notification.kavenegar_response = "Test mode - SMS not actually sent"
-                    notification.save()
-                    return {'success': True, 'message': 'Test mode - SMS logged only'}
+                logger.info(f"📱 Test mode: SMS would be sent to {clean_phone}")
+                notification.is_successful = True
+                notification.kavenegar_response = "Test mode - SMS not actually sent"
+                notification.save()
+                return {'success': True, 'message': 'Test mode - SMS logged only'}
 
-            # Send actual SMS
+            # Send SMS using domestic sender
             params = {
-                'sender': sender,
-                'receptor': clean_phone,
+                'sender': self.sender_domestic,  # Always use domestic sender
+                'receptor': clean_phone,  # Phone in 09xxxxxxxxx format
                 'message': message,
             }
+
+            logger.info(f"📱 Sending SMS: {self.sender_domestic} -> {clean_phone} (length: {len(message)})")
 
             response = self.api.sms_send(params)
 
             # Log successful SMS
-            logger.info(f"✅ SMS sent successfully to {clean_phone} via sender {sender}")
-            logger.info(f"📱 Response: {response}")
+            logger.info(f"✅ SMS sent successfully to {clean_phone}")
+            logger.info(f"📱 API Response: {response}")
 
             # Update notification record
             notification.is_successful = True
@@ -118,7 +101,8 @@ class KavenegarSMSService:
                 'success': True,
                 'response': response,
                 'message': 'SMS sent successfully',
-                'sender': sender
+                'sender': self.sender_domestic,
+                'receptor': clean_phone
             }
 
         except APIException as e:
@@ -134,19 +118,6 @@ class KavenegarSMSService:
                 'type': 'api_error'
             }
 
-        except HTTPException as e:
-            error_msg = f"HTTP Error: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-
-            notification.error_message = error_msg
-            notification.save()
-
-            return {
-                'success': False,
-                'error': error_msg,
-                'type': 'http_error'
-            }
-
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}"
             logger.error(f"❌ {error_msg}")
@@ -160,11 +131,134 @@ class KavenegarSMSService:
                 'type': 'general_error'
             }
 
+    def clean_iranian_phone(self, phone):
+        """
+        Clean and validate Iranian phone numbers to 09xxxxxxxxx format only
+
+        Accepted inputs:
+        - 09121234567 -> 09121234567 ✅
+        - 9121234567  -> 09121234567 ✅
+        - 021234567   -> 09121234567 ✅ (remove leading 0, add 09)
+        - +989121234567 -> 09121234567 ✅
+        - 989121234567  -> 09121234567 ✅
+        """
+        if not phone:
+            return None
+
+        # Remove all non-digit characters (removes +, spaces, etc.)
+        phone = re.sub(r'\D', '', str(phone))
+
+        if not phone:
+            return None
+
+        logger.info(f"📱 Cleaning Iranian phone: '{phone}' (length: {len(phone)})")
+
+        # Handle different input formats
+        if phone.startswith('09') and len(phone) == 11:
+            # Already in correct format: 09xxxxxxxxx
+            if self.is_valid_iranian_mobile_prefix(phone):
+                logger.info(f"✅ Phone already in correct format: {phone}")
+                return phone
+            else:
+                logger.warning(f"❌ Invalid Iranian mobile prefix: {phone}")
+                return None
+
+        elif phone.startswith('9') and len(phone) == 10:
+            # Missing leading 0: 9xxxxxxxxx -> 09xxxxxxxxx
+            result = '0' + phone
+            if self.is_valid_iranian_mobile_prefix(result):
+                logger.info(f"✅ Added leading 0: {phone} -> {result}")
+                return result
+            else:
+                logger.warning(f"❌ Invalid prefix after adding 0: {result}")
+                return None
+
+        elif phone.startswith('989') and len(phone) == 12:
+            # International format: 989xxxxxxxxx -> 09xxxxxxxxx
+            result = '0' + phone[2:]  # Remove '98', add '0'
+            if self.is_valid_iranian_mobile_prefix(result):
+                logger.info(f"✅ Converted from international: {phone} -> {result}")
+                return result
+            else:
+                logger.warning(f"❌ Invalid result after international conversion: {result}")
+                return None
+
+        elif phone.startswith('98') and len(phone) == 12:
+            # International without 9: 98xxxxxxxxxx -> might be wrong
+            logger.warning(f"❌ Ambiguous international format: {phone}")
+            return None
+
+        else:
+            logger.warning(f"❌ Unsupported phone format: {phone} (length: {len(phone)})")
+            return None
+
+    def is_valid_iranian_mobile_prefix(self, phone):
+        """
+        Check if phone number has valid Iranian mobile operator prefix
+        Valid prefixes: 0901, 0902, 0903, 0905, 0912, 0913, 0914, 0915, 0916, 0917, 0918, 0919, 0990, 0991, 0992, 0993, 0994, 0995, 0996, 0997, 0998, 0999
+        """
+        if not phone or len(phone) != 11 or not phone.startswith('09'):
+            return False
+
+        # Iranian mobile operator prefixes (first 4 digits)
+        valid_prefixes = [
+            '0901', '0902', '0903', '0905',  # Hamrah-e Avval (MCI)
+            '0912', '0913', '0914', '0915', '0916', '0917', '0918', '0919',  # Irancell
+            '0990', '0991', '0992', '0993', '0994', '0995', '0996', '0997', '0998', '0999'  # Various operators
+        ]
+
+        prefix = phone[:4]
+        is_valid = prefix in valid_prefixes
+
+        if not is_valid:
+            logger.warning(f"❌ Invalid Iranian mobile prefix: {prefix}")
+            logger.info(f"📱 Valid prefixes include: 0901, 0902, 0912, 0913, 0990, etc.")
+
+        return is_valid
+
+    def is_duplicate_sms(self, phone, message, sms_type):
+        """
+        ENHANCED: Check for duplicate SMS to prevent sending the same message multiple times
+        """
+        from datetime import timedelta
+
+        # Check for recent SMS (within last 5 minutes) with same content
+        recent_time = timezone.now() - timedelta(minutes=5)
+
+        # Check for exact duplicates
+        exact_duplicate = SMSNotification.objects.filter(
+            recipient_phone=phone,
+            message=message,
+            sms_type=sms_type,
+            sent_at__gte=recent_time,
+            is_successful=True
+        ).exists()
+
+        if exact_duplicate:
+            logger.warning(f"🔄 Exact duplicate SMS prevented: {sms_type} to {phone}")
+            return True
+
+        # ENHANCED: Check for similar messages (same type and similar content)
+        # This catches cases where message content is slightly different but essentially the same
+        if sms_type in ['order_submitted', 'pricing_ready', 'order_confirmed']:
+            # For order-related SMS, check for any successful SMS of same type within last 2 minutes
+            recent_same_type = SMSNotification.objects.filter(
+                recipient_phone=phone,
+                sms_type=sms_type,
+                sent_at__gte=timezone.now() - timedelta(minutes=2),
+                is_successful=True
+            ).exists()
+
+            if recent_same_type:
+                logger.warning(f"🔄 Similar SMS type prevented: {sms_type} to {phone} (within 2 minutes)")
+                return True
+
+        return False
+
     def send_templated_sms(self, phone, template_key, context_data, order=None, sms_type='templated'):
         """
         Send SMS using predefined templates from settings
         """
-
         templates = getattr(settings, 'SMS_TEMPLATES', {})
         template = templates.get(template_key)
 
@@ -188,108 +282,18 @@ class KavenegarSMSService:
             logger.error(f"❌ {error_msg}")
             return {'success': False, 'error': error_msg}
 
-    def send_otp_sms(self, receptor, token, template='verify', sms_type='otp'):
-        """
-        Send OTP SMS using Kavenegar templates
-        """
-
-        # Clean phone number
-        clean_phone = self.clean_phone_number(receptor)
-        if not clean_phone:
-            return {'success': False, 'error': 'Invalid phone number format'}
-
-        # Create SMS notification record
-        notification = SMSNotification.objects.create(
-            order=None,
-            sms_type=sms_type,
-            recipient_phone=clean_phone,
-            message=f"OTP Template: {template}, Token: {token}",
-            is_successful=False
-        )
-
-        try:
-            params = {
-                'receptor': clean_phone,
-                'template': template,
-                'token': token,
-                'type': 'sms',
-            }
-
-            response = self.api.verify_lookup(params)
-
-            logger.info(f"✅ OTP SMS sent successfully to {clean_phone}")
-
-            # Update notification record
-            notification.is_successful = True
-            notification.kavenegar_response = str(response)
-            notification.save()
-
-            return {
-                'success': True,
-                'response': response,
-                'message': 'OTP SMS sent successfully'
-            }
-
-        except Exception as e:
-            error_msg = f"OTP SMS Error: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-
-            notification.error_message = error_msg
-            notification.save()
-
-            return {
-                'success': False,
-                'error': error_msg
-            }
-
-    @staticmethod
-    def clean_phone_number(phone):
-        """
-        Clean and format phone number for Iranian and international numbers
-        """
-        if not phone:
-            return None
-
-        # Remove all non-digit characters
-        phone = re.sub(r'\D', '', str(phone))
-
-        # Handle Iranian mobile numbers
-        if phone.startswith('98'):
-            # Already has country code
-            return phone
-        elif phone.startswith('0'):
-            # Remove leading zero and add country code
-            return '98' + phone[1:]
-        elif len(phone) == 10:
-            # Add country code for Iranian numbers
-            return '98' + phone
-        elif len(phone) == 11 and phone.startswith('1'):
-            # Remove leading 1 and add country code
-            return '98' + phone[1:]
-        elif len(phone) >= 10:
-            # Assume it's an international number without country code
-            return phone
-        else:
-            logger.warning(f"⚠️ Invalid phone number format: {phone}")
-            return None
-
     def test_connection(self):
-        """Test Kavenegar API connection - FIXED VERSION"""
+        """Test Kavenegar API connection"""
         try:
             logger.info("🧪 Testing Kavenegar connection...")
-            logger.info(f"📱 Using API Key: {self.api_key[:20]}...")
+            logger.info(f"📱 API Key: {self.api_key[:20]}...")
             logger.info(f"📱 Domestic Sender: {self.sender_domestic}")
-            logger.info(f"📱 International Sender: {self.sender_international}")
-
-            # Test API key validity by checking account info (if available)
-            # Since we can't use timeout, we'll just validate the configuration
 
             return {
                 'success': True,
                 'message': 'Kavenegar API configuration is valid',
                 'api_key_preview': self.api_key[:20] + '...',
-                'domestic_sender': self.sender_domestic,
-                'international_sender': self.sender_international
+                'domestic_sender': self.sender_domestic
             }
 
         except Exception as e:
@@ -298,3 +302,45 @@ class KavenegarSMSService:
                 'success': False,
                 'error': str(e)
             }
+
+    @staticmethod
+    def clean_phone_number(phone):
+        """
+        Static method for backward compatibility
+        """
+        try:
+            service = KavenegarSMSService()
+            return service.clean_iranian_phone(phone)
+        except:
+            return None
+
+    def debug_phone_number(self, phone):
+        """
+        Debug phone number cleaning process
+        """
+        logger.info(f"🔍 DEBUG: Analyzing phone number: '{phone}'")
+
+        if not phone:
+            logger.info("🔍 DEBUG: Phone is None or empty")
+            return {'original': phone, 'cleaned': None, 'is_valid': False}
+
+        # Remove non-digits
+        digits_only = re.sub(r'\D', '', str(phone))
+        logger.info(f"🔍 DEBUG: Digits only: '{digits_only}' (length: {len(digits_only)})")
+
+        # Apply cleaning
+        cleaned = self.clean_iranian_phone(phone)
+        logger.info(f"🔍 DEBUG: Cleaned result: '{cleaned}'")
+
+        # Validate
+        is_valid = False
+        if cleaned:
+            is_valid = self.is_valid_iranian_mobile_prefix(cleaned)
+            logger.info(f"🔍 DEBUG: Is valid Iranian mobile: {is_valid}")
+
+        return {
+            'original': phone,
+            'digits_only': digits_only,
+            'cleaned': cleaned,
+            'is_valid': is_valid
+        }

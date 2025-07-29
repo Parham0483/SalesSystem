@@ -1006,18 +1006,6 @@ const AdminAnnouncementsPage = () => {
                                 color="green"
                             />
                         </div>
-                        <div className="form-group">
-                            <NeoBrutalistToggle
-                                checked={formData.is_featured || false}
-                                onChange={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setFormData(prev => ({ ...prev, is_featured: e.target.checked }));
-                                }}
-                                label="به عنوان ویژه نمایش داده شود"
-                                color="yellow"
-                            />
-                        </div>
                     </div>
 
                     <div className="form-actions">

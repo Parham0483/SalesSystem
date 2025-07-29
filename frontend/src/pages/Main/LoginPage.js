@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import NeoBrutalistInput from "../component/NeoBrutalist/NeoBrutalistInput";
-import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
-import "../styles/Main/login.css";
+import NeoBrutalistInput from "../../component/NeoBrutalist/NeoBrutalistInput";
+import NeoBrutalistButton from "../../component/NeoBrutalist/NeoBrutalistButton";
+import "../../styles/Main/login.css";
 
 const LoginPage = () => {
     const [email, setEmail] = useState("");

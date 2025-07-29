@@ -1,21 +1,21 @@
 // frontend/src/App.js - Corrected routing order for dealer pages
 
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
+import LoginPage from './pages/Main/LoginPage';
+import RegisterPage from './pages/Main/RegisterPage';
+import DashboardPage from './pages/Customer/DashboardPage';
 import OrderDetailPage from './component/OrderDetailPage';
 import CreateOrderPage from './component/CreateOrderPage';
 import { useEffect } from 'react';
 import axios from 'axios';
-import MainPage from "./pages/MainPage";
+import MainPage from "./pages/Main/MainPage";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AdminOrderDetailPage from "./component/AdminOrderDetailPage";
 import AdminRoute from "./component/AdminRoute";
-import DealerDashboard from "./pages/DealerDashboard";
+import DealerDashboard from "./pages/Dealer/DealerDashboard";
 import DealerRoute from "./component/DealerRoute";
-import ProductsPage from "./pages/ProductsPage";
-import NewArrivalsPage from "./pages/NewArrivalsPage";
+import ProductsPage from "./pages/Customer/ProductsPage";
+import NewArrivalsPage from "./pages/Customer/NewArrivalsPage";
 import AdminOrdersPage  from "./pages/admin/AdminOrdersPage";
 import AdminAnnouncementsPage from "./pages/admin/AdminAnnouncementsPage";
 import AdminProductPage from "./pages/admin/AdminProductPage";

@@ -1,12 +1,12 @@
 // frontend/src/pages/ProductsPage.js - UPDATED Customer View
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../component/api';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistInput from '../component/NeoBrutalist/NeoBrutalistInput';
-import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
-import '../styles/component/ProductsPage.css';
+import API from '../../component/api';
+import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
+import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
+import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
+import '../../styles/component/ProductsPage.css';
 
 const ProductsPage = () => {
     const [products, setProducts] = useState([]);

@@ -240,23 +240,23 @@ if DEBUG:
 
     # Message templates for different scenarios
     SMS_TEMPLATES = {
-        'order_submitted': 'سلام {customer_name}\nسفارش #{order_id} با موفقیت ثبت شد.\nمنتظر قیمت‌گذاری باشید.\nیان تجارت پویا کویر',
+        'order_submitted': 'سلام {customer_name}\nسفارش #{order_id} با موفقیت ثبت شد.\nمنتظر قیمت‌گذاری باشید.\nکیان تجارت پویا کویر',
 
-        'pricing_ready': 'سلام {customer_name}\nقیمت سفارش #{order_id} آماده است.\nمبلغ: {total_amount:,.0f} ریال\nلطفا وارد سایت شوید.\nیان تجارت پویا کویر',
+        'pricing_ready': 'سلام {customer_name}\nقیمت سفارش #{order_id} آماده است.\nمبلغ: {total_amount:,.0f} ریال\nلطفا وارد سایت شوید.\nکیان تجارت پویا کویر',
 
-        'order_confirmed': 'سلام {customer_name}\nسفارش #{order_id} تایید شد!\nمبلغ: {total_amount:,.0f} ریال\nدر حال آماده‌سازی است.\nیان تجارت پویا کویر',
+        'order_confirmed': 'سلام {customer_name}\nسفارش #{order_id} تایید شد!\nمبلغ: {total_amount:,.0f} ریال\nدر حال آماده‌سازی است.\nکیان تجارت پویا کویر',
 
-        'order_rejected': 'سلام {customer_name}\nمتاسفانه سفارش #{order_id} لغو شد.\nبرای اطلاعات بیشتر تماس بگیرید.\nیان تجارت پویا کویر',
+        'order_rejected': 'سلام {customer_name}\nمتاسفانه سفارش #{order_id} لغو شد.\nبرای اطلاعات بیشتر تماس بگیرید.\nکیان تجارت پویا کویر',
 
-        'order_completed': 'سلام {customer_name}\nسفارش #{order_id} تکمیل شد!\nاز خرید شما متشکریم.\nیان تجارت پویا کویر',
+        'order_completed': 'سلام {customer_name}\nسفارش #{order_id} تکمیل شد!\nاز خرید شما متشکریم.\nکیان تجارت پویا کویر',
 
-        'dealer_assigned': 'سلام {dealer_name}\nسفارش #{order_id} به شما تخصیص داده شد.\nمشتری: {customer_name}\nکمیسیون: {commission_rate}%\nوارد پنل شوید.\nیان تجارت پویا کویر',
+        'dealer_assigned': 'سلام {dealer_name}\nسفارش #{order_id} به شما تخصیص داده شد.\nمشتری: {customer_name}\nکمیسیون: {commission_rate}%\nوارد پنل شوید.\nکیان تجارت پویا کویر',
 
-        'dealer_removed': 'سلام {dealer_name}\nسفارش #{order_id} از شما حذف شد.\n{reason}\nیان تجارت پویا کویر',
+        'dealer_removed': 'سلام {dealer_name}\nسفارش #{order_id} از شما حذف شد.\n{reason}\nکیان تجارت پویا کویر',
 
-        'new_arrival': 'سلام {customer_name}\nمحموله جدید "{announcement_title}" رسید!\nبرای مشاهده وارد سایت شوید.\nیان تجارت پویا کویر',
+        'new_arrival': 'سلام {customer_name}\nمحموله جدید "{announcement_title}" رسید!\nبرای مشاهده وارد سایت شوید.\nکیان تجارت پویا کویر',
 
-        'otp_verification': 'کد تایید شما: {otp_code}\nیان تجارت پویا کویر',
+        'otp_verification': 'کد تایید شما: {otp_code}\nکیان تجارت پویا کویر',
     }
 
     # Kavenegar OTP Templates (if you create them in your Kavenegar panel)

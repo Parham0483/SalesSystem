@@ -167,13 +167,7 @@ const ProfilePage = ({ isModal = false }) => {
                     <span className="profile-subtitle">{profile.name}</span>
                 </div>
                 <div className="header-actions">
-                    <NeoBrutalistButton
-                        text="داشبورد"
-                        color="blue-400"
-                        textColor="white"
-                        onClick={() => navigate('/dashboard')}
-                        className="back-btn"
-                    />
+
                     <NeoBrutalistButton
                         text="خروج"
                         color="red-400"

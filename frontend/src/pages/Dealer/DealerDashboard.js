@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../component/api';
-import { useCategories } from '../hooks/useCategories';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import DealerOrderDetailPage from '../component/DealerOrderDetailPage';
-import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
-import ProfilePage from '../component/ProfilePage';
+import API from '../../component/api';
+import { useCategories } from '../../hooks/useCategories';
+import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
+import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
+import DealerOrderDetailPage from '../../component/DealerOrderDetailPage';
+import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
+import ProfilePage from '../../component/ProfilePage';
 
 const DealerDashboard = () => {
     const [orders, setOrders] = useState([]);

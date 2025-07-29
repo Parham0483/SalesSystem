@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../component/api';
-import { useCategories } from '../hooks/useCategories';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistModal from '../component/NeoBrutalist/NeoBrutalistModal';
-import '../styles/component/NewArrivalsPage.css';
+import API from '../../component/api';
+import { useCategories } from '../../hooks/useCategories';
+import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
+import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
+import '../../styles/component/NewArrivalsPage.css';
 
 const NewArrivalsPage = () => {
     const [shipmentAnnouncements, setShipmentAnnouncements] = useState([]);

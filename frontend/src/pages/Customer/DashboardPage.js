@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API from '../component/api';
-import {useCategories} from "../hooks/useCategories";
-import NeoBrutalistModal from "../component/NeoBrutalist/NeoBrutalistModal";
-import CreateOrderPage from '../component/CreateOrderPage';
-import OrderDetailPage from '../component/OrderDetailPage';
-import NeoBrutalistCard from "../component/NeoBrutalist/NeoBrutalistCard";
-import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton";
-import ProfilePage from "../component/ProfilePage";
-import '../styles/Main/dashboard.css';
+import API from '../../component/api';
+import {useCategories} from "../../hooks/useCategories";
+import NeoBrutalistModal from "../../component/NeoBrutalist/NeoBrutalistModal";
+import CreateOrderPage from '../../component/CreateOrderPage';
+import OrderDetailPage from '../../component/OrderDetailPage';
+import NeoBrutalistCard from "../../component/NeoBrutalist/NeoBrutalistCard";
+import NeoBrutalistButton from "../../component/NeoBrutalist/NeoBrutalistButton";
+import ProfilePage from "../../component/ProfilePage";
+import '../../styles/Main/dashboard.css';
 
 const DashboardPage = () => {
     const [orders, setOrders] = useState([]);

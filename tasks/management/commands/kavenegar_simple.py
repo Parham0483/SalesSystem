@@ -24,7 +24,7 @@ def test_kavenegar_api():
         test_phone = '9809902614909'  # Your number with country code
 
         # Test message
-        test_message = 'تست API کاوه نگار - یان تجارت پویا کویر'
+        test_message = 'تست API کاوه نگار - کیان تجارت پویا کویر'
 
         print(f"📱 Preparing to send SMS to: {test_phone}")
         print(f"📱 Using sender: {sender_domestic}")

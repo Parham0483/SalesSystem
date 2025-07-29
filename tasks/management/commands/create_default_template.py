@@ -14,7 +14,7 @@ class Command(BaseCommand):
                 'language': 'fa',
                 'is_active': True,
                 'company_info': {
-                    'name': 'یان تجارت پویا کویر',
+                    'name': 'کیان تجارت پویا کویر',
                     'address': 'یزد، بلوار مدرس',
                     'phone': '021-12345678',
                     'email': 'gtc.1210770@gmail.com'

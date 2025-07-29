@@ -1,118 +1,100 @@
+# tasks/management/commands/test_iranian_sms.py
 from django.core.management.base import BaseCommand
 from tasks.services.sms_service import KavenegarSMSService
 
 
 class Command(BaseCommand):
-    help = 'Test SMS service with your Kavenegar configuration'
+    help = 'Test Iranian SMS service with proper format'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--phone',
             type=str,
-            default='09902614909',  # Your test number
-            help='Phone number to send test SMS to',
-        )
-        parser.add_argument(
-            '--test-type',
-            type=str,
-            choices=['connection', 'simple', 'templated', 'otp', 'international'],
-            default='connection',
-            help='Type of test to perform',
+            default='09902614909',
+            help='Phone number to test (Iranian format)',
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.WARNING('🧪 Testing SMS Service with your Kavenegar config...'))
+        phone = options['phone']
+
+        self.stdout.write(self.style.WARNING(f'🧪 Testing Iranian SMS service with: {phone}'))
 
         try:
             # Initialize SMS service
             sms_service = KavenegarSMSService()
-            self.stdout.write(self.style.SUCCESS('✅ SMS service initialized'))
 
-            # Test connection
-            if options['test_type'] == 'connection':
-                test_result = sms_service.test_connection()
-                if test_result['success']:
-                    self.stdout.write(self.style.SUCCESS(f"✅ {test_result['message']}"))
-                    self.stdout.write(f"📱 API Key: {test_result['api_key_preview']}")
-                    self.stdout.write(f"📱 Domestic Sender: {test_result['domestic_sender']}")
-                    self.stdout.write(f"📱 International Sender: {test_result['international_sender']}")
-                else:
-                    self.stdout.write(self.style.ERROR(f"❌ {test_result['error']}"))
+            # Test phone number cleaning
+            debug_result = sms_service.debug_phone_number(phone)
+
+            self.stdout.write('📱 Phone Number Analysis:')
+            self.stdout.write(f'   Original: {debug_result["original"]}')
+            self.stdout.write(f'   Digits Only: {debug_result["digits_only"]}')
+            self.stdout.write(f'   Cleaned: {debug_result["cleaned"]}')
+            self.stdout.write(f'   Is Valid: {debug_result["is_valid"]}')
+
+            if not debug_result["is_valid"]:
+                self.stdout.write(self.style.ERROR('❌ Phone number is invalid, cannot send SMS'))
                 return
 
-            phone = options['phone']
-            clean_phone = KavenegarSMSService.clean_phone_number(phone)
-            if not clean_phone:
-                self.stdout.write(self.style.ERROR(f'❌ Invalid phone number: {phone}'))
-                return
+            # Test different phone formats
+            self.stdout.write('\n🧪 Testing different phone formats:')
+            test_formats = [
+                '09902614909',  # Standard format
+                '9902614909',  # Without leading 0
+                '989902614909',  # International format
+                '+989902614909',  # With + prefix
+                '0 99 026 14909',  # With spaces
+            ]
 
-            self.stdout.write(f'📱 Sending test SMS to: {clean_phone}')
+            for test_phone in test_formats:
+                result = sms_service.debug_phone_number(test_phone)
+                status = "✅" if result["is_valid"] else "❌"
+                self.stdout.write(f'   {status} {test_phone} -> {result["cleaned"]}')
 
-            # Perform test based on type
-            if options['test_type'] == 'simple':
-                result = sms_service.send_sms(
-                    receptor=clean_phone,
-                    message='🧪 تست سرویس پیامک - یان تجارت پویا کویر',
-                    sms_type='test'
-                )
+            # Send test SMS
+            self.stdout.write('\n📱 Sending test SMS...')
 
-                if result['success']:
-                    self.stdout.write(self.style.SUCCESS('✅ Test SMS sent successfully'))
-                    self.stdout.write(f"📱 Sender used: {result.get('sender', 'Unknown')}")
-                    self.stdout.write(f"📱 Response: {result.get('response', 'N/A')}")
-                else:
-                    self.stdout.write(self.style.ERROR(f"❌ SMS failed: {result['error']}"))
+            test_message = f"""سلام!
+این یک پیام تست است.
+شماره شما: {debug_result["cleaned"]}
+کیان تجارت پویا کویر"""
 
-            elif options['test_type'] == 'templated':
-                # Test templated SMS
-                context = {
-                    'customer_name': 'آقای تست',
-                    'order_id': '12345',
-                    'total_amount': 150000
-                }
+            result = sms_service.send_sms(
+                receptor=debug_result["cleaned"],
+                message=test_message,
+                sms_type='test'
+            )
 
-                result = sms_service.send_templated_sms(
-                    phone=clean_phone,
-                    template_key='pricing_ready',
-                    context_data=context,
-                    sms_type='test_template'
-                )
+            if result['success']:
+                self.stdout.write(self.style.SUCCESS('✅ Test SMS sent successfully!'))
+                self.stdout.write(f'📱 Sender: {result.get("sender")}')
+                self.stdout.write(f'📱 Receptor: {result.get("receptor")}')
 
-                if result['success']:
-                    self.stdout.write(self.style.SUCCESS('✅ Templated SMS sent successfully'))
-                else:
-                    self.stdout.write(self.style.ERROR(f"❌ Templated SMS failed: {result['error']}"))
+                if 'response' in result and result['response']:
+                    response = result['response'][0] if result['response'] else {}
+                    if hasattr(response, 'messageid'):
+                        self.stdout.write(f'📱 Message ID: {response.messageid}')
+                    if hasattr(response, 'cost'):
+                        self.stdout.write(f'💰 Cost: {response.cost}')
+            else:
+                self.stdout.write(self.style.ERROR(f'❌ Test SMS failed: {result["error"]}'))
 
-            elif options['test_type'] == 'otp':
-                result = sms_service.send_otp_sms(
-                    receptor=clean_phone,
-                    token='12345',
-                    template='verify',
-                    sms_type='test_otp'
-                )
+            # Test duplicate prevention
+            self.stdout.write('\n🔄 Testing duplicate prevention...')
+            duplicate_result = sms_service.send_sms(
+                receptor=debug_result["cleaned"],
+                message=test_message,
+                sms_type='test'
+            )
 
-                if result['success']:
-                    self.stdout.write(self.style.SUCCESS('✅ OTP SMS sent successfully'))
-                else:
-                    self.stdout.write(self.style.ERROR(f"❌ OTP SMS failed: {result['error']}"))
-
-            elif options['test_type'] == 'international':
-                # Test international number (you can modify this)
-                intl_phone = '+1234567890'  # Example international number
-
-                result = sms_service.send_sms(
-                    receptor=intl_phone,
-                    message='Test international SMS - Yan Tejarat Puya Kavir',
-                    sms_type='test_international'
-                )
-
-                if result['success']:
-                    self.stdout.write(self.style.SUCCESS('✅ International SMS sent successfully'))
-                    self.stdout.write(f"📱 Sender used: {result.get('sender', 'Unknown')}")
-                else:
-                    self.stdout.write(self.style.ERROR(f"❌ International SMS failed: {result['error']}"))
+            if not duplicate_result['success'] and 'duplicate' in duplicate_result.get('error', '').lower():
+                self.stdout.write(self.style.SUCCESS('✅ Duplicate prevention working!'))
+            elif duplicate_result['success']:
+                self.stdout.write(self.style.WARNING('⚠️ Duplicate SMS was sent (prevention not working)'))
+            else:
+                self.stdout.write(f'❓ Unexpected result: {duplicate_result["error"]}')
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ SMS test failed: {str(e)}'))
+            self.stdout.write(self.style.ERROR(f'❌ Test failed: {str(e)}'))
 
-        self.stdout.write(self.style.SUCCESS('🎯 SMS service test completed.'))
+        self.stdout.write(self.style.SUCCESS('\n🎯 Iranian SMS test completed.'))

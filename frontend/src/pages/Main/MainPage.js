@@ -1,8 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import NeoBrutalistButton from "../component/NeoBrutalist/NeoBrutalistButton.js";
+import NeoBrutalistButton from "../../component/NeoBrutalist/NeoBrutalistButton.js";
 import UnicornScene from "unicornstudio-react";
-import "../styles/Main/MainPage.css";
+import "../../styles/Main/MainPage.css";
 
 const MainPage = () => {
     const navigate = useNavigate();

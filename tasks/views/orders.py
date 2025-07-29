@@ -76,30 +76,48 @@ class OrderViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
     def create(self, request, *args, **kwargs):
-        """ENHANCED: Create order with dual email+SMS notification"""
+        """FIXED: Create order with single SMS notification"""
         try:
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 order = serializer.save()
 
-                # Send dual notification (email + SMS)
-                dual_result = NotificationService.send_dual_notification(
-                    order=order,
-                    notification_type='order_submitted'
-                )
+                # FIXED: Send notifications separately to prevent duplicates
+                email_sent = False
+                sms_sent = False
 
-                logger.info(f"📧 Email sent: {dual_result['email']['sent']}")
-                logger.info(f"📱 SMS sent: {dual_result['sms']['sent']}")
+                # 1. Send admin email notification
+                try:
+                    email_sent = NotificationService.notify_admin_new_order(order)
+                    logger.info(f"📧 Admin email sent: {email_sent}")
+                except Exception as e:
+                    logger.error(f"❌ Admin email failed: {str(e)}")
+
+                # 2. Send customer SMS notification (SINGLE CALL)
+                try:
+                    if order.customer.phone:
+                        customer_sms = f"""سلام {order.customer.name}
+    سفارش #{order.id} با موفقیت ثبت شد.
+    منتظر قیمت‌گذاری باشید.
+    کیان تجارت پویا کویر"""
+
+                        sms_sent = NotificationService.send_sms_notification(
+                            phone=order.customer.phone,
+                            message=customer_sms,
+                            order=order,
+                            sms_type='order_submitted'
+                        )
+                        logger.info(f"📱 Customer SMS sent: {sms_sent}")
+                except Exception as e:
+                    logger.error(f"❌ Customer SMS failed: {str(e)}")
 
                 return Response({
                     'message': 'Order created successfully',
                     'order_id': order.id,
                     'status': order.status,
                     'notifications': {
-                        'email_sent': dual_result['email']['sent'],
-                        'sms_sent': dual_result['sms']['sent'],
-                        'email_error': dual_result['email'].get('error'),
-                        'sms_error': dual_result['sms'].get('error')
+                        'admin_email_sent': email_sent,
+                        'customer_sms_sent': sms_sent
                     }
                 }, status=status.HTTP_201_CREATED)
 
@@ -113,6 +131,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Order creation failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @action(detail=True, methods=['POST'], url_path='submit_pricing')
     def submit_pricing(self, request, *args, **kwargs):
@@ -295,7 +314,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 completion_sms = f"""سلام {order.customer.name}
 سفارش #{order.id} تکمیل شد!
 از خرید شما متشکریم.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 sms_sent = NotificationService.send_sms_notification(
                     phone=order.customer.phone,
@@ -370,7 +389,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 مشتری: {order.customer.name}
 کمیسیون: {effective_rate}%
 وارد پنل شوید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                         sms_sent = NotificationService.send_sms_notification(
                             phone=dealer.phone,
@@ -454,7 +473,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 removal_sms = f"""سلام {old_dealer.name}
 سفارش #{order.id} از شما حذف شد.
 {f'دلیل: {removal_reason}' if removal_reason else ''}
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 sms_sent = NotificationService.send_sms_notification(
                     phone=old_dealer.phone,

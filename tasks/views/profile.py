@@ -386,7 +386,7 @@ class UserProfileViewSet(viewsets.ViewSet):
         """Send password change notification"""
         try:
             # Send email notification
-            subject = "تغییر رمز عبور - یان تجارت پویا کویر"
+            subject = "تغییر رمز عبور - کیان تجارت پویا کویر"
             message = f"""
 {user.name} عزیز،
 
@@ -397,7 +397,7 @@ class UserProfileViewSet(viewsets.ViewSet):
 اگر این تغییر توسط شما انجام نشده، فوراً با پشتیبانی تماس بگیرید.
 
 با احترام،
-تیم یان تجارت پویا کویر
+تیم کیان تجارت پویا کویر
             """.strip()
 
             from django.core.mail import send_mail
@@ -415,7 +415,7 @@ class UserProfileViewSet(viewsets.ViewSet):
 رمز عبور حساب شما تغییر یافت.
 زمان: {timezone.now().strftime('%H:%M')}
 اگر توسط شما نبوده، تماس بگیرید.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
                 NotificationService.send_sms_notification(
                     phone=user.phone,
@@ -462,7 +462,7 @@ def request_password_reset(request):
         }, timeout=600)  # 10 minutes
 
         # Send OTP via email
-        subject = "بازیابی رمز عبور - یان تجارت پویا کویر"
+        subject = "بازیابی رمز عبور - کیان تجارت پویا کویر"
         message = f"""
 {user.name} عزیز،
 
@@ -473,7 +473,7 @@ def request_password_reset(request):
 اگر درخواست بازیابی رمز عبور نداده‌اید، این پیام را نادیده بگیرید.
 
 با احترام،
-تیم یان تجارت پویا کویر
+تیم کیان تجارت پویا کویر
         """.strip()
 
         from django.core.mail import send_mail
@@ -489,7 +489,7 @@ def request_password_reset(request):
         if user.phone:
             sms_message = f"""کد بازیابی رمز عبور: {otp}
 این کد تا 10 دقیقه معتبر است.
-یان تجارت پویا کویر"""
+کیان تجارت پویا کویر"""
 
             NotificationService.send_sms_notification(
                 phone=user.phone,
@@ -634,7 +634,7 @@ def reset_password(request):
 اکنون می‌توانید با رمز عبور جدید وارد حساب خود شوید.
 
 با احترام،
-تیم یان تجارت پویا کویر
+تیم کیان تجارت پویا کویر
             """.strip()
 
             from django.core.mail import send_mail
