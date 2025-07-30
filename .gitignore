@@ -7,7 +7,7 @@ __pycache__/
 # Ignore environment files containing secrets
 .env
 frontend/.env
-mysite/.env
+.env
 
 # Ignore node modules
 node_modules/
