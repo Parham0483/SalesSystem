@@ -314,13 +314,11 @@ const AdminProductsPage = () => {
         const method = editingProduct ? 'patch' : 'post';
 
         try {
-            console.log('📤 Sending form data:', Object.fromEntries(formData.entries()));
 
             const response = await API[method](url, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            console.log('✅ Product saved successfully:', response.data);
             fetchProducts();
             handleCloseModal();
         } catch (err) {

@@ -1,0 +1,16 @@
+Login attempt for email: test@example.com
+Customer found: test@example.com, is_active: True
+Password check result: True
+Login successful for: test@example.com
+Login attempt for email: test@example.com
+Customer found: test@example.com, is_active: True
+Password check result: True
+Login successful for: test@example.com
+Login attempt for email: test@example.com
+Customer found: test@example.com, is_active: True
+Password check result: True
+Login successful for: test@example.com
+Login attempt for email: test@example.com
+Customer found: test@example.com, is_active: True
+Password check result: True
+Login successful for: test@example.com

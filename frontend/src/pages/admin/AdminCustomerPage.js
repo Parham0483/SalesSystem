@@ -66,7 +66,6 @@ const AdminCustomersPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/customers/' );
-            console.log('👥 Admin customers fetched:', response.data);
             setCustomers(response.data);
             calculateStats(response.data);
             setError('');

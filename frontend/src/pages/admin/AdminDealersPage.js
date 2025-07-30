@@ -95,7 +95,6 @@ const AdminDealersPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/dealers/');
-            console.log('🤝 Admin dealers fetched:', response.data);
             setDealers(response.data);
             setError('');
         } catch (err) {
@@ -114,7 +113,6 @@ const AdminDealersPage = () => {
     const fetchCommissions = useCallback(async () => {
         try {
             const response = await API.get('/admin/dealers/commissions/');
-            console.log('💰 Commissions fetched:', response.data);
             setCommissions(response.data);
         } catch (err) {
             console.error('❌ Error fetching commissions:', err);
@@ -124,7 +122,6 @@ const AdminDealersPage = () => {
     const fetchDealerStats = useCallback(async () => {
         try {
             const response = await API.get('/admin/dashboard/stats/dealers/');
-            console.log('📊 Dealer stats fetched:', response.data);
             setDealerStats(response.data);
         } catch (err) {
             console.error('❌ Error fetching dealer stats:', err);

@@ -49,6 +49,13 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(null=True, blank=True)
+    google_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Google OAuth user ID"
+    )
 
     # Dealer fields
     is_dealer = models.BooleanField(default=False, help_text="Is this user a dealer?")

@@ -22,6 +22,8 @@ import AdminProductPage from "./pages/admin/AdminProductPage";
 import AdminCustomersPage from "./pages/admin/AdminCustomerPage";
 import AdminDealersPage from "./pages/admin/AdminDealersPage";
 import Profile from "./component/ProfilePage";
+import CompleteProfilePage from "./pages/Main/CompleteProfilePage";
+import GoogleAuthProvider from "./component/GoogleAuth/GoogleOAuthProvider";
 
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/';
@@ -51,7 +53,6 @@ function App() {
                     .then(() => {
                     })
                     .catch((error) => {
-                        console.log('❌ Existing token is invalid:', error.response?.data);
                         // Token is invalid, clear everything
                         localStorage.removeItem('access_token');
                         localStorage.removeItem('refresh_token');
@@ -59,7 +60,6 @@ function App() {
                         delete axios.defaults.headers.common['Authorization'];
                     });
             } else {
-                console.log('ℹ️ No existing authentication found');
                 // Ensure no stale headers
                 delete axios.defaults.headers.common['Authorization'];
             }
@@ -69,12 +69,14 @@ function App() {
     }, []);
 
     return (
+        <GoogleAuthProvider>
         <Router>
             <Routes>
                 {/* PUBLIC ROUTES */}
                 <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route path="/complete-profile" element={<CompleteProfilePage />} />
                 <Route path="/profile" element={<Profile />} />
 
                 {/* ADMIN ROUTES - Put these BEFORE general routes */}
@@ -136,6 +138,7 @@ function App() {
                 <Route path="*" element={<div>Page not found</div>} />
             </Routes>
         </Router>
+            </GoogleAuthProvider>
     );
 }
 

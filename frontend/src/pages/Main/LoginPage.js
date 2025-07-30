@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import NeoBrutalistInput from "../../component/NeoBrutalist/NeoBrutalistInput";
 import NeoBrutalistButton from "../../component/NeoBrutalist/NeoBrutalistButton";
+import GoogleLoginButton from "../../component/GoogleAuth/GoogleLoginButton";
 import "../../styles/Main/login.css";
 
 const LoginPage = () => {
@@ -17,12 +18,8 @@ const LoginPage = () => {
         setLoading(true);
         setError("");
 
-        console.log('🚀 Starting login process...');
-
         try {
             const loginData = { email, password };
-
-            console.log('📤 Sending login request for:', email);
 
             const response = await axios.post(
                 `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/'}auth/login/`,
@@ -35,19 +32,9 @@ const LoginPage = () => {
                 }
             );
 
-            console.log('✅ Login response:', response.data);
-
             if (response.status === 200) {
                 const { user, tokens } = response.data;
 
-                console.log('🔑 Storing authentication data:', {
-                    user: user,
-                    hasTokens: !!tokens,
-                    isDealer: user.is_dealer, // LOG DEALER STATUS
-                    isStaff: user.is_staff,
-                    accessToken: tokens?.access ? `${tokens.access.substring(0, 20)}...` : null,
-                    refreshToken: tokens?.refresh ? `${tokens.refresh.substring(0, 20)}...` : null
-                });
 
                 // Store user data - INCLUDE is_dealer field
                 localStorage.setItem('userData', JSON.stringify({
@@ -55,8 +42,9 @@ const LoginPage = () => {
                     email: user.email,
                     name: user.name,
                     is_staff: user.is_staff,
-                    is_dealer: user.is_dealer,        // ← ADD THIS FIELD
-                    company_name: user.company_name
+                    is_dealer: user.is_dealer,
+                    company_name: user.company_name,
+                    phone: user.phone
                 }));
 
                 // Store tokens
@@ -66,24 +54,13 @@ const LoginPage = () => {
                 // CRITICAL: Set the authorization header for future requests
                 axios.defaults.headers.common['Authorization'] = `Bearer ${tokens.access}`;
 
-                console.log('✅ Authentication data stored successfully');
-                console.log('🔍 Verification - localStorage check:', {
-                    userData: !!localStorage.getItem('userData'),
-                    accessToken: !!localStorage.getItem('access_token'),
-                    refreshToken: !!localStorage.getItem('refresh_token'),
-                    axiosHeader: axios.defaults.headers.common['Authorization']
-                });
-
-                // UPDATED: Navigate based on user role INCLUDING DEALER
+                // Navigate based on user role INCLUDING DEALER
                 setTimeout(() => {
                     if (user.is_staff) {
-                        console.log('🔄 Navigating to admin dashboard...');
                         navigate("/admin");
                     } else if (user.is_dealer) {
-                        console.log('🔄 Navigating to dealer dashboard...');
                         navigate("/dealer");
                     } else {
-                        console.log('🔄 Navigating to customer dashboard...');
                         navigate("/dashboard");
                     }
                 }, 100);
@@ -110,6 +87,14 @@ const LoginPage = () => {
         }
     };
 
+    const handleGoogleSuccess = (user) => {
+        // Navigation is handled in GoogleLoginButton component
+    };
+
+    const handleGoogleError = (errorMessage) => {
+        setError(errorMessage);
+    };
+
     return (
         <div className="login-container" id="loginPageContainer">
             <div className="login-box">
@@ -120,7 +105,7 @@ const LoginPage = () => {
                         {error}
                     </div>
                 )}
-
+                {/* Regular Login Form */}
                 <form className="login-form" id="loginForm" onSubmit={handleLogin}>
                     <div className="input-group">
                         <NeoBrutalistInput
@@ -168,6 +153,19 @@ const LoginPage = () => {
                         />
                         حساب کاربری ندارید؟{" "}
                     </p>
+
+                    {/* Google Login Section */}
+                    <div className="google-login-section">
+                        <div className="login-divider">
+                            <span>ورود سریع با گوگل</span>
+                        </div>
+
+                        <GoogleLoginButton
+                            onSuccess={handleGoogleSuccess}
+                            onError={handleGoogleError}
+                        />
+
+                    </div>
 
                     <NeoBrutalistButton
                         text="برگشت به صفحه اصلی"

@@ -367,7 +367,7 @@ class NotificationService:
                 order=order,
                 email_type='pricing_ready',
                 recipient_email=order.customer.email,
-                subject=subject if 'subject' in locals() else f"قیمت‌گذاری سفارش #{order.id}",
+                subject= subject if 'subject' in locals() else f"قیمت‌گذاری سفارش #{order.id}",
                 is_successful=False,
                 error_message=str(e)
             )

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import NeoBrutalistInput from "../../component/NeoBrutalist/NeoBrutalistInput";
 import NeoBrutalistButton from "../../component/NeoBrutalist/NeoBrutalistButton";
+import GoogleLoginButton from "../../component/GoogleAuth/GoogleLoginButton";
 import "../../styles/Main/register.css";
 
 const RegisterPage = () => {
@@ -20,7 +21,6 @@ const RegisterPage = () => {
         setLoading(true);
         setError("");
 
-        console.log('🚀 Starting registration process...');
 
         try {
             const registrationData = {
@@ -30,8 +30,6 @@ const RegisterPage = () => {
                 phone,
                 company_name: companyName,
             };
-
-            console.log('📤 Sending registration data:', { ...registrationData, password: '[HIDDEN]' });
 
             const response = await axios.post(
                 `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/'}auth/register/`,
@@ -44,7 +42,6 @@ const RegisterPage = () => {
                 }
             );
 
-            console.log('✅ Registration response:', response.data);
 
             if (response.status === 201) {
                 const { user } = response.data;
@@ -81,12 +78,23 @@ const RegisterPage = () => {
         }
     };
 
+    const handleGoogleSuccess = (user) => {
+        // Navigation is handled in GoogleLoginButton component
+    };
+
+    const handleGoogleError = (errorMessage) => {
+        setError(errorMessage);
+    };
+
     return (
         <div className="register-container">
             <div className="register-card">
                 <h2>سامانه ثبت سفارش</h2>
                 {error && <p className="error">{error}</p>}
 
+
+
+                {/* Regular Registration Form */}
                 <form onSubmit={handleRegister}>
                     <NeoBrutalistInput
                         type="email"
@@ -146,22 +154,25 @@ const RegisterPage = () => {
                     />
                 </form>
 
-                <div className="register-footer">
-                    <NeoBrutalistButton
-                        text="قبلاً ثبت نام کرده‌اید؟ ورود"
-                        color="yellow-400"
-                        textColor="white"
-                        onClick={() => navigate("/login")}
-                        disabled={loading}
-                    />
-                    <NeoBrutalistButton
-                        text="برگشت به صفحه اصلی"
-                        color="yellow-400"
-                        textColor="black"
-                        onClick={() => navigate("/")}
-                        disabled={loading}
+                {/* Google Registration Section */}
+                <div className="google-register-section">
+                    <div className="register-divider">
+                        <span>ثبت نام سریع با Google</span>
+                    </div>
+
+                    <GoogleLoginButton
+                        onSuccess={handleGoogleSuccess}
+                        onError={handleGoogleError}
                     />
                 </div>
+                <NeoBrutalistButton
+                    text="برگشت به صفحه اصلی"
+                    color="yellow-400"
+                    textColor="black"
+                    className="btn-back-main"
+                    onClick={() => navigate("/")}
+                    disabled={loading}
+                />
             </div>
         </div>
     );

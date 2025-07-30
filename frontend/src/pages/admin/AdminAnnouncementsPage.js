@@ -83,21 +83,7 @@ const AdminAnnouncementsPage = () => {
         }
     }, []);
 
-    const debugImageData = (announcement) => {
-        console.log('🖼️ Debugging images for announcement:', announcement.id);
-        console.log('📋 Full announcement data:', announcement);
-        console.log('🔍 Images array:', announcement.images);
-        console.log('🔍 Image URL field:', announcement.image_url);
 
-        if (announcement.images && announcement.images.length > 0) {
-            announcement.images.forEach((img, index) => {
-                console.log(`📸 Image ${index + 1}:`, img);
-                console.log(`🔗 Image URL ${index + 1}:`, img.image);
-            });
-        } else {
-            console.log('❌ No images found in announcement.images');
-        }
-    };
 
     useEffect(() => {
         fetchAnnouncements();

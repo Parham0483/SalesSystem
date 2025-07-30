@@ -26,14 +26,7 @@ const DealerDashboard = () => {
         const userDataString = localStorage.getItem('userData');
         const user = userDataString ? JSON.parse(userDataString) : null;
 
-        console.log('🔍 Dealer Dashboard - User check:', {
-            hasUser: !!user,
-            isDealer: user?.is_dealer,
-            userName: user?.name
-        });
-
         if (!user || (!user.is_dealer && !user.is_staff)) {
-            console.log('❌ Access denied - redirecting to login');
             navigate('/login');
             return;
         }
@@ -57,13 +50,6 @@ const DealerDashboard = () => {
             }
 
         } catch (err) {
-            console.error('❌ Error fetching assigned orders:', err);
-            console.log('❌ Error details:', {
-                status: err.response?.status,
-                data: err.response?.data,
-                message: err.message
-            });
-
             if (err.response?.status === 403) {
                 setError('دسترسی رد شد. لطفاً مجدداً وارد شوید.');
                 setTimeout(() => navigate('/login'), 2000);

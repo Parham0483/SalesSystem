@@ -90,7 +90,6 @@ const AdminOrdersPage = () => {
         setLoading(true);
         try {
             const response = await API.get('/admin/orders/');
-            console.log('📋 Admin orders fetched:', response.data);
             setOrders(response.data);
             calculateStats(response.data);
             setError('');

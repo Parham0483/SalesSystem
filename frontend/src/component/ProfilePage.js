@@ -43,7 +43,6 @@ const ProfilePage = ({ isModal = false }) => {
         setLoading(true);
         try {
             const response = await API.get('/profile/me/');
-            console.log('👤 Profile fetched:', response.data);
             setProfile(response.data.profile);
             setFormData({
                 name: response.data.profile.name,
@@ -65,7 +64,6 @@ const ProfilePage = ({ isModal = false }) => {
     const fetchOrdersSummary = async () => {
         try {
             const response = await API.get('/profile/orders-summary/');
-            console.log('📊 Orders summary fetched:', response.data);
             setOrdersData(response.data);
         } catch (error) {
             console.error('❌ Error fetching orders summary:', error);
@@ -75,7 +73,6 @@ const ProfilePage = ({ isModal = false }) => {
     const fetchNotifications = async () => {
         try {
             const response = await API.get('/profile/notifications-history/');
-            console.log('🔔 Notifications fetched:', response.data);
             setNotificationsData(response.data);
         } catch (error) {
             console.error('❌ Error fetching notifications:', error);
@@ -86,7 +83,6 @@ const ProfilePage = ({ isModal = false }) => {
         e.preventDefault();
         try {
             const response = await API.put('/profile/update/', formData);
-            console.log('✅ Profile updated:', response.data);
             setProfile({ ...profile, ...response.data.profile });
             setEditing(false);
             setMessage('پروفایل با موفقیت به‌روزرسانی شد');

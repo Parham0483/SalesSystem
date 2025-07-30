@@ -177,18 +177,23 @@ LOGGING = {
         },
     },
     'loggers': {
-        'rest_framework_simplejwt': {
+        'tasks.services.google_oauth_service': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
-        'django.request': {
+        'tasks.views.google_auth': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
-    },
+    }
 }
+
+#Google
+# settings.py
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
 
 #Media
 MEDIA_URL = '/media/'

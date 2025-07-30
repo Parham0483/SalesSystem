@@ -24,9 +24,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
 
     const fetchDealers = async () => {
         try {
-            console.log('🔍 Fetching dealers for assignment...');
             const response = await API.get('/dealers/list-for-assignment/');
-            console.log('✅ Dealers fetched:', response.data);
             setDealers(response.data.dealers || []);
         } catch (err) {
             console.error('❌ Error fetching dealers:', err);
@@ -43,7 +41,6 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
         setCustomCommissionRate('');
         setUseCustomRate(false);
 
-        console.log('🎯 Selected dealer:', dealer);
     };
 
     const getEffectiveCommissionRate = () => {
@@ -84,15 +81,9 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
                 assignmentData.custom_commission_rate = parseFloat(customCommissionRate);
             }
 
-            console.log('📤 Assigning dealer to order:', {
-                orderId,
-                ...assignmentData,
-                effective_commission_rate: effectiveRate
-            });
 
             const response = await API.post(`/orders/${orderId}/assign-dealer/`, assignmentData);
 
-            console.log('✅ Dealer assigned successfully:', response.data);
 
             const successMessage = `نماینده ${selectedDealerInfo.name} با موفقیت تخصیص داده شد!\nنرخ کمیسیون: ${effectiveRate}%`;
             alert(successMessage);

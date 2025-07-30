@@ -33,7 +33,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setLoading(true);
         try {
             const res = await API.get(`/orders/${orderId}/`);
-            console.log('📦 Order data received:', res.data);
+
             setOrder(res.data);
             setItems(res.data.items || []);
             setAdminComment(res.data.admin_comment || '');
@@ -54,11 +54,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setError('');
 
         try {
-            console.log('🔄 Completing order:', orderId);
 
             const response = await API.post(`/orders/${orderId}/complete/`);
 
-            console.log('✅ Order completed successfully:', response.data);
 
             // Show success message
             alert('سفارش با موفقیت تکمیل شد!');
@@ -89,7 +87,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         try {
             const response = await API.post(`/orders/${orderId}/remove-dealer/`);
 
-            console.log('✅ Dealer removed successfully:', response.data);
             alert('نماینده با موفقیت حذف شد!');
 
             // Refresh order data
@@ -162,11 +159,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 }))
             };
 
-            console.log('📤 Submitting pricing data:', submissionData);
 
             const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
 
-            console.log('✅ Pricing submitted successfully:', response.data);
 
             // Show success message
             alert('قیمت‌گذاری با موفقیت ثبت شد!');

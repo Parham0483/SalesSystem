@@ -14,7 +14,6 @@ API.interceptors.request.use(
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`
         } else {
-            console.log('❌ No token found for request:', config.url);
         }
         return config;
     },
@@ -26,8 +25,6 @@ API.interceptors.response.use(
         return response;
     },
     async (error) => {
-        console.log('❌ Response Error:', error.config?.url, error.response?.status);
-        console.log('❌ Error details:', error.response?.data);
 
         const originalRequest = error.config;
 
@@ -55,7 +52,6 @@ API.interceptors.response.use(
                 originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
                 return API(originalRequest);
             } catch (refreshError) {
-                console.log('❌ Token refresh failed:', refreshError);
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('refresh_token');
                 localStorage.removeItem('userData');

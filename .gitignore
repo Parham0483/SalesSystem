@@ -1,0 +1,13 @@
+# .gitignore
+
+# Ignore Python virtual environment and cache
+__pycache__/
+*.pyc
+
+# Ignore environment files containing secrets
+.env
+frontend/.env
+mysite/.env
+
+# Ignore node modules
+node_modules/

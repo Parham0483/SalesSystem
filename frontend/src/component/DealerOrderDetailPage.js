@@ -31,7 +31,6 @@ const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setLoading(true);
         try {
             const response = await API.get(`/orders/${orderId}/`);
-            console.log('📦 Dealer viewing order:', response.data);
             setOrder(response.data);
             setDealerNotes(response.data.dealer_notes || '');
         } catch (err) {
@@ -75,8 +74,6 @@ const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             const response = await API.post(`/orders/${orderId}/update-dealer-notes/`, {
                 dealer_notes: dealerNotes
             });
-
-            console.log('✅ Dealer notes updated:', response.data);
             alert('یادداشت‌های نماینده با موفقیت به‌روزرسانی شد');
             setIsEditingNotes(false);
 

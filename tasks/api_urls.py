@@ -18,6 +18,8 @@ from tasks.views.profile import (
     verify_reset_otp,
     reset_password
 )
+from tasks.views.google_auth import google_auth, complete_google_profile, link_google_account
+
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -51,6 +53,11 @@ urlpatterns = [
     # JWT token endpoints
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+
+# Google OAuth endpoints
+    path('auth/google/', google_auth, name='google_auth'),
+    path('auth/google/complete-profile/', complete_google_profile, name='google_complete_profile'),
+    path('auth/google/link-account/', link_google_account, name='google_link_account'),
 
     #Password Reset URLs
     path('auth/password-reset/request/', request_password_reset, name='password_reset_request'),

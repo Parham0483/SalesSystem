@@ -49,7 +49,6 @@ const DashboardPage = () => {
 
         try {
             const response = await API.get('/orders/');
-            console.log('📦 Orders fetched:', response.data);
             setOrders(response.data);
         } catch (error) {
             console.error('❌ Error fetching orders:', error);
@@ -67,7 +66,6 @@ const DashboardPage = () => {
     const fetchRecentProducts = async () => {
         try {
             const response = await API.get('/products/new-arrivals/');
-            console.log('🆕 Recent products fetched:', response.data);
             setRecentProducts(response.data.slice(0, 6)); // Show 6 recent products
         } catch (error) {
             console.error('❌ Error fetching recent products:', error);
@@ -77,7 +75,6 @@ const DashboardPage = () => {
     const fetchRecentAnnouncements = async () => {
         try {
             const response = await API.get('/shipment-announcements/');
-            console.log('📢 Recent announcements fetched:', response.data);
             setRecentAnnouncements(response.data.slice(0, 3)); // Show 3 recent announcements
         } catch (error) {
             console.error('❌ Error fetching announcements:', error);
