@@ -225,7 +225,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
             if (!response.ok) {
-                let errorMessage = 'خطا در آپلود فایل‌ها';
+                let errorMessage ='خطا در آپلود فایل‌ها';
 
                 if (response.status === 413) {
                     errorMessage = 'مجموع حجم فایل‌ها بیش از حد مجاز است';

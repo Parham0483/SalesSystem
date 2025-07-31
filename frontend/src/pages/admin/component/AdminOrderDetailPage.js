@@ -55,8 +55,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setError('');
 
         try {
-            const response = await API.post(`/orders/${orderId}/complete/`);
-
             // Show success message
             alert('سفارش با موفقیت تکمیل شد!');
 
@@ -83,8 +81,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
 
         try {
-            const response = await API.post(`/orders/${orderId}/remove-dealer/`);
-
             alert('نماینده با موفقیت حذف شد!');
 
             // Refresh order data
@@ -157,8 +153,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 }))
             };
 
-            const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
-
             // Show success message
             alert('قیمت‌گذاری با موفقیت ثبت شد!');
 
@@ -218,12 +212,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         return statusMap[status] || status;
     };
 
-    // Helper functions with Persian formatting
-    const formatPrice = (price) => {
-        if (!price || price === 0) return '';
-        const formattedNumber = new Intl.NumberFormat('fa-IR').format(price);
-        return formattedNumber;
-    };
 
     const formatQuantity = (quantity) => {
         if (!quantity || quantity === 0) return '';

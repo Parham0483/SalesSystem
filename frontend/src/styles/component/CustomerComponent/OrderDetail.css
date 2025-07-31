@@ -18,7 +18,7 @@
     padding: 1.5rem;
     background-color: #fff;
     border: 4px solid #000;
-    box-shadow: 6px 6px 0px #000;
+    box-shadow: 6px 6px  #000;
     margin-bottom: 1rem;
     direction: rtl;
 }
@@ -471,7 +471,7 @@
 .neo-error-card {
     background-color: #fef2f2;
     border-color: #ef4444 !important;
-    box-shadow: 6px 6px 0px #ef4444 !important;
+    box-shadow: 6px 6px  #ef4444 !important;
 }
 
 .neo-error-icon {
