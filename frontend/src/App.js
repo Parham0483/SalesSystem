@@ -106,16 +106,6 @@ function App() {
                     <AdminRoute><div>Reports Page (To be built)</div></AdminRoute>
                 } />
 
-                {/*<Route
-                    path="/admin/products/:productId"
-                    element={
-                    <AdminRoute>
-                        <AdminProductManagment/>
-                    </AdminRoute>
-                    }
-                 />
-                 */}
-
                 {/* DEALER ROUTES - Put these BEFORE customer routes */}
                 <Route
                     path="/dealer"

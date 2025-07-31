@@ -3,8 +3,8 @@ import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
+import PaymentReceiptUploadModal from './PaymentReceiptUploadModal'; // Import the fixed component
 import '../styles/component/CustomerComponent/OrderDetail.css';
-import PaymentReceiptUpload from "./PaymentReceiptUpload";
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
@@ -16,6 +16,10 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [rejectionReason, setRejectionReason] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [generatingInvoice, setGeneratingInvoice] = useState(false);
+
+    // FIXED: Payment upload modal state
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
     const tableRef = useRef(null);
 
     useEffect(() => {
@@ -32,11 +36,13 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
     const fetchOrder = async () => {
         setLoading(true);
+        setError(''); // Clear previous errors
         try {
             const response = await API.get(`/orders/${orderId}/`);
             setOrder(response.data);
             setEditedComment(response.data.customer_comment || '');
         } catch (err) {
+            console.error('❌ Error fetching order:', err);
             setError('خطا در بارگیری جزئیات سفارش');
         } finally {
             setLoading(false);
@@ -80,6 +86,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
 
         setSubmitting(true);
+        setError(''); // Clear previous errors
+
         try {
             if (approvalDecision === 'approve') {
                 // First approve the order
@@ -96,6 +104,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 fetchOrder();
             }
         } catch (err) {
+            console.error('❌ Error submitting approval:', err);
             setError(err.response?.data?.error || 'خطا در ارسال تصمیم');
             setGeneratingInvoice(false);
         } finally {
@@ -125,8 +134,23 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
+            console.error('❌ Error downloading invoice:', err);
             setError('خطا در دانلود فاکتور');
         }
+    };
+
+    // FIXED: Payment upload success handler
+    const handlePaymentUploadSuccess = (response) => {
+        console.log('✅ Payment upload successful:', response);
+
+        // Refresh order data to show updated payment status
+        fetchOrder();
+
+        // Close modal
+        setIsPaymentModalOpen(false);
+
+        // Clear any previous errors
+        setError('');
     };
 
     const getStatusColor = (status) => {
@@ -137,6 +161,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
+            case 'payment_uploaded':
+                return 'purple-400';
             case 'completed':
                 return 'green-600';
             case 'rejected':
@@ -153,6 +179,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید',
             'confirmed': 'تأیید شده و فاکتور صادر شد',
+            'payment_uploaded': 'رسید پرداخت آپلود شده',
             'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
@@ -245,7 +272,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
-            {/* Order Information dfakfnaks;c;askcna;sknc*/}
+            {/* Order Information */}
             <NeoBrutalistCard className="neo-order-info-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اطلاعات سفارش</h2>
@@ -518,7 +545,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Payment Receipt Upload Section */}
+            {/* FIXED: Payment Receipt Upload Section */}
             {(order.status === 'confirmed' && !order.payment_receipt) && (
                 <NeoBrutalistCard className="neo-payment-upload-card">
                     <div className="neo-card-header">
@@ -529,10 +556,15 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             لطفاً رسید پرداخت یا تصویر چک خود را آپلود کنید. پس از بررسی و تایید توسط مدیر، سفارش شما تکمیل خواهد شد.
                         </p>
 
-                        <PaymentReceiptUpload
-                            orderId={order.id}
-                            onUploadSuccess={fetchOrder}
-                        />
+                        <div className="neo-upload-button-container">
+                            <NeoBrutalistButton
+                                text="📄 آپلود رسید پرداخت"
+                                color="yellow-400"
+                                textColor="black"
+                                onClick={() => setIsPaymentModalOpen(true)}
+                                className="neo-upload-receipt-btn"
+                            />
+                        </div>
                     </div>
                 </NeoBrutalistCard>
             )}
@@ -548,16 +580,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             <div className="neo-info-item">
                                 <span className="neo-info-label">تاریخ آپلود</span>
                                 <span className="neo-info-value">
-                        {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
-                    </span>
+                                    {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
+                                </span>
                             </div>
                             <div className="neo-info-item">
                                 <span className="neo-info-label">وضعیت</span>
                                 <span className={`neo-info-value ${
                                     order.payment_verified ? 'neo-payment-verified' : 'neo-payment-pending'
                                 }`}>
-                        {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
-                    </span>
+                                    {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                </span>
                             </div>
                             {order.payment_notes && (
                                 <div className="neo-info-item">
@@ -588,6 +620,20 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
+            {order.status === 'payment_uploaded' && (
+                <div className="neo-status-message neo-info">
+                    <span className="neo-status-icon">📄</span>
+                    <span>رسید پرداخت شما آپلود شد و در انتظار بررسی توسط مدیر می‌باشد.</span>
+                </div>
+            )}
+
+            {order.status === 'completed' && (
+                <div className="neo-status-message neo-success">
+                    <span className="neo-status-icon">🎉</span>
+                    <span>سفارش شما با موفقیت تکمیل شد! از خرید شما متشکریم.</span>
+                </div>
+            )}
+
             {order.status === 'rejected' && order.customer_rejection_reason && (
                 <NeoBrutalistCard className="neo-admin-reply-card">
                     <div className="neo-card-header">
@@ -595,6 +641,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     </div>
                     <p className="neo-comment-text">{order.customer_rejection_reason}</p>
                 </NeoBrutalistCard>
+            )}
+
+            {/* FIXED: Payment Upload Modal - Only render when needed */}
+            {isPaymentModalOpen && (
+                <PaymentReceiptUploadModal
+                    orderId={order.id}
+                    onUploadSuccess={handlePaymentUploadSuccess}
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                />
             )}
         </div>
     );

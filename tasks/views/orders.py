@@ -658,19 +658,21 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error': 'Payment receipt file is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Validate file type and size
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-            max_size = 10 * 1024 * 1024  # 10MB
+            # --- FIXED: Allow PDF and increase file size limit ---
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+                             'application/pdf']  # Added 'application/pdf'
+            max_size = 15 * 1024 * 1024  # Increased to 15MB to match frontend
 
             if payment_receipt.content_type not in allowed_types:
                 return Response({
-                    'error': 'فقط فایل‌های تصویری (JPEG, PNG, GIF, WebP) مجاز هستند'
+                    'error': 'فقط فایل‌های تصویری (JPEG, PNG, GIF, WebP) و PDF مجاز هستند'  # Updated error message
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             if payment_receipt.size > max_size:
                 return Response({
-                    'error': 'حجم فایل نباید بیشتر از 10MB باشد'
+                    'error': 'حجم فایل نباید بیشتر از 15MB باشد'  # Updated error message
                 }, status=status.HTTP_400_BAD_REQUEST)
+            # --- END OF FIX ---
 
             # Save payment receipt
             order.payment_receipt = payment_receipt

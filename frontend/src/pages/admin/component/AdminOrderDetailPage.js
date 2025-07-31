@@ -490,16 +490,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             />
                         )}
 
-                        {order.status === 'confirmed' && (
-                            <NeoBrutalistButton
-                                text={completing ? "در حال تکمیل..." : "تکمیل سفارش"}
-                                color="green-400"
-                                textColor="black"
-                                onClick={handleCompleteOrder}
-                                disabled={completing}
-                                className="complete-order-btn"
-                            />
-                        )}
                     </div>
                 </form>
             </NeoBrutalistCard>
@@ -538,6 +528,20 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
+            {/* Payment Verification Section */}
+            {order.status === 'payment_uploaded' && (
+                <NeoBrutalistCard className="admin-payment-verification-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">بررسی رسید پرداخت</h2>
+                    </div>
+
+                    <PaymentVerificationComponent
+                        order={order}
+                        onPaymentVerified={fetchOrder}
+                    />
+                </NeoBrutalistCard>
+            )}
+
             {order.status === 'completed' && (
                 <NeoBrutalistCard className="admin-order-info-card">
                     <div className="admin-card-header">
@@ -566,19 +570,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Payment Verification Section */}
-            {order.status === 'payment_uploaded' && (
-                <NeoBrutalistCard className="admin-payment-verification-card">
-                    <div className="admin-card-header">
-                        <h2 className="admin-card-title">بررسی رسید پرداخت</h2>
-                    </div>
 
-                    <PaymentVerificationComponent
-                        order={order}
-                        onPaymentVerified={fetchOrder}
-                    />
-                </NeoBrutalistCard>
-            )}
 
             {/* Show payment info for completed orders */}
             {order.status === 'completed' && order.payment_receipt && (

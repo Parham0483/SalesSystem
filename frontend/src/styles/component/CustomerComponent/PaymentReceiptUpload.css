@@ -1,5 +1,82 @@
+/* Modal Overlay - FIXED positioning */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* High z-index to ensure it's on top */
+    padding: 1rem;
+    overflow-y: auto; /* Allow scrolling if content is too tall */
+}
+
+/* Modal Container - FIXED positioning */
+.modal-container {
+    background-color: white;
+    border-radius: 12px;
+    border: 4px solid #000;
+    box-shadow: 8px 8px 0px #000;
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    margin: auto; /* Center in viewport */
+}
+
+/* Modal Header */
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 3px solid #000;
+    background-color: #facc15;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #000;
+}
+
+.modal-close-btn {
+    background-color: #ef4444;
+    color: white;
+    border: 3px solid #000;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    transform: scale(1.1);
+}
+
+.modal-content {
+    padding: 1.5rem;
+}
+
+/* Payment Receipt Upload Component */
 .payment-receipt-upload {
     width: 100%;
+    font-family: system-ui, -apple-system, sans-serif;
 }
 
 .upload-error {
@@ -23,6 +100,7 @@
     cursor: pointer;
     transition: all 0.3s ease;
     background: #f9fafb;
+    margin-bottom: 1rem;
 }
 
 .dropzone:hover,
@@ -47,18 +125,22 @@
 .dropzone-text p {
     margin: 0.25rem 0;
     font-weight: bold;
+    font-size: 1rem;
 }
 
 .dropzone-hint {
     font-size: 0.875rem;
     color: #6b7280;
+    margin-top: 0.5rem;
 }
 
+/* Preview Container */
 .preview-container {
     border: 3px solid #374151;
     border-radius: 12px;
     padding: 1.5rem;
-    background: white;
+    background: #f9fafb;
+    margin-bottom: 1rem;
 }
 
 .preview-header {
@@ -74,12 +156,13 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: bold;
+    color: #374151;
 }
 
 .remove-preview-btn {
     background: #ef4444;
     color: white;
-    border: none;
+    border: 2px solid #000;
     border-radius: 50%;
     width: 2rem;
     height: 2rem;
@@ -87,6 +170,9 @@
     font-size: 1rem;
     font-weight: bold;
     transition: transform 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .remove-preview-btn:hover {
@@ -113,42 +199,204 @@
     border-radius: 8px;
 }
 
+/* PDF Preview */
+.pdf-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    background-color: white;
+}
+
+.pdf-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.pdf-label {
+    margin: 0;
+    font-weight: bold;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.pdf-view-btn {
+    padding: 0.5rem 1rem;
+    background-color: #3b82f6;
+    color: white;
+    border: 2px solid #000;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.pdf-view-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 2px 0px #000;
+}
+
+/* File Info */
 .file-info {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
+    justify-content: center;
 }
 
 .file-info-item {
     display: flex;
     gap: 0.5rem;
+    align-items: flex-start;
 }
 
 .file-info-label {
     font-weight: bold;
     min-width: 80px;
-}
-
-.file-info-value {
     color: #374151;
 }
 
+.file-info-value {
+    color: #6b7280;
+    word-break: break-word;
+}
+
+/* Upload Actions */
 .upload-actions {
     display: flex;
+    gap: 1rem;
     justify-content: center;
+    flex-wrap: wrap;
 }
 
 .upload-btn {
     min-width: 200px;
+    padding: 12px 24px;
+    background-color: #4ade80;
+    color: white;
+    border: 3px solid #000;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0px #000;
 }
 
+.upload-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 6px 6px 0px #000;
+}
+
+.upload-btn:disabled,
+.upload-btn.uploading {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.cancel-btn {
+    min-width: 120px;
+    padding: 12px 24px;
+    background-color: #9ca3af;
+    color: white;
+    border: 3px solid #000;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0px #000;
+}
+
+.cancel-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: 6px 6px 0px #000;
+}
+
+.cancel-btn:disabled {
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Instructions */
+.upload-instructions {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background-color: #dbeafe;
+    border: 2px solid #3b82f6;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: #1e40af;
+}
+
+.instructions-title {
+    margin: 0;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.instructions-list {
+    margin: 0;
+    padding-right: 1.5rem;
+    list-style-type: disc;
+}
+
+.instructions-list li {
+    margin-bottom: 0.25rem;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
+    .modal-overlay {
+        padding: 0.5rem;
+    }
+
+    .modal-container {
+        max-height: 95vh;
+    }
+
+    .modal-header {
+        padding: 1rem;
+    }
+
+    .modal-content {
+        padding: 1rem;
+    }
+
     .preview-content {
         flex-direction: column;
     }
 
     .preview-image-container {
         max-width: 100%;
+    }
+
+    .upload-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .upload-btn,
+    .cancel-btn {
+        width: 100%;
+        max-width: 250px;
+    }
+
+    .dropzone {
+        padding: 1.5rem;
+    }
+
+    .dropzone-icon {
+        font-size: 2rem;
     }
 }

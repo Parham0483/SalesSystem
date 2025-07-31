@@ -154,7 +154,11 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             'custom_commission_rate', 'has_dealer',
 
             # Invoice
-            'invoice_id', 'invoice_number', 'invoice_date'
+            'invoice_id', 'invoice_number', 'invoice_date','payment_receipt',
+            'payment_receipt_uploaded_at',
+            'payment_verified',
+            'payment_verified_at',
+            'payment_notes',
         ]
         read_only_fields = fields
 
