@@ -7,7 +7,7 @@ import {
     Calendar, CreditCard, MoreVertical, Plus
 } from 'lucide-react';
 import API from '../../component/api';
-import AdminOrderDetailPage from '../../component/AdminOrderDetailPage';
+import AdminOrderDetailPage from './component/AdminOrderDetailPage';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';

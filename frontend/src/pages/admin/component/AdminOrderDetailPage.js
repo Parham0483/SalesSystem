@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import API from '../component/api';
-import DealerAssignmentComponent from './DealerAssignmentComponent';
-import NeoBrutalistCard from '../component/NeoBrutalist/NeoBrutalistCard';
-import NeoBrutalistButton from '../component/NeoBrutalist/NeoBrutalistButton';
-import NeoBrutalistInput from '../component/NeoBrutalist/NeoBrutalistInput';
-import '../styles/component/AdminOrderDetail.css';
+import API from '../../../component/api';
+import DealerAssignmentComponent from '../../../component/DealerAssignmentComponent';
+import PaymentVerificationComponent from "./PaymentVerificationComponent";
+import NeoBrutalistCard from '../../../component/NeoBrutalist/NeoBrutalistCard';
+import NeoBrutalistButton from '../../../component/NeoBrutalist/NeoBrutalistButton';
+import NeoBrutalistInput from '../../../component/NeoBrutalist/NeoBrutalistInput';
+import '../../../styles/component/AdminComponent/AdminOrderDetail.css';
 
 const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
@@ -561,6 +562,58 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 <span className="admin-info-value">{order.invoice_number}</span>
                             </div>
                         )}
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Payment Verification Section */}
+            {order.status === 'payment_uploaded' && (
+                <NeoBrutalistCard className="admin-payment-verification-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">بررسی رسید پرداخت</h2>
+                    </div>
+
+                    <PaymentVerificationComponent
+                        order={order}
+                        onPaymentVerified={fetchOrder}
+                    />
+                </NeoBrutalistCard>
+            )}
+
+            {/* Show payment info for completed orders */}
+            {order.status === 'completed' && order.payment_receipt && (
+                <NeoBrutalistCard className="admin-payment-info-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">اطلاعات پرداخت</h2>
+                    </div>
+                    <div className="admin-order-info-grid">
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">تاریخ آپلود رسید</span>
+                            <span className="admin-info-value">
+                    {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
+                </span>
+                        </div>
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">تاریخ تایید پرداخت</span>
+                            <span className="admin-info-value">
+                    {order.payment_verified_at && new Date(order.payment_verified_at).toLocaleDateString('fa-IR')}
+                </span>
+                        </div>
+                        {order.payment_notes && (
+                            <div className="admin-info-item">
+                                <span className="admin-info-label">یادداشت‌های پرداخت</span>
+                                <span className="admin-info-value">{order.payment_notes}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="payment-receipt-view">
+                        <img
+                            src={order.payment_receipt}
+                            alt="رسید پرداخت"
+                            className="admin-receipt-image"
+                            onClick={() => window.open(order.payment_receipt, '_blank')}
+                        />
                     </div>
                 </NeoBrutalistCard>
             )}

@@ -1,0 +1,154 @@
+.payment-receipt-upload {
+    width: 100%;
+}
+
+.upload-error {
+    background: #fee2e2;
+    border: 3px solid #dc2626;
+    padding: 1rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.dropzone {
+    border: 3px dashed #6b7280;
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: #f9fafb;
+}
+
+.dropzone:hover,
+.dropzone-active {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    transform: translateY(-2px);
+}
+
+.dropzone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dropzone-icon {
+    font-size: 3rem;
+    opacity: 0.7;
+}
+
+.dropzone-text p {
+    margin: 0.25rem 0;
+    font-weight: bold;
+}
+
+.dropzone-hint {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.preview-container {
+    border: 3px solid #374151;
+    border-radius: 12px;
+    padding: 1.5rem;
+    background: white;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.preview-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.remove-preview-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 2rem;
+    height: 2rem;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: transform 0.2s ease;
+}
+
+.remove-preview-btn:hover {
+    transform: scale(1.1);
+}
+
+.preview-content {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.preview-image-container {
+    flex: 1;
+    max-width: 300px;
+}
+
+.preview-image {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+    object-fit: contain;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+}
+
+.file-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.file-info-item {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.file-info-label {
+    font-weight: bold;
+    min-width: 80px;
+}
+
+.file-info-value {
+    color: #374151;
+}
+
+.upload-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.upload-btn {
+    min-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .preview-content {
+        flex-direction: column;
+    }
+
+    .preview-image-container {
+        max-width: 100%;
+    }
+}

@@ -1012,3 +1012,45 @@ class NotificationService:
             logger.error(f"❌ Failed to send admin status change notification: {e}")
             return False
 
+    @staticmethod
+    def notify_admin_payment_uploaded(order):
+        """Notify admin when customer uploads payment receipt"""
+        try:
+            subject = f"رسید پرداخت آپلود شد - سفارش #{order.id}"
+
+            message = f"""
+    رسید پرداخت برای سفارش جدیدی آپلود شده است:
+
+    شماره سفارش: #{order.id}
+    نام مشتری: {order.customer.name}
+    مبلغ سفارش: {order.quoted_total:,.0f} ریال
+    تاریخ آپلود: {order.payment_receipt_uploaded_at.strftime('%Y/%m/%d %H:%M')}
+
+    لطفاً وارد پنل مدیریت شوید و رسید پرداخت را بررسی کنید.
+    پنل مدیریت: {settings.FRONTEND_URL}/admin/orders/{order.id}
+            """.strip()
+
+            admin_emails = getattr(settings, 'ADMIN_EMAIL_LIST', ['admin@company.com'])
+
+            success_count = 0
+            for admin_email in admin_emails:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[admin_email],
+                        fail_silently=False,
+                    )
+                    success_count += 1
+                except Exception as e:
+                    logger.error(f"❌ Failed to send payment upload notification to {admin_email}: {e}")
+
+            return success_count > 0
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send payment upload notification: {e}")
+            return False
+
+
+
