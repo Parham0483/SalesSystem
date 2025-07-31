@@ -142,7 +142,35 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
+            // Prepare data for submission
+            const submissionData = {
+                admin_comment: adminComment,
+                items: items.map(item => ({
+                    id: item.id,
+                    quoted_unit_price: parseFloat(item.quoted_unit_price) || 0,
+                    final_quantity: parseInt(item.final_quantity) || 0,
+                    admin_notes: item.admin_notes || '',
+                }))
+            };
 
+            // Show success message
+            alert('قیمت‌گذاری با موفقیت ثبت شد!');
+
+            if (onOrderUpdated) {
+                onOrderUpdated();
+            }
+
+            // Refresh order data
+            fetchOrder();
+
+        } catch (err) {
+            console.error('❌ Error submitting pricing:', err);
+            const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی قیمت‌گذاری';
+            setError(errorMessage);
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     const updateItem = (index, field, value) => {
         const newItems = [...items];
