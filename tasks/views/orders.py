@@ -1,13 +1,17 @@
 # tasks/views/orders.py - COMPLETE INTEGRATION WITH SMS
 
 from django.db.models import Sum, Q
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, request
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
 import logging
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
+from rest_framework.decorators import api_view, permission_classes
+from ..models import OrderPaymentReceipt # Import the receipt model
 
 from ..serializers import (
     OrderCreateSerializer,
@@ -771,6 +775,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'error': f'خطا در آپلود رسیدهای پرداخت: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
     @action(detail=True, methods=['GET'], url_path='payment-receipts')
     def get_payment_receipts(self, request, *args, **kwargs):
         """Get all payment receipts for an order"""
@@ -1024,3 +1029,23 @@ class OrderItemViewSet(viewsets.ModelViewSet):
             ).distinct()
         else:
             return OrderItem.objects.filter(order__customer=user)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def view_payment_receipt(request, *, receipt_id):
+    try:
+        # Find the specific receipt from the OrderPaymentReceipt model
+        receipt = get_object_or_404(OrderPaymentReceipt, pk=receipt_id)
+
+        # Security Check: Ensure the user is an admin or related to the order
+        if not (request.user.is_staff or request.user == receipt.order.customer):
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Use FileResponse to stream the file efficiently
+        return FileResponse(receipt.receipt_file.open(), as_attachment=False, filename=receipt.file_name)
+
+    except Http404:
+        return Response({"error": "Receipt not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"❌ Error serving receipt file {receipt_id}: {str(e)}")
+        return Response({"error": "Could not serve file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

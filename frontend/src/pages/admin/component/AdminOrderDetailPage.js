@@ -55,9 +55,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setError('');
 
         try {
-
             const response = await API.post(`/orders/${orderId}/complete/`);
-
 
             // Show success message
             alert('سفارش با موفقیت تکمیل شد!');
@@ -78,7 +76,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setCompleting(false);
         }
     };
-
 
     const handleRemoveDealer = async () => {
         if (!window.confirm('آیا مطمئن هستید که می‌خواهید نماینده را حذف کنید؟')) {
@@ -160,9 +157,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 }))
             };
 
-
             const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
-
 
             // Show success message
             alert('قیمت‌گذاری با موفقیت ثبت شد!');
@@ -197,6 +192,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
+            case 'payment_uploaded':
+                return 'purple-400';
             case 'completed':
                 return 'green-600';
             case 'rejected':
@@ -213,6 +210,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید مشتری',
             'confirmed': 'تأیید شده',
+            'payment_uploaded': 'رسید پرداخت آپلود شده',
             'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
@@ -239,6 +237,20 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         const total = parseFloat(unitPrice) * parseInt(quantity);
         const formattedTotal = new Intl.NumberFormat('fa-IR').format(total);
         return `${formattedTotal} ریال`;
+    };
+
+    const calculateOrderTotal = () => {
+        const total = items.reduce((sum, item) => {
+            if (item.quoted_unit_price && item.final_quantity) {
+                return sum + (parseFloat(item.quoted_unit_price) * parseInt(item.final_quantity));
+            }
+            return sum;
+        }, 0);
+
+        if (total > 0) {
+            return new Intl.NumberFormat('fa-IR').format(total);
+        }
+        return 'محاسبه نشده';
     };
 
     if (loading) {
@@ -310,9 +322,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="admin-info-label">مشتری</span>
                         <span className="admin-info-value">{order.customer_name}</span>
                     </div>
-                    <div className="neo-info-item">
-                        <span className="neo-info-label">شماره تماس</span>
-                        <span className="neo-info-value">
+                    <div className="admin-info-item">
+                        <span className="admin-info-label">شماره تماس</span>
+                        <span className="admin-info-value">
                             {order.customer_phone || 'ثبت نشده'}
                         </span>
                     </div>
@@ -332,17 +344,21 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             {order.customer_comment || 'هیچ توضیحی ارائه نشده'}
                         </span>
                     </div>
+                    <div className="admin-info-item">
+                        <span className="admin-info-label">مجموع سفارش</span>
+                        <span className="admin-info-value">
+                            {calculateOrderTotal()} ریال
+                        </span>
+                    </div>
 
                     {/* Show completion info for completed orders */}
                     {order.status === 'completed' && order.completion_date && (
-                        <>
-                            <div className="admin-info-item">
-                                <span className="admin-info-label">تاریخ تکمیل</span>
-                                <span className="admin-info-value">
-                                    {new Date(order.completion_date).toLocaleDateString('fa-IR')}
-                                </span>
-                            </div>
-                        </>
+                        <div className="admin-info-item">
+                            <span className="admin-info-label">تاریخ تکمیل</span>
+                            <span className="admin-info-value">
+                                {new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                            </span>
+                        </div>
                     )}
                 </div>
             </NeoBrutalistCard>
@@ -363,8 +379,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             <div className="admin-info-item">
                                 <span className="admin-info-label">تاریخ تخصیص:</span>
                                 <span className="admin-info-value">
-                        {order.dealer_assigned_at && new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}
-                    </span>
+                                    {order.dealer_assigned_at && new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}
+                                </span>
                             </div>
                             <NeoBrutalistButton
                                 text="حذف نماینده"
@@ -489,10 +505,45 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 className="admin-submit-btn"
                             />
                         )}
-
                     </div>
                 </form>
             </NeoBrutalistCard>
+
+            {/* Payment Verification Section */}
+            {(order.status === 'payment_uploaded') && (
+                <NeoBrutalistCard className="admin-payment-verification-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">تایید پرداخت</h2>
+                    </div>
+                    <PaymentVerificationComponent
+                        orderId={order.id}
+                        order={order}
+                        onPaymentVerified={fetchOrder}
+                    />
+                </NeoBrutalistCard>
+            )}
+
+            {/* Complete Order Section */}
+            {(order.status === 'confirmed') && (
+                <NeoBrutalistCard className="admin-complete-order-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">تکمیل سفارش</h2>
+                    </div>
+                    <div className="admin-complete-section">
+                        <p className="admin-complete-description">
+                            سفارش آماده تکمیل است. آیا مایل به تکمیل این سفارش هستید؟
+                        </p>
+                        <NeoBrutalistButton
+                            text={completing ? "در حال تکمیل..." : "تکمیل سفارش"}
+                            color="green-400"
+                            textColor="black"
+                            onClick={handleCompleteOrder}
+                            disabled={completing}
+                            className="admin-complete-btn"
+                        />
+                    </div>
+                </NeoBrutalistCard>
+            )}
 
             {/* Success Message */}
             {!error && (submitting || completing) && (
@@ -505,92 +556,45 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
-            {/* Order Status Info */}
-            {order.status === 'waiting_customer_approval' && (
+            {/* Payment Information Display */}
+            {(order.status === 'payment_uploaded' || order.status === 'confirmed' || order.status === 'completed') && (
                 <NeoBrutalistCard className="admin-order-info-card">
-                    <div className="admin-card-header">
-                        <h2 className="admin-card-title">⏰ منتظر پاسخ مشتری</h2>
-                    </div>
-                    <div className="admin-order-info-grid">
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">قیمت‌گذاری انجام شده</span>
-                            <span className="admin-info-value">
-                                {order.pricing_date && new Date(order.pricing_date).toLocaleDateString('fa-IR')}
-                            </span>
-                        </div>
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">مبلغ کل ارائه شده</span>
-                            <span className="admin-info-value">
-                                {formatPrice(order.quoted_total)} ریال
-                            </span>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-            {/* Payment Verification Section */}
-            {order.status === 'payment_uploaded' && (
-                <NeoBrutalistCard className="admin-payment-verification-card">
-                    <div className="admin-card-header">
-                        <h2 className="admin-card-title">بررسی رسید پرداخت</h2>
-                    </div>
-
-                    <PaymentVerificationComponent
-                        order={order}
-                        onPaymentVerified={fetchOrder}
-                    />
-                </NeoBrutalistCard>
-            )}
-
-            {order.status === 'completed' && (
-                <NeoBrutalistCard className="admin-order-info-card">
-                    <div className="admin-card-header">
-                        <h2 className="admin-card-title">✅ سفارش تکمیل شده</h2>
-                    </div>
-                    <div className="admin-order-info-grid">
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">تاریخ تکمیل</span>
-                            <span className="admin-info-value">
-                                {order.completion_date && new Date(order.completion_date).toLocaleDateString('fa-IR')}
-                            </span>
-                        </div>
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">مبلغ نهایی</span>
-                            <span className="admin-info-value">
-                                {formatPrice(order.quoted_total)} ریال
-                            </span>
-                        </div>
-                        {order.invoice_number && (
-                            <div className="admin-info-item">
-                                <span className="admin-info-label">شماره فاکتور</span>
-                                <span className="admin-info-value">{order.invoice_number}</span>
-                            </div>
-                        )}
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-
-
-            {/* Show payment info for completed orders */}
-            {order.status === 'completed' && order.payment_receipt && (
-                <NeoBrutalistCard className="admin-payment-info-card">
                     <div className="admin-card-header">
                         <h2 className="admin-card-title">اطلاعات پرداخت</h2>
                     </div>
                     <div className="admin-order-info-grid">
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">تاریخ آپلود رسید</span>
-                            <span className="admin-info-value">
-                    {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
-                </span>
-                        </div>
-                        <div className="admin-info-item">
-                            <span className="admin-info-label">تاریخ تایید پرداخت</span>
-                            <span className="admin-info-value">
-                    {order.payment_verified_at && new Date(order.payment_verified_at).toLocaleDateString('fa-IR')}
-                </span>
-                        </div>
+                        {order.has_payment_receipts ? (
+                            <>
+                                <div className="admin-info-item">
+                                    <span className="admin-info-label">نوع پرداخت</span>
+                                    <span className="admin-info-value">رسیدهای متعدد</span>
+                                </div>
+                                <div className="admin-info-item">
+                                    <span className="admin-info-label">تعداد رسیدها</span>
+                                    <span className="admin-info-value">{order.payment_receipts_count || 'نامشخص'}</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {order.payment_receipt_uploaded_at && (
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">تاریخ آپلود رسید</span>
+                                        <span className="admin-info-value">
+                                            {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
+                                        </span>
+                                    </div>
+                                )}
+                                {order.payment_verified_at && (
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">تاریخ تایید پرداخت</span>
+                                        <span className="admin-info-value">
+                                            {new Date(order.payment_verified_at).toLocaleDateString('fa-IR')}
+                                        </span>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
                         {order.payment_notes && (
                             <div className="admin-info-item">
                                 <span className="admin-info-label">یادداشت‌های پرداخت</span>
@@ -599,14 +603,25 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         )}
                     </div>
 
-                    <div className="payment-receipt-view">
-                        <img
-                            src={order.payment_receipt}
-                            alt="رسید پرداخت"
-                            className="admin-receipt-image"
-                            onClick={() => window.open(order.payment_receipt, '_blank')}
-                        />
-                    </div>
+                    {/* Show legacy single receipt if exists */}
+                    {order.payment_receipt && !order.has_payment_receipts && (
+                        <div className="payment-receipt-view">
+                            <h4>رسید پرداخت:</h4>
+                            <img
+                                src={order.payment_receipt}
+                                alt="رسید پرداخت"
+                                className="admin-receipt-image"
+                                onClick={() => window.open(order.payment_receipt, '_blank')}
+                                style={{
+                                    maxWidth: '300px',
+                                    maxHeight: '400px',
+                                    cursor: 'pointer',
+                                    border: '2px solid #000',
+                                    borderRadius: '8px'
+                                }}
+                            />
+                        </div>
+                    )}
                 </NeoBrutalistCard>
             )}
         </div>

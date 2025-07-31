@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from tasks.views.customers import CustomerViewSet
-from tasks.views.orders import OrderViewSet, OrderItemViewSet
+from tasks.views.orders import OrderViewSet, OrderItemViewSet,view_payment_receipt
 from tasks.views.invoices import InvoiceViewSet
 from tasks.views.dealers import DealerViewSet
 from tasks.views.auth import get_csrf_token, customer_register, customer_login, customer_logout
@@ -19,6 +19,7 @@ from tasks.views.profile import (
     reset_password
 )
 from tasks.views.google_auth import google_auth, complete_google_profile, link_google_account
+
 
 
 # Create router and register viewsets
@@ -49,6 +50,9 @@ urlpatterns = [
     path('auth/register/', customer_register, name='customer_register'),
     path('auth/login/', customer_login, name='customer_login'),
     path('auth/logout/', customer_logout, name='customer_logout'),
+    path('receipts/<int:receipt_id>/view/', view_payment_receipt, name='view_receipt'),
+
+
 
     # JWT token endpoints
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
