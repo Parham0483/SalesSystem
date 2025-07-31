@@ -3,7 +3,8 @@ import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
-import '../styles/component/OrderDetail.css';
+import '../styles/component/CustomerComponent/OrderDetail.css';
+import PaymentReceiptUpload from "./PaymentReceiptUpload";
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
@@ -513,6 +514,68 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             onClick={downloadInvoice}
                             className="neo-download-btn"
                         />
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Payment Receipt Upload Section */}
+            {(order.status === 'confirmed' && !order.payment_receipt) && (
+                <NeoBrutalistCard className="neo-payment-upload-card">
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">آپلود رسید پرداخت</h2>
+                    </div>
+                    <div className="neo-payment-upload-content">
+                        <p className="neo-payment-instructions">
+                            لطفاً رسید پرداخت یا تصویر چک خود را آپلود کنید. پس از بررسی و تایید توسط مدیر، سفارش شما تکمیل خواهد شد.
+                        </p>
+
+                        <PaymentReceiptUpload
+                            orderId={order.id}
+                            onUploadSuccess={fetchOrder}
+                        />
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Payment Receipt Status */}
+            {order.payment_receipt && (
+                <NeoBrutalistCard className="neo-payment-status-card">
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">وضعیت رسید پرداخت</h2>
+                    </div>
+                    <div className="neo-payment-status-content">
+                        <div className="neo-payment-info-grid">
+                            <div className="neo-info-item">
+                                <span className="neo-info-label">تاریخ آپلود</span>
+                                <span className="neo-info-value">
+                        {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
+                    </span>
+                            </div>
+                            <div className="neo-info-item">
+                                <span className="neo-info-label">وضعیت</span>
+                                <span className={`neo-info-value ${
+                                    order.payment_verified ? 'neo-payment-verified' : 'neo-payment-pending'
+                                }`}>
+                        {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                    </span>
+                            </div>
+                            {order.payment_notes && (
+                                <div className="neo-info-item">
+                                    <span className="neo-info-label">توضیحات مدیر</span>
+                                    <span className="neo-info-value">{order.payment_notes}</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="neo-payment-receipt-preview">
+                            <img
+                                src={order.payment_receipt}
+                                alt="رسید پرداخت"
+                                className="neo-receipt-image"
+                                onClick={() => window.open(order.payment_receipt, '_blank')}
+                            />
+                            <p className="neo-receipt-hint">برای مشاهده در اندازه کامل کلیک کنید</p>
+                        </div>
                     </div>
                 </NeoBrutalistCard>
             )}

@@ -316,6 +316,7 @@
 
 /* Enhanced status colors */
 :root {
+    --purple-400: #9d00ff;
     --yellow-400: #facc15;
     --blue-400: #60a5fa;
     --green-400: #4ade80;

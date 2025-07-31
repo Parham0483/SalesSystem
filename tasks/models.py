@@ -364,6 +364,8 @@ STATUS_CHOICES = [
     ('pending_pricing', 'Pending Pricing'),
     ('waiting_customer_approval', 'Waiting Customer Approval'),
     ('confirmed', 'Confirmed'),
+    ('waiting_payment', 'Waiting Payment Receipt'),
+    ('payment_uploaded', 'Payment Receipt Uploaded'),
     ('completed', 'Completed'),
     ('rejected', 'Rejected'),
     ('cancelled', 'Cancelled'),
@@ -430,6 +432,41 @@ class Order(models.Model):
     # Customer response
     customer_response_date = models.DateTimeField(blank=True, null=True)
     customer_rejection_reason = models.TextField(blank=True, null=True)
+
+    #Payment Fields
+    payment_receipt = models.ImageField(
+        upload_to='payment_receipts/',
+        blank=True,
+        null=True,
+        help_text="Payment receipt or cheque image"
+    )
+    payment_receipt_uploaded_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When payment receipt was uploaded"
+    )
+    payment_verified = models.BooleanField(
+        default=False,
+        help_text="Admin verified the payment receipt"
+    )
+    payment_verified_at = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="When payment was verified by admin"
+    )
+    payment_verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='verified_payments',
+        help_text="Admin who verified the payment"
+    )
+    payment_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Admin notes about payment verification"
+    )
 
     def __str__(self):
         return f"Order {self.id} - {self.customer.name} - {self.status}"

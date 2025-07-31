@@ -6,7 +6,7 @@ import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import NeoBrutalistModal from './NeoBrutalist/NeoBrutalistModal';
-import '../styles/component/profile.css';
+import '../styles/component/CustomerComponent/profile.css';
 
 const ProfilePage = ({ isModal = false }) => {
     const [profile, setProfile] = useState(null);

@@ -298,7 +298,7 @@ class DealerCommissionAdmin(admin.ModelAdmin):
     export_commission_report.short_description = "Export commission report"
 
 
-# NEW: Order Log Admin
+# Order Log Admin
 @admin.register(OrderLog)
 class OrderLogAdmin(admin.ModelAdmin):
     list_display = ['timestamp', 'order_link', 'action_display', 'performed_by', 'description_short']

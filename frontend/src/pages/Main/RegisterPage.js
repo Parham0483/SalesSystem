@@ -157,7 +157,7 @@ const RegisterPage = () => {
                 {/* Google Registration Section */}
                 <div className="google-register-section">
                     <div className="register-divider">
-                        <span>ثبت نام سریع با Google</span>
+                        <span>ثبت نام سریع با گوگل</span>
                     </div>
 
                     <GoogleLoginButton

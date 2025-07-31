@@ -6,7 +6,7 @@ import { useCategories } from '../../hooks/useCategories';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
-import '../../styles/component/NewArrivalsPage.css';
+import '../../styles/component/CustomerComponent/NewArrivalsPage.css';
 
 const NewArrivalsPage = () => {
     const [shipmentAnnouncements, setShipmentAnnouncements] = useState([]);
@@ -144,9 +144,9 @@ const NewArrivalsPage = () => {
                         )}
 
                         {!isDealer && (
-                            <NeoBrutalistButton text="داشبورد" color="yellow-400" textColor="black" onClick={() => navigate('/dashboard')} className="dashboard-btn" />
+                            <NeoBrutalistButton text="داشبورد" color="purple-400" textColor="black" onClick={() => navigate('/dashboard')} className="dashboard-btn" />
                         )}
-                        {isDealer && (<NeoBrutalistButton text="داشبورد" color="yellow-400" textColor="black" onClick={() => navigate('/dealer')} className="dashboard-btn" />
+                        {isDealer && (<NeoBrutalistButton text="داشبورد" color="purple-400" textColor="black" onClick={() => navigate('/dealer')} className="dashboard-btn" />
                         )}
                         <NeoBrutalistButton
                             text="خروج"

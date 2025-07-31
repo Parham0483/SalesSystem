@@ -4,7 +4,7 @@ import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistDropdown from './NeoBrutalist/NeoBrutalistDropdown';
-import '../styles/component/CreateOrder.css';
+import '../styles/component/CustomerComponent/CreateOrder.css';
 
 const CreateOrderPage = ({ onOrderCreated }) => {
     const [products, setProducts] = useState([]);

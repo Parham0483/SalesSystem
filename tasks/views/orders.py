@@ -19,7 +19,7 @@ from ..serializers.dealers import (
     DealerSerializer, DealerAssignmentSerializer,
     DealerNotesUpdateSerializer
 )
-from ..models import Order, OrderItem, Customer
+from ..models import Order, OrderItem, Customer, OrderLog
 from ..services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
@@ -636,6 +636,152 @@ class OrderViewSet(viewsets.ModelViewSet):
             'orders': serializer.data
         })
 
+    @action(detail=True, methods=['POST'], url_path='upload-payment-receipt')
+    def upload_payment_receipt(self, request, *args, **kwargs):
+        """Customer uploads payment receipt"""
+        try:
+            order = self.get_object()
+
+            if order.customer != request.user:
+                return Response({
+                    'error': 'Permission denied'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            if order.status != 'confirmed':
+                return Response({
+                    'error': f'Cannot upload payment receipt for order with status: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            payment_receipt = request.FILES.get('payment_receipt')
+            if not payment_receipt:
+                return Response({
+                    'error': 'Payment receipt file is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate file type and size
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            max_size = 10 * 1024 * 1024  # 10MB
+
+            if payment_receipt.content_type not in allowed_types:
+                return Response({
+                    'error': 'فقط فایل‌های تصویری (JPEG, PNG, GIF, WebP) مجاز هستند'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if payment_receipt.size > max_size:
+                return Response({
+                    'error': 'حجم فایل نباید بیشتر از 10MB باشد'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Save payment receipt
+            order.payment_receipt = payment_receipt
+            order.payment_receipt_uploaded_at = timezone.now()
+            order.status = 'payment_uploaded'
+            order.save()
+
+            # Create log entry
+            OrderLog.objects.create(
+                order=order,
+                action='payment_receipt_uploaded',
+                description=f"Payment receipt uploaded by {request.user.name}",
+                performed_by=request.user
+            )
+
+            # Notify admin about payment upload
+            try:
+                NotificationService.notify_admin_payment_uploaded(order)
+            except Exception as e:
+                logger.warning(f"Failed to send payment upload notification: {str(e)}")
+
+            return Response({
+                'message': 'رسید پرداخت با موفقیت آپلود شد',
+                'order': OrderDetailSerializer(order).data
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Payment receipt upload failed: {str(e)}")
+            return Response({
+                'error': f'خطا در آپلود رسید پرداخت: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='verify-payment')
+    def verify_payment(self, request, *args, **kwargs):
+        """Admin verifies payment receipt and completes order"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            if order.status != 'payment_uploaded':
+                return Response({
+                    'error': f'Cannot verify payment for order with status: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            payment_verified = request.data.get('payment_verified', True)
+            payment_notes = request.data.get('payment_notes', '')
+
+            if payment_verified:
+                # Verify payment and complete order
+                order.payment_verified = True
+                order.payment_verified_at = timezone.now()
+                order.payment_verified_by = request.user
+                order.payment_notes = payment_notes
+                order.status = 'completed'
+                order.completion_date = timezone.now()
+                order.completed_by = request.user
+                order.save()
+
+                # Create commission if dealer assigned
+                if order.assigned_dealer and order.dealer_commission_amount > 0:
+                    from ..models import DealerCommission
+                    commission = DealerCommission.create_for_completed_order(order)
+                    if commission:
+                        logger.info(f"💰 Commission created for dealer {order.assigned_dealer.name}")
+
+                # Create log
+                OrderLog.objects.create(
+                    order=order,
+                    action='payment_verified',
+                    description=f"Payment verified and order completed by {request.user.name}",
+                    performed_by=request.user
+                )
+
+                # Send completion notifications
+                try:
+                    NotificationService.send_dual_notification(
+                        order=order,
+                        notification_type='order_completed'
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send completion notifications: {str(e)}")
+
+            else:
+                # Reject payment - move back to confirmed status
+                order.payment_verified = False
+                order.payment_notes = payment_notes
+                order.status = 'confirmed'
+                order.save()
+
+                OrderLog.objects.create(
+                    order=order,
+                    action='payment_rejected',
+                    description=f"Payment receipt rejected by {request.user.name}: {payment_notes}",
+                    performed_by=request.user
+                )
+
+            return Response({
+                'message': 'پرداخت تایید شد و سفارش تکمیل گردید' if payment_verified else 'رسید پرداخت رد شد',
+                'order': OrderDetailSerializer(order).data
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Payment verification failed: {str(e)}")
+            return Response({
+                'error': f'خطا در تایید پرداخت: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['GET'], url_path='dealer-dashboard-stats')
     def dealer_dashboard_stats(self, request):
         """Get dashboard statistics for dealer"""
@@ -668,7 +814,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             'stats': stats
         })
 
-    # NEW: SMS-specific actions
+
     @action(detail=True, methods=['POST'], url_path='send-custom-sms')
     def send_custom_sms(self, request, *args, **kwargs):
         """Admin sends custom SMS to customer"""

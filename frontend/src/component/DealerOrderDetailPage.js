@@ -4,7 +4,7 @@ import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
-import '../styles/component/OrderDetail.css';
+import '../styles/component/CustomerComponent/OrderDetail.css';
 
 const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
