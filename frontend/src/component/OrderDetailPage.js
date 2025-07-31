@@ -3,7 +3,7 @@ import API from './api';
 import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
-import PaymentReceiptUploadModal from './PaymentReceiptUploadModal'; // Import the fixed component
+import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import '../styles/component/CustomerComponent/OrderDetail.css';
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
@@ -17,8 +17,13 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [submitting, setSubmitting] = useState(false);
     const [generatingInvoice, setGeneratingInvoice] = useState(false);
 
-    // FIXED: Payment upload modal state
+    // Payment upload modal state
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+    // NEW: Payment receipts management
+    const [paymentReceipts, setPaymentReceipts] = useState([]);
+    const [loadingReceipts, setLoadingReceipts] = useState(false);
+    const [receiptsError, setReceiptsError] = useState('');
 
     const tableRef = useRef(null);
 
@@ -34,9 +39,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     }, [order]);
 
+    // NEW: Fetch payment receipts when order loads
+    useEffect(() => {
+        if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts || order.payment_receipts?.length > 0)) {
+            fetchPaymentReceipts();
+        }
+    }, [order]);
+
     const fetchOrder = async () => {
         setLoading(true);
-        setError(''); // Clear previous errors
+        setError('');
         try {
             const response = await API.get(`/orders/${orderId}/`);
             setOrder(response.data);
@@ -46,6 +58,43 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setError('خطا در بارگیری جزئیات سفارش');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // NEW: Fetch payment receipts
+    const fetchPaymentReceipts = async () => {
+        setLoadingReceipts(true);
+        setReceiptsError('');
+        try {
+            const response = await API.get(`/orders/${orderId}/payment-receipts/`);
+            setPaymentReceipts(response.data.receipts || []);
+        } catch (err) {
+            console.error('❌ Error fetching payment receipts:', err);
+            setReceiptsError('خطا در بارگیری رسیدهای پرداخت');
+        } finally {
+            setLoadingReceipts(false);
+        }
+    };
+
+    // NEW: Delete payment receipt
+    const deletePaymentReceipt = async (receiptId) => {
+        if (!window.confirm('آیا از حذف این رسید اطمینان دارید؟')) {
+            return;
+        }
+
+        try {
+            await API.delete(`/orders/${orderId}/delete-payment-receipt/${receiptId}/`);
+
+            // Remove from local state
+            setPaymentReceipts(prev => prev.filter(receipt => receipt.id !== receiptId));
+
+            // Refresh order data
+            fetchOrder();
+
+            alert('رسید با موفقیت حذف شد');
+        } catch (err) {
+            console.error('❌ Error deleting payment receipt:', err);
+            alert('خطا در حذف رسید پرداخت');
         }
     };
 
@@ -86,11 +135,10 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
 
         setSubmitting(true);
-        setError(''); // Clear previous errors
+        setError('');
 
         try {
             if (approvalDecision === 'approve') {
-                // First approve the order
                 await API.post(`/orders/${orderId}/approve/`);
             } else {
                 await API.post(`/orders/${orderId}/reject/`, {
@@ -123,7 +171,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 responseType: 'blob'
             });
 
-            // Create blob URL and download
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -139,12 +186,15 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // FIXED: Payment upload success handler
+    // UPDATED: Payment upload success handler
     const handlePaymentUploadSuccess = (response) => {
         console.log('✅ Payment upload successful:', response);
 
         // Refresh order data to show updated payment status
         fetchOrder();
+
+        // Refresh payment receipts
+        fetchPaymentReceipts();
 
         // Close modal
         setIsPaymentModalOpen(false);
@@ -211,6 +261,14 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         if (!text) return '-';
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
+    };
+
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
 
     if (loading) {
@@ -545,20 +603,21 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* FIXED: Payment Receipt Upload Section */}
-            {(order.status === 'confirmed' && !order.payment_receipt) && (
+            {/* UPDATED: Payment Receipt Upload Section */}
+            {(order.status === 'confirmed' && !order.has_payment_receipts) && (
                 <NeoBrutalistCard className="neo-payment-upload-card">
                     <div className="neo-card-header">
                         <h2 className="neo-card-title">آپلود رسید پرداخت</h2>
                     </div>
                     <div className="neo-payment-upload-content">
                         <p className="neo-payment-instructions">
-                            لطفاً رسید پرداخت یا تصویر چک خود را آپلود کنید. پس از بررسی و تایید توسط مدیر، سفارش شما تکمیل خواهد شد.
+                            لطفاً رسید(های) پرداخت یا تصویر چک خود را آپلود کنید. می‌توانید چندین فایل انتخاب کنید.
+                            پس از بررسی و تایید توسط مدیر، سفارش شما تکمیل خواهد شد.
                         </p>
 
                         <div className="neo-upload-button-container">
                             <NeoBrutalistButton
-                                text="📄 آپلود رسید پرداخت"
+                                text="📄 آپلود رسیدهای پرداخت"
                                 color="yellow-400"
                                 textColor="black"
                                 onClick={() => setIsPaymentModalOpen(true)}
@@ -569,31 +628,189 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Payment Receipt Status */}
-            {order.payment_receipt && (
+            {/* UPDATED: Payment Receipts Status - Multiple Receipts Support */}
+            {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">
-                        <h2 className="neo-card-title">وضعیت رسید پرداخت</h2>
+                        <h2 className="neo-card-title">
+                            رسیدهای پرداخت ({paymentReceipts.length})
+                        </h2>
+                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
+                    </div>
+
+                    {receiptsError && (
+                        <div className="neo-error-message">
+                            <span>⚠️ {receiptsError}</span>
+                        </div>
+                    )}
+
+                    <div className="neo-payment-receipts-content">
+                        {/* Allow adding more receipts if still in confirmed status */}
+                        {order.status === 'confirmed' && (
+                            <div className="neo-add-more-receipts">
+                                <NeoBrutalistButton
+                                    text="➕ افزودن رسید جدید"
+                                    color="blue-400"
+                                    textColor="white"
+                                    onClick={() => setIsPaymentModalOpen(true)}
+                                    className="neo-add-receipt-btn"
+                                />
+                            </div>
+                        )}
+
+                        {/* Display all payment receipts */}
+                        <div className="neo-receipts-grid">
+                            {paymentReceipts.map((receipt, index) => (
+                                <div key={receipt.id} className="neo-receipt-item" data-file-type={receipt.file_type}>
+                                    <div className="neo-receipt-header">
+                                        <h4>رسید {index + 1}</h4>
+                                        <div className="neo-receipt-meta">
+                                            <span className="neo-receipt-type">
+                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
+                                            </span>
+                                            <span className="neo-receipt-size">
+                                                {formatFileSize(receipt.file_size)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="neo-receipt-info">
+                                        <div className="neo-receipt-details">
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">نام فایل:</span>
+                                                <span className="neo-info-value">{receipt.file_name}</span>
+                                            </div>
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">تاریخ آپلود:</span>
+                                                <span className="neo-info-value">
+                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
+                                                </span>
+                                            </div>
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">وضعیت:</span>
+                                                <span className={`neo-info-value ${
+                                                    receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
+                                                }`}>
+                                                    {receipt.is_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
+                                                </span>
+                                            </div>
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">آپلود شده توسط:</span>
+                                                <span className="neo-info-value">{receipt.uploaded_by}</span>
+                                            </div>
+                                            {receipt.admin_notes && (
+                                                <div className="neo-info-item">
+                                                    <span className="neo-info-label">توضیحات مدیر:</span>
+                                                    <span className="neo-info-value">{receipt.admin_notes}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Receipt preview */}
+                                        <div className="neo-receipt-preview">
+                                            {receipt.file_type === 'image' ? (
+                                                <img
+                                                    src={receipt.file_url}
+                                                    alt={`رسید پرداخت ${index + 1}`}
+                                                    className="neo-receipt-image"
+                                                    onClick={() => window.open(receipt.file_url, '_blank')}
+                                                />
+                                            ) : (
+                                                <div className="neo-pdf-preview">
+                                                    <div className="neo-pdf-icon">📄</div>
+                                                    <p className="neo-pdf-name">{receipt.file_name}</p>
+                                                    <NeoBrutalistButton
+                                                        text="🔍 مشاهده PDF"
+                                                        color="blue-400"
+                                                        textColor="white"
+                                                        onClick={() => window.open(receipt.file_url, '_blank')}
+                                                        className="neo-pdf-view-btn"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Receipt actions */}
+                                    <div className="neo-receipt-actions">
+                                        <NeoBrutalistButton
+                                            text="📥 دانلود"
+                                            color="green-400"
+                                            textColor="black"
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = receipt.file_url;
+                                                link.download = receipt.file_name;
+                                                link.click();
+                                            }}
+                                            className="neo-download-receipt-btn"
+                                        />
+
+                                        {/* Allow deletion only if order is still in confirmed status */}
+                                        {order.status === 'confirmed' && (
+                                            <NeoBrutalistButton
+                                                text="🗑️ حذف"
+                                                color="red-400"
+                                                textColor="white"
+                                                onClick={() => deletePaymentReceipt(receipt.id)}
+                                                className="neo-delete-receipt-btn"
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Overall payment status */}
+                        <div className="neo-payment-summary">
+                            <div className="neo-summary-stats">
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">کل رسیدها:</span>
+                                    <span className="neo-stat-value">{paymentReceipts.length}</span>
+                                </div>
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">تایید شده:</span>
+                                    <span className="neo-stat-value">
+                                        {paymentReceipts.filter(r => r.is_verified).length}
+                                    </span>
+                                </div>
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">در انتظار:</span>
+                                    <span className="neo-stat-value">
+                                        {paymentReceipts.filter(r => !r.is_verified).length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Legacy single payment receipt support (for backward compatibility) */}
+            {order.payment_receipt && !order.has_payment_receipts && (
+                <NeoBrutalistCard className="neo-payment-status-card">
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">وضعیت رسید پرداخت (قدیمی)</h2>
                     </div>
                     <div className="neo-payment-status-content">
                         <div className="neo-payment-info-grid">
                             <div className="neo-info-item">
-                                <span className="neo-info-label">تاریخ آپلود</span>
+                                <span className="neo-info-label">تاریخ آپلود:</span>
                                 <span className="neo-info-value">
                                     {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
                                 </span>
                             </div>
                             <div className="neo-info-item">
-                                <span className="neo-info-label">وضعیت</span>
+                                <span className="neo-info-label">وضعیت:</span>
                                 <span className={`neo-info-value ${
                                     order.payment_verified ? 'neo-payment-verified' : 'neo-payment-pending'
                                 }`}>
-                                    {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                    {order.payment_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
                                 </span>
                             </div>
                             {order.payment_notes && (
                                 <div className="neo-info-item">
-                                    <span className="neo-info-label">توضیحات مدیر</span>
+                                    <span className="neo-info-label">توضیحات مدیر:</span>
                                     <span className="neo-info-value">{order.payment_notes}</span>
                                 </div>
                             )}
@@ -623,7 +840,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             {order.status === 'payment_uploaded' && (
                 <div className="neo-status-message neo-info">
                     <span className="neo-status-icon">📄</span>
-                    <span>رسید پرداخت شما آپلود شد و در انتظار بررسی توسط مدیر می‌باشد.</span>
+                    <span>رسیدهای پرداخت شما آپلود شد و در انتظار بررسی توسط مدیر می‌باشد.</span>
                 </div>
             )}
 
@@ -643,7 +860,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* FIXED: Payment Upload Modal - Only render when needed */}
+            {/* Payment Upload Modal */}
             {isPaymentModalOpen && (
                 <PaymentReceiptUploadModal
                     orderId={order.id}

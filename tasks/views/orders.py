@@ -638,7 +638,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='upload-payment-receipt')
     def upload_payment_receipt(self, request, *args, **kwargs):
-        """Customer uploads payment receipt"""
+        """Customer uploads multiple payment receipts (images and PDFs)"""
         try:
             order = self.get_object()
 
@@ -652,57 +652,213 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error': f'Cannot upload payment receipt for order with status: {order.status}'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            payment_receipt = request.FILES.get('payment_receipt')
-            if not payment_receipt:
+            # Get multiple files
+            uploaded_files = request.FILES.getlist('payment_receipts')  # Changed from single to multiple
+
+            if not uploaded_files:
                 return Response({
-                    'error': 'Payment receipt file is required'
+                    'error': 'At least one payment receipt file is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # --- FIXED: Allow PDF and increase file size limit ---
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-                             'application/pdf']  # Added 'application/pdf'
-            max_size = 15 * 1024 * 1024  # Increased to 15MB to match frontend
+            # Validation constants
+            allowed_image_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            allowed_pdf_types = ['application/pdf']
+            allowed_types = allowed_image_types + allowed_pdf_types
 
-            if payment_receipt.content_type not in allowed_types:
+            max_file_size = 15 * 1024 * 1024  # 15MB
+            max_files_count = 10  # Maximum 10 files per upload
+
+            # Validate file count
+            if len(uploaded_files) > max_files_count:
                 return Response({
-                    'error': 'فقط فایل‌های تصویری (JPEG, PNG, GIF, WebP) و PDF مجاز هستند'  # Updated error message
+                    'error': f'Maximum {max_files_count} files allowed per upload'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            if payment_receipt.size > max_size:
+            # Validate each file
+            valid_files = []
+            errors = []
+
+            for i, file in enumerate(uploaded_files):
+                file_errors = []
+
+                # Check file type
+                if file.content_type not in allowed_types:
+                    file_errors.append(
+                        f'File {i + 1} ({file.name}): Unsupported format. Only images (JPEG, PNG, GIF, WebP) and PDF are allowed')
+
+                # Check file size
+                if file.size > max_file_size:
+                    file_errors.append(f'File {i + 1} ({file.name}): Size exceeds 15MB limit')
+
+                # Check if file is empty
+                if file.size == 0:
+                    file_errors.append(f'File {i + 1} ({file.name}): File is empty')
+
+                if file_errors:
+                    errors.extend(file_errors)
+                else:
+                    # Determine file type
+                    file_type = 'pdf' if file.content_type in allowed_pdf_types else 'image'
+                    valid_files.append((file, file_type))
+
+            # If there are validation errors, return them
+            if errors:
                 return Response({
-                    'error': 'حجم فایل نباید بیشتر از 15MB باشد'  # Updated error message
+                    'error': 'File validation failed',
+                    'details': errors
                 }, status=status.HTTP_400_BAD_REQUEST)
-            # --- END OF FIX ---
 
-            # Save payment receipt
-            order.payment_receipt = payment_receipt
-            order.payment_receipt_uploaded_at = timezone.now()
-            order.status = 'payment_uploaded'
-            order.save()
+            # Save valid files
+            saved_receipts = []
+            from ..models import OrderPaymentReceipt
 
-            # Create log entry
-            OrderLog.objects.create(
-                order=order,
-                action='payment_receipt_uploaded',
-                description=f"Payment receipt uploaded by {request.user.name}",
-                performed_by=request.user
-            )
+            for file, file_type in valid_files:
+                try:
+                    receipt = OrderPaymentReceipt.objects.create(
+                        order=order,
+                        receipt_file=file,
+                        file_type=file_type,
+                        uploaded_by=request.user
+                    )
+                    saved_receipts.append({
+                        'id': receipt.id,
+                        'file_name': receipt.file_name,
+                        'file_type': receipt.file_type,
+                        'file_size': receipt.file_size,
+                        'uploaded_at': receipt.uploaded_at,
+                        'file_url': receipt.receipt_file.url if receipt.receipt_file else None
+                    })
+                except Exception as e:
+                    logger.error(f"Error saving receipt file {file.name}: {str(e)}")
+                    errors.append(f'Failed to save {file.name}: {str(e)}')
 
-            # Notify admin about payment upload
-            try:
-                NotificationService.notify_admin_payment_uploaded(order)
-            except Exception as e:
-                logger.warning(f"Failed to send payment upload notification: {str(e)}")
+            # Update order status if we have successfully saved receipts
+            if saved_receipts:
+                order.has_payment_receipts = True
+                order.status = 'payment_uploaded'
+                order.save(update_fields=['has_payment_receipts', 'status'])
+
+                # Create log entry
+                OrderLog.objects.create(
+                    order=order,
+                    action='payment_receipts_uploaded',
+                    description=f"{len(saved_receipts)} payment receipts uploaded by {request.user.name}",
+                    performed_by=request.user
+                )
+
+                # Notify admin about payment upload
+                try:
+                    NotificationService.notify_admin_payment_uploaded(order)
+                except Exception as e:
+                    logger.warning(f"Failed to send payment upload notification: {str(e)}")
+
+            # Prepare response
+            response_data = {
+                'message': f'{len(saved_receipts)} payment receipts uploaded successfully',
+                'uploaded_receipts': saved_receipts,
+                'total_receipts': order.total_receipts_count,
+                'order': OrderDetailSerializer(order).data
+            }
+
+            if errors:
+                response_data['warnings'] = errors
+
+            return Response(response_data)
+
+        except Exception as e:
+            logger.error(f"❌ Payment receipts upload failed: {str(e)}")
+            return Response({
+                'error': f'خطا در آپلود رسیدهای پرداخت: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='payment-receipts')
+    def get_payment_receipts(self, request, *args, **kwargs):
+        """Get all payment receipts for an order"""
+        try:
+            order = self.get_object()
+
+            # Permission check
+            if not (request.user.is_staff or request.user == order.customer or request.user == order.assigned_dealer):
+                return Response({
+                    'error': 'Permission denied'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            receipts = order.all_payment_receipts
+            receipts_data = []
+
+            for receipt in receipts:
+                receipts_data.append({
+                    'id': receipt.id,
+                    'file_name': receipt.file_name,
+                    'file_type': receipt.file_type,
+                    'file_size': receipt.file_size,
+                    'uploaded_at': receipt.uploaded_at,
+                    'uploaded_by': receipt.uploaded_by.name,
+                    'is_verified': receipt.is_verified,
+                    'admin_notes': receipt.admin_notes,
+                    'file_url': receipt.receipt_file.url if receipt.receipt_file else None
+                })
 
             return Response({
-                'message': 'رسید پرداخت با موفقیت آپلود شد',
-                'order': OrderDetailSerializer(order).data
+                'order_id': order.id,
+                'total_receipts': len(receipts_data),
+                'receipts': receipts_data
             })
 
         except Exception as e:
-            logger.error(f"❌ Payment receipt upload failed: {str(e)}")
+            logger.error(f"❌ Error getting payment receipts: {str(e)}")
             return Response({
-                'error': f'خطا در آپلود رسید پرداخت: {str(e)}'
+                'error': 'Failed to retrieve payment receipts'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['DELETE'], url_path='delete-payment-receipt/(?P<receipt_id>[^/.]+)')
+    def delete_payment_receipt(self, request, pk=None, receipt_id=None):
+        """Delete a specific payment receipt"""
+        try:
+            order = self.get_object()
+
+            # Only customer and admin can delete
+            if not (request.user.is_staff or request.user == order.customer):
+                return Response({
+                    'error': 'Permission denied'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Only allow deletion if order is still in payment_uploaded status
+            if order.status not in ['confirmed', 'payment_uploaded']:
+                return Response({
+                    'error': 'Cannot delete receipts for this order status'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            from ..models import OrderPaymentReceipt
+            try:
+                receipt = OrderPaymentReceipt.objects.get(
+                    id=receipt_id,
+                    order=order
+                )
+            except OrderPaymentReceipt.DoesNotExist:
+                return Response({
+                    'error': 'Receipt not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Delete the file and record
+            file_name = receipt.file_name
+            receipt.delete()
+
+            # Update order status if no more receipts
+            if order.total_receipts_count == 0:
+                order.has_payment_receipts = False
+                order.status = 'confirmed'  # Back to confirmed status
+                order.save(update_fields=['has_payment_receipts', 'status'])
+
+            return Response({
+                'message': f'Receipt {file_name} deleted successfully',
+                'remaining_receipts': order.total_receipts_count
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Error deleting payment receipt: {str(e)}")
+            return Response({
+                'error': 'Failed to delete payment receipt'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='verify-payment')

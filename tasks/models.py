@@ -438,12 +438,16 @@ class Order(models.Model):
         upload_to='payment_receipts/',
         blank=True,
         null=True,
-        help_text="Payment receipt or cheque image"
+        help_text="Legacy single payment receipt (deprecated)"
     )
     payment_receipt_uploaded_at = models.DateTimeField(
         blank=True,
         null=True,
         help_text="When payment receipt was uploaded"
+    )
+    has_payment_receipts = models.BooleanField(
+        default=False,
+        help_text="True if order has any payment receipts uploaded"
     )
     payment_verified = models.BooleanField(
         default=False,
@@ -620,6 +624,21 @@ class Order(models.Model):
     class Meta:
         db_table = 'orders'
         ordering = ['-created_at']
+
+    @property
+    def all_payment_receipts(self):
+        """Get all payment receipts for this order"""
+        return self.payment_receipts.all().order_by('-uploaded_at')
+
+    @property
+    def verified_payment_receipts(self):
+        """Get verified payment receipts"""
+        return self.payment_receipts.filter(is_verified=True)
+
+    @property
+    def total_receipts_count(self):
+        """Total number of uploaded receipts"""
+        return self.payment_receipts.count()
 
 
 class OrderItem(models.Model):
@@ -997,3 +1016,45 @@ class DealerCommission(models.Model):
     class Meta:
         db_table = 'dealer_commissions'
         ordering = ['-created_at']
+
+
+class OrderPaymentReceipt(models.Model):
+    """Multiple payment receipts for an order"""
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payment_receipts')
+    receipt_file = models.FileField(
+        upload_to='payment_receipts/',
+        help_text="Payment receipt image or PDF"
+    )
+    file_type = models.CharField(
+        max_length=10,
+        choices=[('image', 'Image'), ('pdf', 'PDF')],
+        help_text="Type of uploaded file"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        'Customer',
+        on_delete=models.CASCADE,
+        help_text="User who uploaded this receipt"
+    )
+    is_verified = models.BooleanField(default=False)
+    admin_notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Receipt for Order #{self.order.id} - {self.file_type}"
+
+    @property
+    def file_size(self):
+        """Get file size in bytes"""
+        try:
+            return self.receipt_file.size
+        except:
+            return 0
+
+    @property
+    def file_name(self):
+        """Get original filename"""
+        return self.receipt_file.name.split('/')[-1] if self.receipt_file else ''
+
+    class Meta:
+        db_table = 'order_payment_receipts'
+        ordering = ['-uploaded_at']

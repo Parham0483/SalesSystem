@@ -5,13 +5,10 @@ import '../styles/component/CustomerComponent/PaymentReceiptUpload.css'
 const Modal = ({ isOpen, onClose, children, title }) => {
     useEffect(() => {
         if (isOpen) {
-            // Prevent body scroll when modal is open
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'unset';
         }
-
-        // Cleanup on unmount
         return () => {
             document.body.style.overflow = 'unset';
         };
@@ -22,15 +19,10 @@ const Modal = ({ isOpen, onClose, children, title }) => {
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-                {/* Modal Header */}
                 <div className="modal-header">
                     <h2 className="modal-title">{title}</h2>
-                    <button className="modal-close-btn" onClick={onClose}>
-                        ✕
-                    </button>
+                    <button className="modal-close-btn" onClick={onClose}>✕</button>
                 </div>
-
-                {/* Modal Content */}
                 <div className="modal-content">
                     {children}
                 </div>
@@ -39,11 +31,10 @@ const Modal = ({ isOpen, onClose, children, title }) => {
     );
 };
 
-// FIXED Payment Receipt Upload Component
 const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }) => {
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
-    const [previewFile, setPreviewFile] = useState(null);
+    const [selectedFiles, setSelectedFiles] = useState([]);
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -52,7 +43,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
             'application/pdf'
         ];
-        const maxSize = 15 * 1024 * 1024; // 15MB for PDFs
+        const maxSize = 15 * 1024 * 1024; // 15MB
 
         if (!allowedTypes.includes(file.type)) {
             return 'فقط فایل‌های تصویری (JPEG, PNG, GIF, WebP) و PDF مجاز هستند';
@@ -62,45 +53,77 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             return 'حجم فایل نباید بیشتر از 15MB باشد';
         }
 
+        if (file.size === 0) {
+            return 'فایل خالی است';
+        }
+
         return null;
     };
 
-    const handleFileSelect = (file) => {
-        setError('');
+    const processFiles = (files) => {
+        const maxFiles = 10;
+        const fileArray = Array.from(files);
 
-        const validationError = validateFile(file);
-        if (validationError) {
-            setError(validationError);
+        if (fileArray.length > maxFiles) {
+            setError(`حداکثر ${maxFiles} فایل در هر بار آپلود مجاز است`);
             return;
         }
 
-        // Handle different file types
-        if (file.type === 'application/pdf') {
-            // For PDF files, create URL for preview
-            const fileURL = URL.createObjectURL(file);
-            setPreviewFile({
-                file: file,
-                preview: fileURL,
-                name: file.name,
-                size: file.size,
-                type: 'pdf'
-            });
+        const validFiles = [];
+        const errors = [];
+
+        fileArray.forEach((file, index) => {
+            const validationError = validateFile(file);
+            if (validationError) {
+                errors.push(`فایل ${index + 1} (${file.name}): ${validationError}`);
+            } else {
+                // Create preview for valid files
+                const fileType = file.type.startsWith('image/') ? 'image' : 'pdf';
+
+                if (fileType === 'image') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const fileData = {
+                            file: file,
+                            id: Date.now() + index,
+                            name: file.name,
+                            size: file.size,
+                            type: fileType,
+                            preview: e.target.result
+                        };
+                        validFiles.push(fileData);
+
+                        // Update state when all files are processed
+                        if (validFiles.length === fileArray.filter(f => !validateFile(f)).length) {
+                            setSelectedFiles(prev => [...prev, ...validFiles]);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    // For PDF files
+                    const fileData = {
+                        file: file,
+                        id: Date.now() + index,
+                        name: file.name,
+                        size: file.size,
+                        type: fileType,
+                        preview: URL.createObjectURL(file)
+                    };
+                    validFiles.push(fileData);
+                }
+            }
+        });
+
+        if (errors.length > 0) {
+            setError(errors.join('\n'));
         } else {
-            // For image files, create data URL
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                setPreviewFile({
-                    file: file,
-                    preview: e.target.result,
-                    name: file.name,
-                    size: file.size,
-                    type: 'image'
-                });
-            };
-            reader.onerror = () => {
-                setError('خطا در خواندن فایل');
-            };
-            reader.readAsDataURL(file);
+            setError('');
+        }
+
+        // Add PDF files immediately (they don't need FileReader)
+        const pdfFiles = validFiles.filter(f => f.type === 'pdf');
+        if (pdfFiles.length > 0) {
+            setSelectedFiles(prev => [...prev, ...pdfFiles]);
         }
     };
 
@@ -120,23 +143,42 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
         e.preventDefault();
         e.stopPropagation();
         setIsDragOver(false);
-
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0) {
-            handleFileSelect(files[0]);
-        }
+        processFiles(e.dataTransfer.files);
     };
 
     const handleFileInputChange = (e) => {
-        const files = Array.from(e.target.files);
-        if (files.length > 0) {
-            handleFileSelect(files[0]);
+        processFiles(e.target.files);
+    };
+
+    const removeFile = (fileId) => {
+        setSelectedFiles(prev => {
+            const updated = prev.filter(f => f.id !== fileId);
+            // Clean up object URLs for removed files
+            const removedFile = prev.find(f => f.id === fileId);
+            if (removedFile && removedFile.type === 'pdf') {
+                URL.revokeObjectURL(removedFile.preview);
+            }
+            return updated;
+        });
+    };
+
+    const clearAllFiles = () => {
+        // Clean up object URLs
+        selectedFiles.forEach(file => {
+            if (file.type === 'pdf') {
+                URL.revokeObjectURL(file.preview);
+            }
+        });
+        setSelectedFiles([]);
+        setError('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
     const handleUpload = async () => {
-        if (!previewFile) {
-            setError('لطفاً ابتدا فایل را انتخاب کنید');
+        if (selectedFiles.length === 0) {
+            setError('لطفاً حداقل یک فایل انتخاب کنید');
             return;
         }
 
@@ -145,19 +187,20 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
 
         try {
             const formData = new FormData();
-            formData.append('payment_receipt', previewFile.file);
 
-            // FIXED: Better error handling for the API call
+            // Add all selected files to FormData
+            selectedFiles.forEach(fileData => {
+                formData.append('payment_receipts', fileData.file);
+            });
+
             const token = localStorage.getItem('access_token');
             if (!token) {
                 throw new Error('لطفاً دوباره وارد شوید');
             }
 
-            console.log('📤 Uploading payment receipt for order:', orderId);
+            console.log('📤 Uploading', selectedFiles.length, 'payment receipts for order:', orderId);
             const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api';
             const uploadUrl = `${API_URL}orders/${orderId}/upload-payment-receipt/`;
-
-            console.log('📤 Uploading payment receipt to:', uploadUrl);
 
             const response = await fetch(uploadUrl, {
                 method: 'POST',
@@ -167,14 +210,10 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                 },
             });
 
-
             let responseData = null;
-
-            // FIXED: Better response handling
             try {
                 const responseText = await response.text();
                 console.log('📄 Raw response:', responseText);
-
                 if (responseText) {
                     responseData = JSON.parse(responseText);
                 }
@@ -186,13 +225,15 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
             if (!response.ok) {
-                // Handle different types of error responses
-                let errorMessage = 'خطا در آپلود فایل';
+                let errorMessage = 'خطا در آپلود فایل‌ها';
 
                 if (response.status === 413) {
-                    errorMessage = 'حجم فایل بیش از حد مجاز است';
+                    errorMessage = 'مجموع حجم فایل‌ها بیش از حد مجاز است';
                 } else if (response.status === 400) {
-                    errorMessage = responseData?.error || 'فرمت فایل نامعتبر است';
+                    errorMessage = responseData?.error || 'فرمت فایل‌ها نامعتبر است';
+                    if (responseData?.details) {
+                        errorMessage += '\n' + responseData.details.join('\n');
+                    }
                 } else if (response.status === 401) {
                     errorMessage = 'لطفاً دوباره وارد شوید';
                 } else if (response.status === 403) {
@@ -209,18 +250,19 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
             // Success
-            console.log('✅ Payment receipt uploaded successfully:', responseData);
+            console.log('✅ Payment receipts uploaded successfully:', responseData);
 
             // Show success message
-            alert('رسید پرداخت با موفقیت آپلود شد!');
+            const uploadedCount = responseData.uploaded_receipts?.length || selectedFiles.length;
+            alert(`${uploadedCount} رسید پرداخت با موفقیت آپلود شد!`);
 
-            // Clean up
-            if (previewFile.type === 'pdf') {
-                URL.revokeObjectURL(previewFile.preview);
+            // Show warnings if any
+            if (responseData.warnings && responseData.warnings.length > 0) {
+                console.warn('⚠️ Upload warnings:', responseData.warnings);
             }
 
-            setPreviewFile(null);
-            setError('');
+            // Clean up
+            clearAllFiles();
 
             // Call success callback
             if (onUploadSuccess) {
@@ -233,10 +275,9 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
         } catch (err) {
-            console.error('❌ Payment receipt upload failed:', err);
+            console.error('❌ Payment receipts upload failed:', err);
 
-            // User-friendly error messages
-            let errorMessage = 'خطا در آپلود رسید پرداخت';
+            let errorMessage = 'خطا در آپلود رسیدهای پرداخت';
 
             if (err.name === 'TypeError' && err.message.includes('fetch')) {
                 errorMessage = 'خطا در اتصال به سرور. لطفاً اتصال اینترنت خود را بررسی کنید.';
@@ -247,17 +288,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             setError(errorMessage);
         } finally {
             setUploading(false);
-        }
-    };
-
-    const removePreview = () => {
-        if (previewFile?.type === 'pdf') {
-            URL.revokeObjectURL(previewFile.preview);
-        }
-        setPreviewFile(null);
-        setError('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
         }
     };
 
@@ -273,19 +303,21 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
         fileInputRef.current?.click();
     };
 
-    // FIXED: Cleanup on unmount
+    // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (previewFile?.type === 'pdf') {
-                URL.revokeObjectURL(previewFile.preview);
-            }
+            selectedFiles.forEach(file => {
+                if (file.type === 'pdf') {
+                    URL.revokeObjectURL(file.preview);
+                }
+            });
         };
-    }, [previewFile]);
+    }, []);
 
-    // FIXED: Reset state when modal closes
+    // Reset state when modal closes
     useEffect(() => {
-        if (!isOpen && previewFile) {
-            removePreview();
+        if (!isOpen && selectedFiles.length > 0) {
+            clearAllFiles();
         }
     }, [isOpen]);
 
@@ -293,17 +325,17 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title="آپلود رسید پرداخت"
+            title="آپلود رسیدهای پرداخت"
         >
             <div className="payment-receipt-upload" dir="rtl">
                 {error && (
                     <div className="upload-error">
                         <span>⚠️</span>
-                        <span>{error}</span>
+                        <span style={{ whiteSpace: 'pre-line' }}>{error}</span>
                     </div>
                 )}
 
-                {!previewFile ? (
+                {selectedFiles.length === 0 ? (
                     <div>
                         <input
                             ref={fileInputRef}
@@ -311,6 +343,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                             accept="image/*,.pdf"
                             onChange={handleFileInputChange}
                             style={{ display: 'none' }}
+                            multiple // IMPORTANT: Enable multiple file selection
                         />
 
                         <div
@@ -324,70 +357,99 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                                 <div className="dropzone-icon">📄</div>
                                 <div className="dropzone-text">
                                     {isDragOver ? (
-                                        <p>فایل را اینجا رها کنید...</p>
+                                        <p>فایل‌ها را اینجا رها کنید...</p>
                                     ) : (
                                         <>
-                                            <p>فایل رسید پرداخت را اینجا بکشید</p>
-                                            <p>یا کلیک کنید تا فایل را انتخاب کنید</p>
+                                            <p>فایل‌های رسید پرداخت را اینجا بکشید</p>
+                                            <p>یا کلیک کنید تا فایل‌ها را انتخاب کنید</p>
+                                            <p className="multiple-files-hint">
+                                                🔢 می‌توانید چندین فایل انتخاب کنید (حداکثر 10 فایل)
+                                            </p>
                                         </>
                                     )}
                                 </div>
                                 <div className="dropzone-hint">
-                                    فرمت‌های مجاز: JPEG, PNG, GIF, WebP, PDF (حداکثر 15MB)
+                                    فرمت‌های مجاز: JPEG, PNG, GIF, WebP, PDF (حداکثر 15MB هر فایل)
                                 </div>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="preview-container">
-                        <div className="preview-header">
-                            <h3>پیش‌نمایش فایل</h3>
-                            <button className="remove-preview-btn" onClick={removePreview}>
-                                ✕
-                            </button>
+                    <div className="files-container">
+                        <div className="files-header">
+                            <h3>فایل‌های انتخاب شده ({selectedFiles.length})</h3>
+                            <div className="files-actions">
+                                <button className="add-more-btn" onClick={openFileDialog}>
+                                    ➕ افزودن فایل‌های بیشتر
+                                </button>
+                                <button className="clear-all-btn" onClick={clearAllFiles}>
+                                    🗑️ حذف همه
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="preview-content">
-                            {/* File Preview */}
-                            <div className="preview-image-container">
-                                {previewFile.type === 'image' ? (
-                                    <img
-                                        src={previewFile.preview}
-                                        alt="پیش‌نمایش رسید پرداخت"
-                                        className="preview-image"
-                                    />
-                                ) : (
-                                    <div className="pdf-preview">
-                                        <div className="pdf-icon">📄</div>
-                                        <p className="pdf-label">فایل PDF</p>
+                        <div className="files-list">
+                            {selectedFiles.map((fileData) => (
+                                <div key={fileData.id} className="file-item">
+                                    <div className="file-preview">
+                                        {fileData.type === 'image' ? (
+                                            <img
+                                                src={fileData.preview}
+                                                alt={fileData.name}
+                                                className="file-preview-image"
+                                            />
+                                        ) : (
+                                            <div className="pdf-preview">
+                                                <div className="pdf-icon">📄</div>
+                                                <p className="pdf-label">PDF</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="file-info">
+                                        <div className="file-name" title={fileData.name}>
+                                            {fileData.name.length > 25
+                                                ? `${fileData.name.substring(0, 25)}...`
+                                                : fileData.name
+                                            }
+                                        </div>
+                                        <div className="file-details">
+                                            <span className="file-size">{formatFileSize(fileData.size)}</span>
+                                            <span className="file-type-badge">
+                                                {fileData.type === 'pdf' ? 'PDF' : 'تصویر'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="file-actions">
+                                        {fileData.type === 'pdf' && (
+                                            <button
+                                                className="preview-btn"
+                                                onClick={() => window.open(fileData.preview, '_blank')}
+                                            >
+                                                👁️ مشاهده
+                                            </button>
+                                        )}
                                         <button
-                                            className="pdf-view-btn"
-                                            onClick={() => window.open(previewFile.preview, '_blank')}
+                                            className="remove-file-btn"
+                                            onClick={() => removeFile(fileData.id)}
                                         >
-                                            مشاهده PDF
+                                            ❌ حذف
                                         </button>
                                     </div>
-                                )}
-                            </div>
-
-                            {/* File Info */}
-                            <div className="file-info">
-                                <div className="file-info-item">
-                                    <span className="file-info-label">نام فایل:</span>
-                                    <span className="file-info-value">{previewFile.name}</span>
                                 </div>
-                                <div className="file-info-item">
-                                    <span className="file-info-label">حجم فایل:</span>
-                                    <span className="file-info-value">{formatFileSize(previewFile.size)}</span>
-                                </div>
-                                <div className="file-info-item">
-                                    <span className="file-info-label">نوع فایل:</span>
-                                    <span className="file-info-value">
-                                        {previewFile.type === 'pdf' ? 'PDF' : 'تصویر'}
-                                    </span>
-                                </div>
-                            </div>
+                            ))}
                         </div>
+
+                        {/* Hidden input for adding more files */}
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={handleFileInputChange}
+                            style={{ display: 'none' }}
+                            multiple
+                        />
 
                         {/* Upload Actions */}
                         <div className="upload-actions">
@@ -396,7 +458,10 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                                 onClick={handleUpload}
                                 disabled={uploading}
                             >
-                                {uploading ? "در حال آپلود..." : "آپلود رسید پرداخت"}
+                                {uploading
+                                    ? `در حال آپلود ${selectedFiles.length} فایل...`
+                                    : `آپلود ${selectedFiles.length} رسید پرداخت`
+                                }
                             </button>
 
                             <button
@@ -414,10 +479,12 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                 <div className="upload-instructions">
                     <p className="instructions-title">💡 راهنمایی:</p>
                     <ul className="instructions-list">
-                        <li>تصویر واضح از رسید پرداخت یا چک آپلود کنید</li>
-                        <li>می‌توانید فایل PDF نیز آپلود کنید</li>
-                        <li>حداکثر حجم فایل: 15 مگابایت</li>
-                        <li>پس از آپلود، مدیر رسید را بررسی و تایید خواهد کرد</li>
+                        <li>می‌توانید چندین تصویر از رسید پرداخت یا چک آپلود کنید</li>
+                        <li>فایل‌های PDF نیز پشتیبانی می‌شوند</li>
+                        <li>حداکثر 10 فایل در هر بار آپلود</li>
+                        <li>حداکثر حجم هر فایل: 15 مگابایت</li>
+                        <li>فرمت‌های مجاز: JPEG, PNG, GIF, WebP, PDF</li>
+                        <li>پس از آپلود، مدیر فایل‌ها را بررسی و تایید خواهد کرد</li>
                     </ul>
                 </div>
             </div>
@@ -425,5 +492,4 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
     );
 };
 
-// Export the component
 export default PaymentReceiptUploadModal;
