@@ -84,10 +84,11 @@
     font-weight: bold;
     margin-bottom: 0.5rem;
     color: #374151;
+
 }
 
 .payment-notes-textarea {
-    width: 100%;
+    width: 95%;
     padding: 0.75rem;
     border: 3px solid #374151;
     border-radius: 8px;
