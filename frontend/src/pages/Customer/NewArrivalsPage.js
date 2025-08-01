@@ -343,16 +343,6 @@ const NewArrivalsPage = () => {
                                         }}
                                         className="details-btn"
                                     />
-                                    <NeoBrutalistButton
-                                        text="استعلام قیمت"
-                                        color="green-400"
-                                        textColor="black"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleOrderInquiry('محصولات محموله', announcement.title);
-                                        }}
-                                        className="inquiry-btn"
-                                    />
                                 </div>
                             </NeoBrutalistCard>
                         ))}
@@ -455,10 +445,10 @@ const NewArrivalsPage = () => {
                                     {selectedAnnouncement.images.length > 1 && (
                                         <>
                                             <button className="image-nav-btn prev-btn" onClick={prevImage}>
-                                                ‹
+                                                ›
                                             </button>
                                             <button className="image-nav-btn next-btn" onClick={nextImage}>
-                                                ›
+                                                ‹
                                             </button>
                                             <div className="image-counter">
                                                 {currentImageIndex + 1} از {selectedAnnouncement.images.length}

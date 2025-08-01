@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductsPage.js - UPDATED for Dealer Role
+// frontend/src/pages/ProductsPage.js - FIXED FILTERS
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../component/api';
@@ -7,25 +7,29 @@ import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
+import NeoBrutalistDropdown from "../../component/NeoBrutalist/NeoBrutalistDropdown";
 import '../../styles/component/CustomerComponent/ProductsPage.css';
+import {Filter, Search} from "lucide-react";
 
 const ProductsPage = () => {
-    // ... (keep all existing state declarations)
+    // FIXED: Use consistent state variables
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('all');
+
+    // FIXED: Remove duplicate filter states, keep only these
+    const [filterStatus, setFilterStatus] = useState('all'); // For stock status
+    const [selectedCategory, setSelectedCategory] = useState('all'); // For category
     const [sortBy, setSortBy] = useState('newest');
     const [categories, setCategories] = useState([]);
-    const [selectedCategory, setSelectedCategory] = useState('all');
 
     const navigate = useNavigate();
-    const { isDealer } = useAuth(); // <-- Use the hook to check the role
+    const { isDealer } = useAuth();
 
-    // ... (keep all existing functions like useEffect, fetchProducts, etc.)
+    // FIXED: Updated useEffect with correct dependencies
     useEffect(() => {
         fetchProducts();
         fetchCategories();
@@ -63,9 +67,10 @@ const ProductsPage = () => {
         }
     };
 
-
     const filterAndSortProducts = () => {
         let filtered = [...products];
+
+        // Search filter
         if (searchTerm) {
             filtered = filtered.filter(product =>
                 product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -74,15 +79,25 @@ const ProductsPage = () => {
                 (product.tags && product.tags.toLowerCase().includes(searchTerm.toLowerCase()))
             );
         }
+
+        // Category filter
         if (selectedCategory !== 'all') {
             filtered = filtered.filter(product =>
                 product.category === parseInt(selectedCategory)
             );
         }
+
+        // Stock status filter
         if (filterStatus !== 'all') {
             filtered = filtered.filter(product => {
                 const stockStatus = getStockStatus(product);
-                if (filterStatus === 'available') {
+                if (filterStatus === 'in_stock') {
+                    return stockStatus.status === 'available';
+                } else if (filterStatus === 'low_stock') {
+                    return stockStatus.status === 'low_stock';
+                } else if (filterStatus === 'out_of_stock') {
+                    return stockStatus.status === 'out_of_stock';
+                } else if (filterStatus === 'available') {
                     return stockStatus.status === 'available' || stockStatus.status === 'low_stock';
                 } else if (filterStatus === 'unavailable') {
                     return stockStatus.status === 'out_of_stock' || stockStatus.status === 'discontinued';
@@ -90,6 +105,8 @@ const ProductsPage = () => {
                 return true;
             });
         }
+
+        // Sort products
         filtered.sort((a, b) => {
             switch (sortBy) {
                 case 'newest':
@@ -104,6 +121,7 @@ const ProductsPage = () => {
                     return 0;
             }
         });
+
         setFilteredProducts(filtered);
     };
 
@@ -120,21 +138,49 @@ const ProductsPage = () => {
         }
         if (product.stock === 0) {
             return { status: 'out_of_stock', text: 'ناموجود', color: 'red-400', description: 'موجودی این محصول به پایان رسیده است' };
-        } else if (product.stock <= 10) {
+        } else if (product.stock <= 50) {
             return { status: 'low_stock', text: 'موجودی کم', color: 'yellow-400', description: 'موجودی این محصول رو به اتمام است' };
         } else {
             return { status: 'available', text: 'موجود', color: 'green-400', description: 'این محصول در انبار موجود است' };
         }
     };
+
+    // FIXED: Clear filters function
+    const clearFilters = () => {
+        setSearchTerm('');
+        setFilterStatus('all');
+        setSelectedCategory('all');
+        setSortBy('newest');
+    };
+
+    // FIXED: Updated dropdown options
+    const stockOptions = [
+        { value: 'all', label: 'همه موجودی‌ها' },
+        { value: 'in_stock', label: 'موجود' },
+        { value: 'low_stock', label: 'موجودی کم' },
+        { value: 'out_of_stock', label: 'ناموجود' }
+    ];
+
+    const categoryOptions = [
+        { value: 'all', label: 'همه دسته‌ها' },
+        ...categories.map(cat => ({
+            value: cat.id,
+            label: cat.display_name || cat.name
+        }))
+    ];
+
     const handleProductClick = (product) => setSelectedProduct(product);
+
     const handleCreateOrder = (product) => {
         const stockStatus = getStockStatus(product);
         navigate('/orders/create', { state: { preselectedProduct: product, stockStatus: stockStatus } });
     };
+
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
     };
+
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -142,13 +188,13 @@ const ProductsPage = () => {
         delete API.defaults.headers.common['Authorization'];
         navigate('/');
     };
+
     const isNewProduct = (createdAt) => {
         const productDate = new Date(createdAt);
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         return productDate > oneWeekAgo;
     };
-
 
     if (loading) {
         return <div className="products-page"><div className="products-header"><div className="loading-container"><div className="loading-spinner"></div><h1>در حال بارگیری محصولات...</h1></div></div></div>;
@@ -159,7 +205,6 @@ const ProductsPage = () => {
             {/* Header */}
             <div className="products-header">
                 <div className="header-content">
-                    {/* ... (title section remains the same) */}
                     <div className="title-section">
                         <h1 className="products-title">🛍️ کاتالوگ محصولات</h1>
                         <p className="products-subtitle">
@@ -191,7 +236,8 @@ const ProductsPage = () => {
                         {!isDealer && (
                             <NeoBrutalistButton text="داشبورد" color="purple-400" textColor="black" onClick={() => navigate('/dashboard')} className="dashboard-btn" />
                         )}
-                        {isDealer && (<NeoBrutalistButton text="داشبورد" color="purple-400" textColor="black" onClick={() => navigate('/dealer')} className="dashboard-btn" />
+                        {isDealer && (
+                            <NeoBrutalistButton text="داشبورد" color="purple-400" textColor="black" onClick={() => navigate('/dealer')} className="dashboard-btn" />
                         )}
                         <NeoBrutalistButton
                             text="خروج"
@@ -204,44 +250,56 @@ const ProductsPage = () => {
                 </div>
             </div>
 
-            {/* ... (error banner and filters remain the same) */}
             {error && (
                 <div className="error-banner">
                     <span>⚠️ {error}</span>
                     <NeoBrutalistButton text="تلاش مجدد" color="blue-400" textColor="white" onClick={fetchProducts} className="retry-btn" />
                 </div>
             )}
-            <div className="products-filters">
-                <div className="search-section">
-                    <NeoBrutalistInput type="text" placeholder="جستجو در نام محصول، توضیحات یا دسته‌بندی..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="search-input" />
+
+            {/* FIXED: Filters Section with correct state variables */}
+            <NeoBrutalistCard className="filters-card">
+                <div className="filters-header">
+                    <h3>
+                        <Filter size={20} />
+                        فیلترها و جستجو
+                    </h3>
+                    <NeoBrutalistButton
+                        text="پاک کردن فیلترها"
+                        color="red-400"
+                        textColor="white"
+                        onClick={clearFilters}
+                    />
                 </div>
-                <div className="filter-section">
-                    <div className="filter-group">
-                        <label>دسته‌بندی:</label>
-                        <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} className="filter-select">
-                            <option value="all">همه دسته‌ها</option>
-                            {categories.map(category => ( <option key={category.id} value={category.id}> {category.display_name || category.name} </option>))}
-                        </select>
+
+                <div className="filters-grid">
+                    <div className="search-wrapper">
+                        <Search className="search-icon" />
+                        <NeoBrutalistInput
+                            placeholder="جستجو در نام، توضیحات یا دسته..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="search-input"
+                        />
                     </div>
-                    <div className="filter-group">
-                        <label>وضعیت موجودی:</label>
-                        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="filter-select">
-                            <option value="all">همه محصولات</option>
-                            <option value="available">موجود</option>
-                            <option value="unavailable">ناموجود</option>
-                        </select>
-                    </div>
-                    <div className="filter-group">
-                        <label>مرتب‌سازی:</label>
-                        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="filter-select">
-                            <option value="newest">جدیدترین</option>
-                            <option value="oldest">قدیمی‌ترین</option>
-                            <option value="name">نام محصول</option>
-                            <option value="category">دسته‌بندی</option>
-                        </select>
-                    </div>
+
+                    {/* FIXED: Use correct state variables */}
+                    <NeoBrutalistDropdown
+                        label="موجودی"
+                        options={stockOptions}
+                        value={filterStatus}
+                        onChange={(value) => setFilterStatus(value)}
+                    />
+
+                    <NeoBrutalistDropdown
+                        label="دسته‌بندی"
+                        options={categoryOptions}
+                        value={selectedCategory}
+                        onChange={(value) => setSelectedCategory(value)}
+                    />
                 </div>
-            </div>
+            </NeoBrutalistCard>
+
             <div className="products-stats">
                 <NeoBrutalistCard className="stats-card">
                     <div className="stats-content">
@@ -253,11 +311,9 @@ const ProductsPage = () => {
                 </NeoBrutalistCard>
             </div>
 
-
             {/* Products Grid */}
             <div className="products-grid">
                 {filteredProducts.map((product) => {
-                    // ... (card setup remains the same)
                     const stockStatus = getStockStatus(product);
                     const isNew = isNewProduct(product.created_at);
 
@@ -267,16 +323,23 @@ const ProductsPage = () => {
                             className={`product-card ${stockStatus.status}`}
                             onClick={() => handleProductClick(product)}
                         >
-                            {/* ... (product image and badges remain the same) */}
                             <div className="product-image-container">
-                                {product.image_url ? ( <img src={product.image_url} alt={product.name} className="product-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} /> ) : ( <div className="product-image-placeholder"> {product.category_name === 'آجیل' ? '🥜' : product.category_name === 'ادویه' ? '🌶️' : '📦'} <span>تصویر ندارد</span> </div> )}
+                                {product.image_url ? (
+                                    <img src={product.image_url} alt={product.name} className="product-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} />
+                                ) : (
+                                    <div className="product-image-placeholder">
+                                        {product.category_name === 'آجیل' ? '🥜' : product.category_name === 'ادویه' ? '🌶️' : '📦'}
+                                        <span>تصویر ندارد</span>
+                                    </div>
+                                )}
                                 {isNew && ( <div className="new-badge"> جدید </div> )}
-                                <div className={`stock-badge ${stockStatus.status}`}> {stockStatus.text} </div>
                                 {product.category_name && ( <div className="category-badge"> {product.category_name} </div> )}
                             </div>
                             <div className="product-info">
                                 <h3 className="product-name">{product.name}</h3>
-                                <p className="product-description"> {product.description.length > 100 ? `${product.description.substring(0, 100)}...` : product.description} </p>
+                                <p className="product-description">
+                                    {product.description.length > 100 ? `${product.description.substring(0, 100)}...` : product.description}
+                                </p>
                                 <div className="product-details">
                                     <div className="product-price"><span className="price-label">قیمت پایه:</span><span className="price-value">{formatPrice(product.base_price)}</span></div>
                                     <div className="product-availability"><span className="availability-label">وضعیت:</span><span className={`availability-status ${stockStatus.status}`} title={stockStatus.description}>{stockStatus.text}</span></div>
@@ -286,7 +349,6 @@ const ProductsPage = () => {
                                 <div className="product-actions">
                                     <NeoBrutalistButton text="مشاهده جزئیات" color="blue-400" textColor="white" onClick={(e) => { e.stopPropagation(); handleProductClick(product); }} className="details-btn"/>
 
-                                    {/* CHANGE: Hide "Order" button for dealers */}
                                     {!isDealer && stockStatus.status !== 'discontinued' && (
                                         <NeoBrutalistButton
                                             text={ stockStatus.status === 'out_of_stock' ? 'استعلام موجودی' : stockStatus.status === 'low_stock' ? 'سفارش سریع' : 'سفارش دهید' }
@@ -303,7 +365,12 @@ const ProductsPage = () => {
                 })}
             </div>
 
-            {filteredProducts.length === 0 && !loading && <div className="empty-state"> {/* ... */} </div>}
+            {filteredProducts.length === 0 && !loading && (
+                <div className="empty-state">
+                    <h2>هیچ محصولی یافت نشد</h2>
+                    <p>لطفاً فیلترهای خود را تغییر دهید یا جستجوی جدیدی انجام دهید</p>
+                </div>
+            )}
 
             {/* Product Detail Modal */}
             <NeoBrutalistModal
@@ -314,34 +381,37 @@ const ProductsPage = () => {
             >
                 {selectedProduct && (
                     <div className="product-detail-modal" dir="rtl">
-                        {/* ... (Modal image remains the same) */}
                         <div className="modal-product-image">
-                            {selectedProduct.image_url ? ( <img src={selectedProduct.image_url} alt={selectedProduct.name} className="modal-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} /> ) : ( <div className="modal-image-placeholder"> {selectedProduct.category_name === 'آجیل' ? '🥜' : selectedProduct.category_name === 'ادویه' ? '🌶️' : '📦'} <span>تصویر موجود نیست</span> </div> )}
+                            {selectedProduct.image_url ? (
+                                <img src={selectedProduct.image_url} alt={selectedProduct.name} className="modal-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} />
+                            ) : (
+                                <div className="modal-image-placeholder">
+                                    {selectedProduct.category_name === 'آجیل' ? '🥜' : selectedProduct.category_name === 'ادویه' ? '🌶️' : '📦'}
+                                    <span>تصویر موجود نیست</span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="modal-product-info">
                             <h2 className="modal-product-name">{selectedProduct.name}</h2>
-                            <div className="modal-stock-section"><div className="modal-stock-status"><NeoBrutalistButton text={getStockStatus(selectedProduct).text} color={getStockStatus(selectedProduct).color} textColor="black" className="modal-status-badge"/></div><p className="stock-description">{getStockStatus(selectedProduct).description}</p></div>
-                            <div className="modal-product-description"><h4>توضیحات محصول:</h4><p>{selectedProduct.description}</p></div>
+                            <NeoBrutalistButton text={getStockStatus(selectedProduct).text} color={getStockStatus(selectedProduct).color} textColor="black" className="modal-status-badge"/>
+                            <div className="modal-product-description">
+                                <h4>توضیحات محصول:</h4>
+                                <p>{selectedProduct.description}</p>
+                            </div>
 
-                            {getStockStatus(selectedProduct).status === 'out_of_stock' && <div className="availability-notice out-of-stock"> {/* ... */} </div>}
-                            {getStockStatus(selectedProduct).status === 'low_stock' && <div className="availability-notice low-stock"> {/* ... */} </div>}
+                            {getStockStatus(selectedProduct).status === 'out_of_stock' && (
+                                <div className="availability-notice out-of-stock">
+                                    <p>این محصول در حال حاضر موجود نیست</p>
+                                </div>
+                            )}
+                            {getStockStatus(selectedProduct).status === 'low_stock' && (
+                                <div className="availability-notice low-stock">
+                                    <p>موجودی این محصول کم است، در اسرع وقت سفارش دهید</p>
+                                </div>
+                            )}
 
                             <div className="modal-actions">
-                                {/* CHANGE: Hide modal "Order" button for dealers */}
-                                {!isDealer && getStockStatus(selectedProduct).status !== 'discontinued' && (
-                                    <NeoBrutalistButton
-                                        text={ getStockStatus(selectedProduct).status === 'out_of_stock' ? 'درخواست موجودی' : getStockStatus(selectedProduct).status === 'low_stock' ? 'سفارش فوری' : 'سفارش این محصول' }
-                                        color={ getStockStatus(selectedProduct).status === 'available' ? 'green-400' : 'yellow-400' }
-                                        textColor="black"
-                                        onClick={() => {
-                                            setSelectedProduct(null);
-                                            handleCreateOrder(selectedProduct);
-                                        }}
-                                        className="modal-order-btn"
-                                    />
-                                )}
-
                                 <NeoBrutalistButton
                                     text="بستن"
                                     color="gray-400"

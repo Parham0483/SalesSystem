@@ -9,9 +9,9 @@
     box-shadow: 8px 8px 0 #000;
     transition: all 0.2s ease;
     font-family: 'Roboto Mono', monospace;
-    font-size: 1.125rem; /* 18px */
+    font-size: 1.125rem;
     font-weight: bold;
-    padding: 0.75rem 1.5rem; /* 12px 24px */
+    padding: 0.75rem 1.5rem;
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: 1px;

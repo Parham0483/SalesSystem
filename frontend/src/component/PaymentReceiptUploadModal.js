@@ -380,10 +380,10 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                             <h3>فایل‌های انتخاب شده ({selectedFiles.length})</h3>
                             <div className="files-actions">
                                 <button className="add-more-btn" onClick={openFileDialog}>
-                                    ➕ افزودن فایل‌های بیشتر
+                                     افزودن فایل‌های بیشتر
                                 </button>
                                 <button className="clear-all-btn" onClick={clearAllFiles}>
-                                    🗑️ حذف همه
+                                     حذف همه
                                 </button>
                             </div>
                         </div>
@@ -400,7 +400,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                                             />
                                         ) : (
                                             <div className="pdf-preview">
-                                                <div className="pdf-icon">📄</div>
                                                 <p className="pdf-label">PDF</p>
                                             </div>
                                         )}
@@ -427,14 +426,14 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                                                 className="preview-btn"
                                                 onClick={() => window.open(fileData.preview, '_blank')}
                                             >
-                                                👁️ مشاهده
+                                                مشاهده
                                             </button>
                                         )}
                                         <button
                                             className="remove-file-btn"
                                             onClick={() => removeFile(fileData.id)}
                                         >
-                                            ❌ حذف
+                                             حذف
                                         </button>
                                     </div>
                                 </div>

@@ -617,7 +617,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
                         <div className="neo-upload-button-container">
                             <NeoBrutalistButton
-                                text="📄 آپلود رسیدهای پرداخت"
+                                text="آپلود رسیدهای پرداخت"
                                 color="yellow-400"
                                 textColor="black"
                                 onClick={() => setIsPaymentModalOpen(true)}
