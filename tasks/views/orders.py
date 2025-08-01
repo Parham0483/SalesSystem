@@ -1,4 +1,6 @@
 # tasks/views/orders.py - COMPLETE INTEGRATION WITH SMS
+import mimetypes
+import os
 
 from django.db.models import Sum, Q
 from rest_framework import viewsets, status, request
@@ -8,7 +10,7 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
 import logging
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from ..models import OrderPaymentReceipt # Import the receipt model
@@ -945,6 +947,51 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'error': f'خطا در تایید پرداخت: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['GET'], url_path='payment-receipts')
+    def get_payment_receipts(self, request, *args, **kwargs):
+        """FIXED: Get all payment receipts with proper URLs"""
+        try:
+            order = self.get_object()
+
+            # Permission check
+            if not (request.user.is_staff or request.user == order.customer or request.user == order.assigned_dealer):
+                return Response({
+                    'error': 'Permission denied'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            receipts = order.all_payment_receipts
+            receipts_data = []
+
+            for receipt in receipts:
+                # FIXED: Build proper URLs for file access
+                base_url = request.build_absolute_uri('/')[:-1]  # Remove trailing slash
+
+                receipts_data.append({
+                    'id': receipt.id,
+                    'file_name': receipt.file_name,
+                    'file_type': receipt.file_type,
+                    'file_size': receipt.file_size,
+                    'uploaded_at': receipt.uploaded_at,
+                    'uploaded_by': receipt.uploaded_by.name,
+                    'is_verified': receipt.is_verified,
+                    'admin_notes': receipt.admin_notes,
+                    # FIXED: Use proper API endpoints for file access
+                    'file_url': f"{base_url}/api/receipts/{receipt.id}/view/",
+                    'download_url': f"{base_url}/api/receipts/{receipt.id}/download/"
+                })
+
+            return Response({
+                'order_id': order.id,
+                'total_receipts': len(receipts_data),
+                'receipts': receipts_data
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Error getting payment receipts: {str(e)}")
+            return Response({
+                'error': 'Failed to retrieve payment receipts'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['GET'], url_path='dealer-dashboard-stats')
     def dealer_dashboard_stats(self, request):
         """Get dashboard statistics for dealer"""
@@ -1030,22 +1077,165 @@ class OrderItemViewSet(viewsets.ModelViewSet):
         else:
             return OrderItem.objects.filter(order__customer=user)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def view_payment_receipt(request, *, receipt_id):
+def view_payment_receipt(request, receipt_id):
+    """
+    FIXED: Serve payment receipt files (images and PDFs) with proper headers
+    """
     try:
-        # Find the specific receipt from the OrderPaymentReceipt model
+        # Find the specific receipt
         receipt = get_object_or_404(OrderPaymentReceipt, pk=receipt_id)
 
-        # Security Check: Ensure the user is an admin or related to the order
-        if not (request.user.is_staff or request.user == receipt.order.customer):
-            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        # Security Check: Ensure user has permission
+        user = request.user
+        order = receipt.order
 
-        # Use FileResponse to stream the file efficiently
-        return FileResponse(receipt.receipt_file.open(), as_attachment=False, filename=receipt.file_name)
+        has_permission = (
+                user.is_staff or
+                user == order.customer or
+                user == order.assigned_dealer
+        )
+
+        if not has_permission:
+            logger.warning(f"❌ Unauthorized access attempt to receipt {receipt_id} by user {user.id}")
+            return HttpResponse("Permission denied", status=403)
+
+        # Check if file exists
+        if not receipt.receipt_file or not receipt.receipt_file.name:
+            logger.error(f"❌ Receipt {receipt_id} has no file attached")
+            return HttpResponse("File not found", status=404)
+
+        try:
+            # Open the file
+            file_handle = receipt.receipt_file.open('rb')
+
+            # Get the file extension and determine content type
+            file_path = receipt.receipt_file.name
+            content_type, encoding = mimetypes.guess_type(file_path)
+
+            # Fallback content types based on our file_type field
+            if not content_type:
+                if receipt.file_type == 'pdf':
+                    content_type = 'application/pdf'
+                elif receipt.file_type == 'image':
+                    # Try to determine image type from extension
+                    ext = os.path.splitext(file_path)[1].lower()
+                    content_type_map = {
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.png': 'image/png',
+                        '.gif': 'image/gif',
+                        '.webp': 'image/webp'
+                    }
+                    content_type = content_type_map.get(ext, 'image/jpeg')
+                else:
+                    content_type = 'application/octet-stream'
+
+            # Create response with proper headers
+            response = HttpResponse(file_handle.read(), content_type=content_type)
+
+            # Set headers for proper display/download
+            filename = receipt.file_name or f"receipt_{receipt.id}"
+
+            # For PDFs and images, show inline by default
+            if receipt.file_type in ['pdf', 'image']:
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+            else:
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            # Set cache headers
+            response['Cache-Control'] = 'private, max-age=3600'
+
+            # Set content length
+            if hasattr(receipt.receipt_file, 'size'):
+                response['Content-Length'] = receipt.receipt_file.size
+
+            logger.info(f"✅ Serving receipt {receipt_id} ({receipt.file_type}) to user {user.id}")
+            return response
+
+        except Exception as file_error:
+            logger.error(f"❌ Error reading receipt file {receipt_id}: {str(file_error)}")
+            return HttpResponse("Error reading file", status=500)
 
     except Http404:
-        return Response({"error": "Receipt not found"}, status=status.HTTP_404_NOT_FOUND)
+        logger.error(f"❌ Receipt {receipt_id} not found")
+        return HttpResponse("Receipt not found", status=404)
     except Exception as e:
-        logger.error(f"❌ Error serving receipt file {receipt_id}: {str(e)}")
-        return Response({"error": "Could not serve file"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"❌ Unexpected error serving receipt {receipt_id}: {str(e)}")
+        return HttpResponse("Internal server error", status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def download_payment_receipt(request, receipt_id):
+    """
+    FIXED: Force download of payment receipt files
+    """
+    try:
+        # Find the specific receipt
+        receipt = get_object_or_404(OrderPaymentReceipt, pk=receipt_id)
+
+        # Security Check
+        user = request.user
+        order = receipt.order
+
+        has_permission = (
+                user.is_staff or
+                user == order.customer or
+                user == order.assigned_dealer
+        )
+
+        if not has_permission:
+            logger.warning(f"❌ Unauthorized download attempt for receipt {receipt_id} by user {user.id}")
+            return HttpResponse("Permission denied", status=403)
+
+        # Check if file exists
+        if not receipt.receipt_file or not receipt.receipt_file.name:
+            logger.error(f"❌ Receipt {receipt_id} has no file for download")
+            return HttpResponse("File not found", status=404)
+
+        try:
+            # Open file for download
+            file_handle = receipt.receipt_file.open('rb')
+
+            # Determine content type
+            file_path = receipt.receipt_file.name
+            content_type, encoding = mimetypes.guess_type(file_path)
+
+            if not content_type:
+                if receipt.file_type == 'pdf':
+                    content_type = 'application/pdf'
+                elif receipt.file_type == 'image':
+                    content_type = 'application/octet-stream'  # Force download for images
+                else:
+                    content_type = 'application/octet-stream'
+
+            # Create download response
+            response = HttpResponse(file_handle.read(), content_type=content_type)
+
+            # Force download with attachment header
+            filename = receipt.file_name or f"receipt_{receipt_id}_{receipt.file_type}"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            # Set additional headers
+            if hasattr(receipt.receipt_file, 'size'):
+                response['Content-Length'] = receipt.receipt_file.size
+
+            response['Cache-Control'] = 'no-cache'
+
+            logger.info(f"✅ Download initiated for receipt {receipt_id} by user {user.id}")
+            return response
+
+        except Exception as file_error:
+            logger.error(f"❌ Error downloading receipt file {receipt_id}: {str(file_error)}")
+            return HttpResponse("Error downloading file", status=500)
+
+    except Http404:
+        logger.error(f"❌ Receipt {receipt_id} not found for download")
+        return HttpResponse("Receipt not found", status=404)
+    except Exception as e:
+        logger.error(f"❌ Unexpected error downloading receipt {receipt_id}: {str(e)}")
+        return HttpResponse("Internal server error", status=500)
+

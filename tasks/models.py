@@ -1,4 +1,4 @@
-# tasks/models.py - Complete Clean Version
+# tasks/models.py - FIXED COMPLETE VERSION
 from datetime import timedelta
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -621,24 +621,24 @@ class Order(models.Model):
             return self.assigned_dealer.dealer_commission_rate
         return Decimal('0.00')
 
-    class Meta:
-        db_table = 'orders'
-        ordering = ['-created_at']
-
     @property
     def all_payment_receipts(self):
         """Get all payment receipts for this order"""
         return self.payment_receipts.all().order_by('-uploaded_at')
 
     @property
-    def verified_payment_receipts(self):
-        """Get verified payment receipts"""
-        return self.payment_receipts.filter(is_verified=True)
+    def verified_receipts_count(self):
+        """Get count of verified payment receipts"""
+        return self.payment_receipts.filter(is_verified=True).count()
 
     @property
     def total_receipts_count(self):
-        """Total number of uploaded receipts"""
+        """Get total count of payment receipts"""
         return self.payment_receipts.count()
+
+    class Meta:
+        db_table = 'orders'
+        ordering = ['-created_at']
 
 
 class OrderItem(models.Model):
@@ -817,9 +817,9 @@ class EmailNotification(models.Model):
         ('dealer_removed', 'Dealer Removed'),
 
         # Announcementtypes
-    ('new_arrival_customer', 'New Arrival - Customer'),
-    ('new_arrival_dealer', 'New Arrival - Dealer'),
-    ('announcement_updated', 'Announcement Updated'),
+        ('new_arrival_customer', 'New Arrival - Customer'),
+        ('new_arrival_dealer', 'New Arrival - Dealer'),
+        ('announcement_updated', 'Announcement Updated'),
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications')
@@ -953,6 +953,9 @@ class OrderLog(models.Model):
         ('dealer_assigned', 'Dealer Assigned'),
         ('dealer_removed', 'Dealer Removed'),
         ('dealer_notes_updated', 'Dealer Notes Updated'),
+        ('payment_receipts_uploaded', 'Payment Receipts Uploaded'),
+        ('payment_verified', 'Payment Verified'),
+        ('payment_rejected', 'Payment Rejected'),
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='logs')
@@ -1018,43 +1021,131 @@ class DealerCommission(models.Model):
         ordering = ['-created_at']
 
 
+# FIXED: OrderPaymentReceipt model with proper User reference
 class OrderPaymentReceipt(models.Model):
-    """Multiple payment receipts for an order"""
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='payment_receipts')
-    receipt_file = models.FileField(
-        upload_to='payment_receipts/',
-        help_text="Payment receipt image or PDF"
+    """Model for storing multiple payment receipts per order"""
+
+    FILE_TYPE_CHOICES = [
+        ('image', 'Image'),
+        ('pdf', 'PDF'),
+    ]
+
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.CASCADE,
+        related_name='payment_receipts'
     )
+
+    def receipt_upload_path(instance, filename):
+        """Generate upload path for receipt files"""
+        # Clean filename
+        name, ext = os.path.splitext(filename)
+        clean_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        clean_filename = f"{clean_name}{ext}"
+
+        return f'payment_receipts/order_{instance.order.id}/{clean_filename}'
+
+    receipt_file = models.FileField(
+        upload_to=receipt_upload_path,
+        help_text="Payment receipt file (image or PDF)"
+    )
+
     file_type = models.CharField(
         max_length=10,
-        choices=[('image', 'Image'), ('pdf', 'PDF')],
+        choices=FILE_TYPE_CHOICES,
         help_text="Type of uploaded file"
     )
+
     uploaded_at = models.DateTimeField(auto_now_add=True)
     uploaded_by = models.ForeignKey(
-        'Customer',
+        settings.AUTH_USER_MODEL,  # FIXED: Use settings.AUTH_USER_MODEL instead of User
         on_delete=models.CASCADE,
         help_text="User who uploaded this receipt"
     )
-    is_verified = models.BooleanField(default=False)
-    admin_notes = models.TextField(blank=True, null=True)
 
-    def __str__(self):
-        return f"Receipt for Order #{self.order.id} - {self.file_type}"
+    # Admin verification fields
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Whether this receipt has been verified by admin"
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this receipt was verified"
+    )
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,  # FIXED: Use settings.AUTH_USER_MODEL instead of User
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_receipts',
+        help_text="Admin who verified this receipt"
+    )
 
-    @property
-    def file_size(self):
-        """Get file size in bytes"""
-        try:
-            return self.receipt_file.size
-        except:
-            return 0
-
-    @property
-    def file_name(self):
-        """Get original filename"""
-        return self.receipt_file.name.split('/')[-1] if self.receipt_file else ''
+    admin_notes = models.TextField(
+        blank=True,
+        help_text="Admin notes about this receipt"
+    )
 
     class Meta:
         db_table = 'order_payment_receipts'
         ordering = ['-uploaded_at']
+        verbose_name = 'Payment Receipt'
+        verbose_name_plural = 'Payment Receipts'
+
+    def __str__(self):
+        return f"Receipt for Order #{self.order.id} - {self.file_name}"
+
+    @property
+    def file_name(self):
+        """Get the filename of the uploaded file"""
+        if self.receipt_file and self.receipt_file.name:
+            return os.path.basename(self.receipt_file.name)
+        return f"receipt_{self.id}"
+
+    @property
+    def file_size(self):
+        """Get the file size in bytes"""
+        try:
+            if self.receipt_file and hasattr(self.receipt_file, 'size'):
+                return self.receipt_file.size
+            elif self.receipt_file and self.receipt_file.name:
+                return self.receipt_file.file.size
+        except (ValueError, FileNotFoundError, OSError):
+            pass
+        return 0
+
+    def save(self, *args, **kwargs):
+        """Override save to determine file type automatically"""
+        if self.receipt_file and not self.file_type:
+            # Determine file type based on content type or extension
+            if hasattr(self.receipt_file, 'content_type'):
+                content_type = self.receipt_file.content_type.lower()
+                if content_type == 'application/pdf':
+                    self.file_type = 'pdf'
+                elif content_type.startswith('image/'):
+                    self.file_type = 'image'
+
+            # Fallback: determine by file extension
+            if not self.file_type and self.receipt_file.name:
+                ext = os.path.splitext(self.receipt_file.name)[1].lower()
+                if ext == '.pdf':
+                    self.file_type = 'pdf'
+                elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+                    self.file_type = 'image'
+                else:
+                    self.file_type = 'image'  # Default fallback
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Override delete to remove file from filesystem"""
+        # Delete the file when the model instance is deleted
+        if self.receipt_file:
+            try:
+                if os.path.isfile(self.receipt_file.path):
+                    os.remove(self.receipt_file.path)
+            except (ValueError, FileNotFoundError, OSError) as e:
+                print(f"Warning: Could not delete file {self.receipt_file.name}: {e}")
+
+        super().delete(*args, **kwargs)

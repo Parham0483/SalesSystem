@@ -98,6 +98,110 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
+    // FIXED: Download function with proper authentication
+    const handleDownloadReceipt = async (receipt) => {
+        try {
+            const downloadUrl = receipt.download_url;
+
+            if (!downloadUrl) {
+                alert('لینک دانلود در دسترس نیست');
+                return;
+            }
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('لطفاً دوباره وارد شوید');
+                return;
+            }
+
+            try {
+                const response = await fetch(downloadUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = receipt.file_name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+
+            } catch (fetchError) {
+                console.error('❌ Error downloading file:', fetchError);
+                alert('خطا در دانلود فایل. لطفاً دوباره تلاش کنید.');
+            }
+
+        } catch (error) {
+            console.error('❌ Error in download handler:', error);
+            alert('خطا در دانلود فایل');
+        }
+    };
+
+    // FIXED: PDF viewing function
+    const handleViewPDF = async (receipt) => {
+        try {
+            const viewUrl = receipt.file_url;
+
+            if (!viewUrl) {
+                alert('فایل PDF در دسترس نیست');
+                return;
+            }
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('لطفاً دوباره وارد شوید');
+                return;
+            }
+
+            try {
+                const response = await fetch(viewUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const newWindow = window.open(blobUrl, '_blank');
+
+                if (!newWindow) {
+                    const link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = receipt.file_name;
+                    link.click();
+                    URL.revokeObjectURL(blobUrl);
+                } else {
+                    setTimeout(() => {
+                        URL.revokeObjectURL(blobUrl);
+                    }, 60000);
+                }
+
+            } catch (fetchError) {
+                console.error('❌ Error fetching PDF:', fetchError);
+                alert('خطا در بارگیری فایل PDF. لطفاً دوباره تلاش کنید.');
+            }
+
+        } catch (error) {
+            console.error('❌ Error viewing PDF:', error);
+            alert('خطا در مشاهده فایل PDF');
+        }
+    };
+
     const applySmartTextSizing = () => {
         const productCells = tableRef.current?.querySelectorAll('.neo-table-cell:nth-child(1)');
         const notesCells = tableRef.current?.querySelectorAll('.neo-table-cell:nth-child(3)');
@@ -628,7 +732,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* UPDATED: Payment Receipts Status - Multiple Receipts Support */}
+            {/* FIXED: Payment Receipts Status - Multiple Receipts Support */}
             {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">
@@ -691,7 +795,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                 <span className={`neo-info-value ${
                                                     receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
                                                 }`}>
-                                                    {receipt.is_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
+                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
                                                 </span>
                                             </div>
                                             <div className="neo-info-item">
@@ -706,7 +810,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             )}
                                         </div>
 
-                                        {/* Receipt preview */}
+                                        {/* FIXED: Receipt preview with proper authentication */}
                                         <div className="neo-receipt-preview">
                                             {receipt.file_type === 'image' ? (
                                                 <img
@@ -714,6 +818,15 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                     alt={`رسید پرداخت ${index + 1}`}
                                                     className="neo-receipt-image"
                                                     onClick={() => window.open(receipt.file_url, '_blank')}
+                                                    onError={(e) => {
+                                                        console.error('❌ Image load error:', e.target.src);
+                                                        e.target.style.display = 'none';
+                                                        // Show placeholder or error message
+                                                        const placeholder = document.createElement('div');
+                                                        placeholder.className = 'image-error-placeholder';
+                                                        placeholder.innerHTML = '⚠️ خطا در بارگیری تصویر';
+                                                        e.target.parentNode.appendChild(placeholder);
+                                                    }}
                                                 />
                                             ) : (
                                                 <div className="neo-pdf-preview">
@@ -723,7 +836,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                         text="🔍 مشاهده PDF"
                                                         color="blue-400"
                                                         textColor="white"
-                                                        onClick={() => window.open(receipt.file_url, '_blank')}
+                                                        onClick={() => handleViewPDF(receipt)}
                                                         className="neo-pdf-view-btn"
                                                     />
                                                 </div>
@@ -731,18 +844,13 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         </div>
                                     </div>
 
-                                    {/* Receipt actions */}
+                                    {/* FIXED: Receipt actions */}
                                     <div className="neo-receipt-actions">
                                         <NeoBrutalistButton
                                             text="📥 دانلود"
                                             color="green-400"
                                             textColor="black"
-                                            onClick={() => {
-                                                const link = document.createElement('a');
-                                                link.href = receipt.file_url;
-                                                link.download = receipt.file_name;
-                                                link.click();
-                                            }}
+                                            onClick={() => handleDownloadReceipt(receipt)}
                                             className="neo-download-receipt-btn"
                                         />
 
@@ -805,7 +913,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 <span className={`neo-info-value ${
                                     order.payment_verified ? 'neo-payment-verified' : 'neo-payment-pending'
                                 }`}>
-                                    {order.payment_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
+                                    {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
                                 </span>
                             </div>
                             {order.payment_notes && (

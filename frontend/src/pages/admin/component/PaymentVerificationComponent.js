@@ -122,6 +122,61 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
         }
     };
 
+    // FIXED: Download function with proper authentication
+    const handleDownloadReceipt = async (receipt) => {
+        try {
+            const downloadUrl = receipt.download_url;
+
+            if (!downloadUrl) {
+                alert('لینک دانلود در دسترس نیست');
+                return;
+            }
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('لطفاً دوباره وارد شوید');
+                return;
+            }
+
+            // FIXED: Proper authenticated download
+            try {
+                const response = await fetch(downloadUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                // Get the blob
+                const blob = await response.blob();
+
+                // Create download link
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = receipt.file_name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Clean up
+                URL.revokeObjectURL(blobUrl);
+
+            } catch (fetchError) {
+                console.error('❌ Error downloading file:', fetchError);
+                alert('خطا در دانلود فایل. لطفاً دوباره تلاش کنید.');
+            }
+
+        } catch (error) {
+            console.error('❌ Error in download handler:', error);
+            alert('خطا در دانلود فایل');
+        }
+    };
+
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -129,8 +184,6 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
-
-
 
     return (
         <div className="payment-verification" dir="rtl">
@@ -171,7 +224,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                             {formatFileSize(receipt.file_size)}
                                         </span>
                                         <span className={`receipt-status ${receipt.is_verified ? 'verified' : 'pending'}`}>
-                                            {receipt.is_verified ? 'تایید شده' : ' در انتظار بررسی'}
+                                            {receipt.is_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
                                         </span>
                                     </div>
                                 </div>
@@ -200,7 +253,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                         )}
                                     </div>
 
-                                    {/* Receipt preview */}
+                                    {/* FIXED: Receipt preview with proper URLs */}
                                     <div className="receipt-preview">
                                         {receipt.file_type === 'image' ? (
                                             <img
@@ -208,6 +261,11 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                                 alt={`رسید پرداخت ${index + 1}`}
                                                 className="receipt-image"
                                                 onClick={() => handleImageClick([receipt], 0)}
+                                                onError={(e) => {
+                                                    console.error('❌ Image load error:', e.target.src);
+                                                    e.target.src = '/placeholder-image.png'; // Add a placeholder
+                                                    e.target.onerror = null; // Prevent infinite loop
+                                                }}
                                             />
                                         ) : (
                                             <div className="pdf-preview">
@@ -224,18 +282,13 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                     </div>
                                 </div>
 
-                                {/* Receipt actions */}
+                                {/* FIXED: Receipt actions */}
                                 <div className="receipt-actions">
                                     <NeoBrutalistButton
                                         text=" دانلود"
                                         color="green-400"
                                         textColor="black"
-                                        onClick={() => {
-                                            const link = document.createElement('a');
-                                            link.href = receipt.file_url;
-                                            link.download = receipt.file_name;
-                                            link.click();
-                                        }}
+                                        onClick={() => handleDownloadReceipt(receipt)}
                                         className="download-receipt-btn"
                                     />
                                 </div>
@@ -300,7 +353,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
 
                 <div className="verification-actions">
                     <NeoBrutalistButton
-                        text={verifying ? "در حال تایید..." : "تایید پرداخت و تکمیل سفارش"}
+                        text={verifying ? "در حال تایید..." : " تایید پرداخت و تکمیل سفارش"}
                         color="green-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(true)}
@@ -309,7 +362,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                     />
 
                     <NeoBrutalistButton
-                        text={verifying ? "در حال رد..." : "رد رسید پرداخت"}
+                        text={verifying ? "در حال رد..." : " رد رسید پرداخت"}
                         color="red-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(false)}
@@ -319,7 +372,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                 </div>
             </div>
 
-            {/* Image Gallery Modal */}
+            {/* FIXED: Image Gallery Modal with proper URLs */}
             {isImageModalOpen && (
                 <div className="image-modal-overlay" onClick={() => setIsImageModalOpen(false)}>
                     <div className="image-modal-container" onClick={(e) => e.stopPropagation()}>
@@ -341,6 +394,10 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                             src={selectedImages[currentImageIndex]?.file_url}
                                             alt={`رسید ${currentImageIndex + 1}`}
                                             className="main-modal-image"
+                                            onError={(e) => {
+                                                console.error('❌ Modal image load error:', e.target.src);
+                                                e.target.style.display = 'none';
+                                            }}
                                         />
 
                                         {selectedImages.length > 1 && (
@@ -371,6 +428,9 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                                         src={image.file_url}
                                                         alt={`Thumbnail ${index + 1}`}
                                                         className="thumbnail-nav-image"
+                                                        onError={(e) => {
+                                                            e.target.style.display = 'none';
+                                                        }}
                                                     />
                                                 </div>
                                             ))}

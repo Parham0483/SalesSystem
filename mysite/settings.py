@@ -1,4 +1,4 @@
-# mysite/settings.py - Updated email settings
+# mysite/settings.py - COMPLETE FIXED VERSION
 
 import os
 import ssl
@@ -85,7 +85,22 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+# FIXED: Static and Media files configuration
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# FIXED: Media files configuration
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# FIXED: File upload settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+
+# FIXED: Security settings for file serving
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+SECURE_REFERRER_POLICY = "same-origin"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -126,14 +141,15 @@ SIMPLE_JWT = {
     'TOKEN_VERIFY_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenVerifySerializer',
 }
 
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
-]
-CORS_ALLOW_CREDENTIALS = True
+# FIXED: CORS Configuration
+if 'corsheaders' in INSTALLED_APPS:
+    CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
 
 CORS_ALLOW_HEADERS = [
     'accept',
@@ -168,14 +184,34 @@ CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
+SESSION_COOKIE_HTTPONLY = False
+SESSION_COOKIE_SAMESITE = 'Lax'
 
-# Logging Configuration for debugging JWT issues
+# FIXED: Logging Configuration - This was causing the error
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'console': {
+            'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'django.log'),
+            'formatter': 'verbose',
         },
     },
     'loggers': {
@@ -189,20 +225,21 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'tasks.views.orders': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     }
 }
 
-#Google
+# Google OAuth Configuration
 load_dotenv()
 
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
 
-#Media
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-#EMAIL SETTINGS
+# EMAIL SETTINGS
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
@@ -218,83 +255,81 @@ FRONTEND_URL = 'http://localhost:3000'
 SUPPORT_EMAIL = 'parham.g1383@gmail.com'
 
 # For development - disable SSL certificate verification
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-
 if DEBUG:
     import ssl
     ssl._create_default_https_context = ssl._create_unverified_context
     os.environ['SSL_CERT_FILE'] = certifi.where()
 
-    KAVENEGAR_API_KEY = '45716874386B306854636F50762B6E4A645039536F703970784239495146586C304C73326E514752776C6F3D'
+# SMS Configuration
+KAVENEGAR_API_KEY = '45716874386B306854636F50762B6E4A645039536F703970784239495146586C304C73326E514752776C6F3D'
 
-    # Sender numbers based on your account info
-    KAVENEGAR_SENDER_DOMESTIC = '2000660110'  # آزمایشی - برای ایران
-    KAVENEGAR_SENDER_INTERNATIONAL = '0018018949161'  # بین المللی - برای 148 کشور
+# Sender numbers based on your account info
+KAVENEGAR_SENDER_DOMESTIC = '2000660110'  # آزمایشی - برای ایران
+KAVENEGAR_SENDER_INTERNATIONAL = '0018018949161'  # بین المللی - برای 148 کشور
 
-    # Default sender (use domestic for Iran)
-    KAVENEGAR_SENDER = KAVENEGAR_SENDER_DOMESTIC
+# Default sender (use domestic for Iran)
+KAVENEGAR_SENDER = KAVENEGAR_SENDER_DOMESTIC
 
-    # Enable/Disable SMS notifications
-    SMS_NOTIFICATIONS_ENABLED = True
+# Enable/Disable SMS notifications
+SMS_NOTIFICATIONS_ENABLED = True
 
-    # SMS Configuration (removed timeout references)
-    SMS_CONFIG = {
-        'max_message_length': 70,  # Persian SMS character limit
-        'retry_failed_sms': True,
-        'log_all_sms': True,
-        'use_test_mode': False,  # Set to True for testing
-    }
+# SMS Configuration
+SMS_CONFIG = {
+    'max_message_length': 70,  # Persian SMS character limit
+    'retry_failed_sms': True,
+    'log_all_sms': True,
+    'use_test_mode': False,  # Set to True for testing
+}
 
-    # Message templates for different scenarios
-    SMS_TEMPLATES = {
-        'order_submitted': 'سلام {customer_name}\nسفارش #{order_id} با موفقیت ثبت شد.\nمنتظر قیمت‌گذاری باشید.\nکیان تجارت پویا کویر',
+# Message templates for different scenarios
+SMS_TEMPLATES = {
+    'order_submitted': 'سلام {customer_name}\nسفارش #{order_id} با موفقیت ثبت شد.\nمنتظر قیمت‌گذاری باشید.\nکیان تجارت پویا کویر',
 
-        'pricing_ready': 'سلام {customer_name}\nقیمت سفارش #{order_id} آماده است.\nمبلغ: {total_amount:,.0f} ریال\nلطفا وارد سایت شوید.\nکیان تجارت پویا کویر',
+    'pricing_ready': 'سلام {customer_name}\nقیمت سفارش #{order_id} آماده است.\nمبلغ: {total_amount:,.0f} ریال\nلطفا وارد سایت شوید.\nکیان تجارت پویا کویر',
 
-        'order_confirmed': 'سلام {customer_name}\nسفارش #{order_id} تایید شد!\nمبلغ: {total_amount:,.0f} ریال\nدر حال آماده‌سازی است.\nکیان تجارت پویا کویر',
+    'order_confirmed': 'سلام {customer_name}\nسفارش #{order_id} تایید شد!\nمبلغ: {total_amount:,.0f} ریال\nدر حال آماده‌سازی است.\nکیان تجارت پویا کویر',
 
-        'order_rejected': 'سلام {customer_name}\nمتاسفانه سفارش #{order_id} لغو شد.\nبرای اطلاعات بیشتر تماس بگیرید.\nکیان تجارت پویا کویر',
+    'order_rejected': 'سلام {customer_name}\nمتاسفانه سفارش #{order_id} لغو شد.\nبرای اطلاعات بیشتر تماس بگیرید.\nکیان تجارت پویا کویر',
 
-        'order_completed': 'سلام {customer_name}\nسفارش #{order_id} تکمیل شد!\nاز خرید شما متشکریم.\nکیان تجارت پویا کویر',
+    'order_completed': 'سلام {customer_name}\nسفارش #{order_id} تکمیل شد!\nاز خرید شما متشکریم.\nکیان تجارت پویا کویر',
 
-        'dealer_assigned': 'سلام {dealer_name}\nسفارش #{order_id} به شما تخصیص داده شد.\nمشتری: {customer_name}\nکمیسیون: {commission_rate}%\nوارد پنل شوید.\nکیان تجارت پویا کویر',
+    'dealer_assigned': 'سلام {dealer_name}\nسفارش #{order_id} به شما تخصیص داده شد.\nمشتری: {customer_name}\nکمیسیون: {commission_rate}%\nوارد پنل شوید.\nکیان تجارت پویا کویر',
 
-        'dealer_removed': 'سلام {dealer_name}\nسفارش #{order_id} از شما حذف شد.\n{reason}\nکیان تجارت پویا کویر',
+    'dealer_removed': 'سلام {dealer_name}\nسفارش #{order_id} از شما حذف شد.\n{reason}\nکیان تجارت پویا کویر',
 
-        'new_arrival': 'سلام {customer_name}\nمحموله جدید "{announcement_title}" رسید!\nبرای مشاهده وارد سایت شوید.\nکیان تجارت پویا کویر',
+    'new_arrival': 'سلام {customer_name}\nمحموله جدید "{announcement_title}" رسید!\nبرای مشاهده وارد سایت شوید.\nکیان تجارت پویا کویر',
 
-        'otp_verification': 'کد تایید شما: {otp_code}\nکیان تجارت پویا کویر',
-    }
+    'otp_verification': 'کد تایید شما: {otp_code}\nکیان تجارت پویا کویر',
+}
 
-    # Kavenegar OTP Templates (if you create them in your Kavenegar panel)
-    KAVENEGAR_OTP_TEMPLATES = {
-        'verification': 'verify',  # Template name in Kavenegar panel
-        'password_reset': 'reset-pass',
-        'login_verification': 'login-verify',
-    }
+# Kavenegar OTP Templates (if you create them in your Kavenegar panel)
+KAVENEGAR_OTP_TEMPLATES = {
+    'verification': 'verify',  # Template name in Kavenegar panel
+    'password_reset': 'reset-pass',
+    'login_verification': 'login-verify',
+}
 
-    # SMS Rate Limiting (to avoid spam)
-    SMS_RATE_LIMITING = {
-        'enabled': True,
-        'max_sms_per_customer_per_hour': 5,
-        'max_sms_per_customer_per_day': 20,
-        'cooldown_between_sms': 30,  # seconds
-    }
+# SMS Rate Limiting (to avoid spam)
+SMS_RATE_LIMITING = {
+    'enabled': True,
+    'max_sms_per_customer_per_hour': 5,
+    'max_sms_per_customer_per_day': 20,
+    'cooldown_between_sms': 30,  # seconds
+}
 
-    # SMS Logging Configuration
-    SMS_LOGGING = {
-        'log_successful_sms': True,
-        'log_failed_sms': True,
-        'log_sms_content': True,  # Set to False for privacy in production
-        'retention_days': 90,  # How long to keep SMS logs
-    }
+# SMS Logging Configuration
+SMS_LOGGING = {
+    'log_successful_sms': True,
+    'log_failed_sms': True,
+    'log_sms_content': True,  # Set to False for privacy in production
+    'retention_days': 90,  # How long to keep SMS logs
+}
 
-    # Development/Testing Settings
-    if DEBUG:
-        # In development, you might want to use test numbers
-        SMS_CONFIG['use_test_mode'] = False  # Set to True to only log SMS without sending
-        SMS_CONFIG['test_phone_numbers'] = ['9809902614909']  # Your test number with country code
+# Development/Testing Settings
+if DEBUG:
+    # In development, you might want to use test numbers
+    SMS_CONFIG['use_test_mode'] = False  # Set to True to only log SMS without sending
+    SMS_CONFIG['test_phone_numbers'] = ['9809902614909']  # Your test number with country code
 
-        # You might want to log SMS instead of sending in development
-        SMS_CONFIG['log_instead_of_send'] = False  # Set to True to only log SMS    
+    # You might want to log SMS instead of sending in development
+    SMS_CONFIG['log_instead_of_send'] = False  # Set to True to only log SMS
