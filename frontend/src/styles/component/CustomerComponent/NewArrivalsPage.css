@@ -179,6 +179,7 @@
     border-radius: 12px;
     font-size: 12px;
     font-weight: bold;
+    text-align: center;
 }
 
 /* Thumbnail Navigation */
@@ -229,7 +230,22 @@
     font-size: 10px;
     font-weight: bold;
 }
-
+.modal-header-info{
+    text-align: center;
+}
+.modal-description{
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 25px;
+}
+.modal-detail-label{
+    font-weight: bolder;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1rem;
+    color: #1a1a1a;
+    line-height: 2;
+    margin: 0;
+    padding-bottom: 3rem;
+}
 /* Responsive Design */
 @media (max-width: 768px) {
     .multiple-images {

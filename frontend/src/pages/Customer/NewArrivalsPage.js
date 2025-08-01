@@ -270,13 +270,13 @@ const NewArrivalsPage = () => {
                                     <div className="shipment-details">
                                         {announcement.origin_country && (
                                             <div className="detail-item">
-                                                <span className="detail-label">🌍 مبدأ:</span>
+                                                <span className="detail-label">مبدأ:</span>
                                                 <span className="detail-value">{announcement.origin_country}</span>
                                             </div>
                                         )}
                                         {announcement.shipment_date && (
                                             <div className="detail-item">
-                                                <span className="detail-label">📅 تاریخ ارسال:</span>
+                                                <span className="detail-label"> تاریخ ارسال:</span>
                                                 <span className="detail-value">
                                                     {new Date(announcement.shipment_date).toLocaleDateString('fa-IR')}
                                                 </span>
@@ -284,7 +284,7 @@ const NewArrivalsPage = () => {
                                         )}
                                         {announcement.estimated_arrival && (
                                             <div className="detail-item">
-                                                <span className="detail-label">🚛 تاریخ رسیدن:</span>
+                                                <span className="detail-label">تاریخ رسیدن:</span>
                                                 <span className="detail-value">
                                                     {new Date(announcement.estimated_arrival).toLocaleDateString('fa-IR')}
                                                 </span>
@@ -292,13 +292,13 @@ const NewArrivalsPage = () => {
                                         )}
                                         {announcement.product_categories && (
                                             <div className="detail-item">
-                                                <span className="detail-label">📦 دسته‌بندی:</span>
+                                                <span className="detail-label"> دسته‌بندی:</span>
                                                 <span className="detail-value">{announcement.product_categories}</span>
                                             </div>
                                         )}
                                         {announcement.products_count > 0 && (
                                             <div className="detail-item">
-                                                <span className="detail-label">📊 تعداد محصول:</span>
+                                                <span className="detail-label"> تعداد محصول:</span>
                                                 <span className="detail-value">
                                                     {announcement.products_count} قلم
                                                 </span>
@@ -501,14 +501,14 @@ const NewArrivalsPage = () => {
                             <div className="modal-complete-details">
                                 {selectedAnnouncement.origin_country && (
                                     <div className="modal-detail-row">
-                                        <span className="modal-detail-label">🌍 کشور مبدأ:</span>
+                                        <span className="modal-detail-label"> کشور مبدأ:</span>
                                         <span className="modal-detail-value">{selectedAnnouncement.origin_country}</span>
                                     </div>
                                 )}
 
                                 {selectedAnnouncement.shipment_date && (
                                     <div className="modal-detail-row">
-                                        <span className="modal-detail-label">📅 تاریخ ارسال:</span>
+                                        <span className="modal-detail-label"> تاریخ ارسال:</span>
                                         <span className="modal-detail-value">
                                             {new Date(selectedAnnouncement.shipment_date).toLocaleDateString('fa-IR')}
                                         </span>
@@ -517,7 +517,7 @@ const NewArrivalsPage = () => {
 
                                 {selectedAnnouncement.estimated_arrival && (
                                     <div className="modal-detail-row">
-                                        <span className="modal-detail-label">🚛 تاریخ تخمینی رسیدن:</span>
+                                        <span className="modal-detail-label"> تاریخ تخمینی رسیدن:</span>
                                         <span className="modal-detail-value">
                                             {new Date(selectedAnnouncement.estimated_arrival).toLocaleDateString('fa-IR')}
                                         </span>
@@ -526,20 +526,15 @@ const NewArrivalsPage = () => {
 
                                 {selectedAnnouncement.product_categories && (
                                     <div className="modal-detail-row">
-                                        <span className="modal-detail-label">📦 دسته‌بندی محصولات:</span>
+                                        <span className="modal-detail-label"> دسته‌بندی محصولات:</span>
                                         <span className="modal-detail-value">{selectedAnnouncement.product_categories}</span>
                                     </div>
                                 )}
 
-                                <div className="modal-detail-row">
-                                    <span className="modal-detail-label">📊 تعداد بازدید:</span>
-                                    <span className="modal-detail-value">
-                                        {selectedAnnouncement.view_count || 0} بار
-                                    </span>
-                                </div>
+
 
                                 <div className="modal-detail-row">
-                                    <span className="modal-detail-label">📅 تاریخ انتشار:</span>
+                                    <span className="modal-detail-label"> تاریخ انتشار:</span>
                                     <span className="modal-detail-value">
                                         {new Date(selectedAnnouncement.created_at).toLocaleDateString('fa-IR')}
                                     </span>

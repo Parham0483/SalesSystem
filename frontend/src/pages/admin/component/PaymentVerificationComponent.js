@@ -88,8 +88,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
     };
 
     const handleViewPDF = async (receipt) => {
-        // 1. Immediately open a new blank tab and get a reference to it.
-        // This is a direct result of the click, so pop-up blockers allow it.
+
         const newWindow = window.open('', '_blank');
         if (newWindow) {
             newWindow.document.write('در حال بارگیری PDF...');
@@ -217,7 +216,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                                     text=" مشاهده PDF"
                                                     color="blue-400"
                                                     textColor="white"
-                                                    onClick={() => handleViewPDF(receipt)} // This now calls the refined function
+                                                    onClick={() => handleViewPDF(receipt)}
                                                     className="pdf-view-btn"
                                                 />
                                             </div>
@@ -248,7 +247,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                     {paymentReceipts.filter(r => r.file_type === 'image').length > 1 && (
                         <div className="gallery-section">
                             <NeoBrutalistButton
-                                text="🖼️ مشاهده همه تصاویر در گالری"
+                                text=" مشاهده همه تصاویر در گالری"
                                 color="purple-400"
                                 textColor="white"
                                 onClick={() => handleImageClick(paymentReceipts.filter(r => r.file_type === 'image'), 0)}
