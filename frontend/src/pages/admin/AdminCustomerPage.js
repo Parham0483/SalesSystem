@@ -13,6 +13,7 @@ import NeoBrutalistDropdown from '../../component/NeoBrutalist/NeoBrutalistDropd
 import NeoBrutalistToggle from '../../component/NeoBrutalist/NeoBrutalistToggle';
 import API from '../../component/api';
 import '../../styles/Admin/AdminCustomers.css';
+import '../../styles/component/AdminComponent/AdminModalStyles.css';
 
 const AdminCustomersPage = () => {
     const [customers, setCustomers] = useState([]);
@@ -706,15 +707,17 @@ const AdminCustomersPage = () => {
             </NeoBrutalistModal>
 
             {/* Create Customer Modal */}
+            // Example: Updated Customer Form Modal Structure
             <NeoBrutalistModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 title="افزودن مشتری جدید"
+                size="large"
             >
                 <form onSubmit={handleFormSubmit} className="customer-form">
                     <div className="form-row">
                         <div className="form-group">
-                            <label>نام کامل *</label>
+                            <label data-required>نام کامل</label>
                             <NeoBrutalistInput
                                 name="name"
                                 value={formData.name}
@@ -724,7 +727,7 @@ const AdminCustomersPage = () => {
                             />
                         </div>
                         <div className="form-group">
-                            <label>ایمیل *</label>
+                            <label data-required>ایمیل</label>
                             <NeoBrutalistInput
                                 type="email"
                                 name="email"
@@ -737,7 +740,7 @@ const AdminCustomersPage = () => {
                     </div>
 
                     <div className="form-group">
-                        <label>رمز عبور *</label>
+                        <label data-required>رمز عبور</label>
                         <NeoBrutalistInput
                             type="password"
                             name="password"
@@ -776,13 +779,9 @@ const AdminCustomersPage = () => {
                         <div className="form-group">
                             <NeoBrutalistToggle
                                 checked={formData.is_dealer}
-                                onChange={(e) => {
-                                    const checked = e?.target?.checked ?? e;
-                                    setFormData(prev => ({ ...prev, is_dealer: checked }));
-                                }}
+                                onChange={(checked) => setFormData(prev => ({ ...prev, is_dealer: checked }))}
                                 label="نماینده فروش"
                             />
-
                         </div>
                         {formData.is_dealer && (
                             <div className="form-group">
@@ -804,10 +803,7 @@ const AdminCustomersPage = () => {
                     <div className="form-group">
                         <NeoBrutalistToggle
                             checked={formData.is_active}
-                            onChange={(e) => {
-                                const checked = e?.target?.checked ?? e;
-                                setFormData(prev => ({ ...prev, is_active: checked }));
-                            }}
+                            onChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
                             label="حساب فعال"
                         />
                     </div>

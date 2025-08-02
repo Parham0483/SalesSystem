@@ -1,0 +1,591 @@
+/* Admin Modal Content Alignment Fixes */
+
+/* Base Modal Content Styling */
+.neo-brutalist-modal .modal-content {
+    padding: 0 !important;
+}
+
+.neo-brutalist-modal .modal-body {
+    padding: 24px;
+    max-height: 70vh;
+    overflow-y: auto;
+    direction: rtl;
+}
+
+/* Form Styling for All Admin Modals */
+.admin-form,
+.announcement-form,
+.customer-form,
+.dealer-form,
+.product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    direction: rtl;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Form Row Layout */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* Form Group Styling */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 70px; /* Consistent height for alignment */
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+    display: block;
+}
+
+/* Required field indicator */
+.form-group label:has(+ *[required])::after,
+.form-group label[data-required]::after {
+    content: " *";
+    color: #ef4444;
+    font-weight: bold;
+}
+
+/* Form Input Alignment */
+.form-group .neo-brutalist-input,
+.form-group .neo-brutalist-dropdown,
+.form-group .form-textarea,
+.form-group .file-input,
+.form-group select,
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+/* Textarea Specific */
+.form-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 3px solid #000;
+    border-radius: 0;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    box-shadow: inset 2px 2px 0px rgba(0,0,0,0.1);
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    direction: rtl;
+}
+
+.form-textarea:focus {
+    box-shadow: inset 4px 4px 0px rgba(0,0,0,0.2);
+}
+
+/* File Input Styling */
+.file-input {
+    width: 100%;
+    padding: 12px;
+    border: 3px solid #000;
+    border-radius: 0;
+    background: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    direction: rtl;
+}
+
+.file-input:hover {
+    background: #f8fafc;
+}
+
+/* Help Text */
+.form-help,
+.file-help-text,
+.form-note {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: #64748b;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.form-note {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    padding: 8px 12px;
+    border-radius: 4px;
+    color: #92400e;
+}
+
+/* Toggle Alignment */
+.form-group .neo-brutalist-toggle {
+    align-self: flex-start;
+    margin-top: 8px;
+}
+
+/* Form Actions */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 2px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .form-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .form-actions .neo-brutalist-button {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* Image Preview Styling */
+.image-preview-container,
+.image-previews-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.image-preview-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.image-preview {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border: 3px solid #000;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.image-preview:hover {
+    transform: scale(1.05);
+}
+
+.image-preview-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+/* Modal Header Fixes */
+.neo-brutalist-modal .modal-header {
+    padding: 20px 24px;
+    border-bottom: 3px solid #000;
+    background: #f8fafc;
+    direction: rtl;
+}
+
+.neo-brutalist-modal .modal-header h2,
+.neo-brutalist-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+/* Modal Specific Alignments */
+
+/* Customer Detail Modal */
+.customer-detail-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.detail-section {
+    background: #ffffff;
+}
+
+.detail-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 8px;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+.detail-item span {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+/* Orders Section Specific */
+.orders-section {
+    max-height: 400px;
+    position: relative;
+}
+
+.orders-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.orders-list-scrollable {
+    padding: 12px;
+}
+
+.order-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.order-item:last-child {
+    margin-bottom: 0;
+}
+
+.no-orders {
+    text-align: center;
+    color: #64748b;
+    padding: 40px 20px;
+    font-style: italic;
+}
+
+/* Stats in Modals */
+.stats-row {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.modal-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    min-width: 120px;
+    text-align: center;
+}
+
+.modal-stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.modal-stat-label {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* Image Gallery Modal */
+.image-gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+}
+
+.gallery-main {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    max-height: 500px;
+    background: #f8fafc;
+    border: 3px solid #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.gallery-main-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.gallery-counter {
+    text-align: center;
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.9rem;
+    padding: 8px;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 4px;
+}
+
+.gallery-thumbnails {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 16px;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    max-width: 100%;
+}
+
+.gallery-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.gallery-thumbnail:hover,
+.gallery-thumbnail.active {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: #3b82f6;
+}
+
+/* Performance Modal */
+.performance-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.performance-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+}
+
+.performance-stat {
+    text-align: center;
+    padding: 16px;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.performance-stat .stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.performance-stat .stat-label {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Loading States in Modals */
+.modal-loading {
+    text-align: center;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.modal-loading .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e2e8f0;
+    border-top: 4px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.modal-loading p {
+    color: #64748b;
+    margin: 0;
+}
+
+/* Special Sections in Modals */
+.admin-permissions-info {
+    background: #f0f9ff;
+    border: 2px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+.admin-permissions-info h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px 0;
+    color: #1e40af;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.admin-permissions-info ul {
+    margin: 0;
+    padding: 0 0 0 20px;
+    color: #1e40af;
+}
+
+.admin-permissions-info li {
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+}
+
+/* Modal Footer/Actions */
+.modal-actions,
+.modal-footer {
+    padding: 20px 24px;
+    border-top: 2px solid #e2e8f0;
+    background: #f8fafc;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+/* Responsive Modal Adjustments */
+@media (max-width: 768px) {
+    .neo-brutalist-modal .modal-body {
+        padding: 16px;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-row {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .performance-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .gallery-thumbnails {
+        padding: 12px;
+    }
+
+    .gallery-thumbnail {
+        width: 50px;
+        height: 50px;
+    }
+
+    .modal-actions,
+    .modal-footer {
+        padding: 16px;
+        flex-direction: column-reverse;
+    }
+}
+
+/* Scrollbar Styling for Modal Content */
+.neo-brutalist-modal .modal-body::-webkit-scrollbar,
+.orders-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.neo-brutalist-modal .modal-body::-webkit-scrollbar-track,
+.orders-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+.neo-brutalist-modal .modal-body::-webkit-scrollbar-thumb,
+.orders-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.neo-brutalist-modal .modal-body::-webkit-scrollbar-thumb:hover,
+.orders-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Accessibility Improvements */
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.neo-brutalist-modal [role="button"]:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Print Styles for Modals */
+@media print {
+    .neo-brutalist-modal {
+        position: static !important;
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+    }
+
+    .modal-actions,
+    .modal-footer,
+    .form-actions {
+        display: none !important;
+    }
+
+    .neo-brutalist-modal .modal-body {
+        padding: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+    }
+}
