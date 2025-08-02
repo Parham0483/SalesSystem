@@ -53,6 +53,7 @@ urlpatterns = [
     path('receipts/<int:receipt_id>/view/', view_payment_receipt, name='view-payment-receipt'),
     path('receipts/<int:receipt_id>/download/', download_payment_receipt, name='download-payment-receipt'),
 
+
     # JWT token endpoints
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),

@@ -1,10 +1,165 @@
+// UPDATED PaymentVerificationComponent.js with Fixed Modal Positioning
+
 import React, { useState, useEffect } from 'react';
 import API from '../../../component/api';
 import NeoBrutalistButton from "../../../component/NeoBrutalist/NeoBrutalistButton";
 import NeoBrutalistCard from "../../../component/NeoBrutalist/NeoBrutalistCard";
-import '../../../styles/component/AdminComponent/PaymentVerification.css'
+import '../../../styles/component/AdminComponent/PaymentVerification.css';
 
-const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
+// Default AuthenticatedImage Component (same as before)
+const DefaultAuthenticatedImage = ({ receipt, onError, className = "" }) => {
+    const [imageData, setImageData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        if (receipt && receipt.file_type === 'image') {
+            loadAuthenticatedImage();
+        }
+    }, [receipt]);
+
+    const loadAuthenticatedImage = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            const imageUrl = receipt.download_url;
+
+            if (!imageUrl) {
+                throw new Error('Download URL not available');
+            }
+
+            console.log('🔍 PaymentVerification loading image from download URL:', imageUrl);
+
+            const response = await fetch(imageUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            setImageData(objectUrl);
+            console.log('✅ PaymentVerification image loaded successfully');
+
+        } catch (err) {
+            console.error('❌ Error loading PaymentVerification authenticated image:', err);
+            setError(err.message);
+            if (onError) {
+                onError(err);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (imageData) {
+                URL.revokeObjectURL(imageData);
+            }
+        };
+    }, [imageData]);
+
+    if (loading) {
+        return (
+            <div className={`verification-image-loading ${className}`} style={{
+                textAlign: 'center',
+                padding: '15px',
+                border: '2px dashed #ccc',
+                borderRadius: '8px',
+                backgroundColor: '#f9f9f9'
+            }}>
+                <div style={{ fontSize: '16px', marginBottom: '6px' }}>🔄</div>
+                <span style={{ fontSize: '12px' }}>در حال بارگیری...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className={`verification-image-error ${className}`} style={{
+                textAlign: 'center',
+                padding: '15px',
+                color: '#ef4444',
+                border: '2px solid #ef4444',
+                borderRadius: '8px',
+                backgroundColor: '#fef2f2'
+            }}>
+                <div style={{ fontSize: '16px', marginBottom: '6px' }}>⚠️</div>
+                <div style={{ marginBottom: '8px', fontSize: '12px' }}>خطا در بارگیری تصویر</div>
+                <button
+                    onClick={loadAuthenticatedImage}
+                    style={{
+                        padding: '4px 8px',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                    }}
+                >
+                    تلاش مجدد
+                </button>
+            </div>
+        );
+    }
+
+    if (!imageData) {
+        return (
+            <div className={`verification-image-placeholder ${className}`} style={{
+                textAlign: 'center',
+                padding: '15px',
+                color: '#6b7280',
+                border: '2px dashed #d1d5db',
+                borderRadius: '8px',
+                backgroundColor: '#f9fafb'
+            }}>
+                <div style={{ fontSize: '16px', marginBottom: '6px' }}>📷</div>
+                <span style={{ fontSize: '12px' }}>تصویر در دسترس نیست</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`verification-image-container ${className}`}>
+            <img
+                src={imageData}
+                alt={`رسید پرداخت ${receipt.file_name}`}
+                className="receipt-image"
+                onClick={() => window.open(imageData, '_blank')}
+                style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    maxHeight: '250px',
+                    objectFit: 'contain',
+                    cursor: 'pointer',
+                    border: '2px solid #000',
+                    borderRadius: '8px',
+                    backgroundColor: '#fff'
+                }}
+                onLoad={() => console.log('✅ PaymentVerification image rendered successfully')}
+                onError={(e) => {
+                    console.error('❌ PaymentVerification image render error:', e);
+                    setError('خطا در نمایش تصویر');
+                }}
+            />
+        </div>
+    );
+};
+
+const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedImage }) => {
     const [verifying, setVerifying] = useState(false);
     const [paymentNotes, setPaymentNotes] = useState('');
     const [error, setError] = useState('');
@@ -14,11 +169,31 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
     const [selectedImages, setSelectedImages] = useState([]);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
+    // Use passed AuthenticatedImage component or fallback to default
+    const ImageComponent = AuthenticatedImage || DefaultAuthenticatedImage;
+
     useEffect(() => {
         if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts)) {
             fetchPaymentReceipts();
         }
     }, [order]);
+
+    // FIXED: Handle modal state properly to prevent body overflow
+    useEffect(() => {
+        if (isImageModalOpen) {
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = 'unset';
+        }
+
+        // Cleanup on unmount
+        return () => {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = 'unset';
+        };
+    }, [isImageModalOpen]);
 
     const fetchPaymentReceipts = async () => {
         setLoadingReceipts(true);
@@ -75,6 +250,12 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
         }
     };
 
+    const closeModal = () => {
+        setIsImageModalOpen(false);
+        setSelectedImages([]);
+        setCurrentImageIndex(0);
+    };
+
     const nextImage = () => {
         setCurrentImageIndex((prev) =>
             prev === selectedImages.length - 1 ? 0 : prev + 1
@@ -87,34 +268,65 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
         );
     };
 
-    const handleViewPDF = async (receipt) => {
+    // FIXED: Handle keyboard navigation
+    useEffect(() => {
+        const handleKeyPress = (e) => {
+            if (isImageModalOpen) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                } else if (e.key === 'ArrowRight') {
+                    nextImage();
+                } else if (e.key === 'ArrowLeft') {
+                    prevImage();
+                }
+            }
+        };
 
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [isImageModalOpen, selectedImages.length]);
+
+    const handleViewPDF = async (receipt) => {
         const newWindow = window.open('', '_blank');
         if (newWindow) {
             newWindow.document.write('در حال بارگیری PDF...');
         }
 
         try {
-            // 2. Fetch the PDF data from the server.
-            const response = await API.get(`/receipts/${receipt.id}/view/`, {
-                responseType: 'blob'
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                alert('لطفاً دوباره وارد شوید');
+                return;
+            }
+
+            const pdfUrl = receipt.download_url || receipt.file_url;
+
+            const response = await fetch(pdfUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
             });
 
-            // 3. Create a temporary URL from the received data.
-            const pdfBlob = new Blob([response.data], { type: 'application/pdf' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const pdfBlob = await response.blob();
             const previewUrl = window.URL.createObjectURL(pdfBlob);
 
-            // 4. If the window is still open, set its location to the new PDF URL.
             if (newWindow) {
                 newWindow.location.href = previewUrl;
+                setTimeout(() => {
+                    URL.revokeObjectURL(previewUrl);
+                }, 60000);
             } else {
-                // Fallback for browsers that might still block the initial open
                 alert('Pop-up blocker may be preventing the PDF from opening. Please allow pop-ups for this site.');
+                URL.revokeObjectURL(previewUrl);
             }
 
         } catch (error) {
             console.error('❌ Error fetching PDF for preview:', error);
-            // If an error occurs, close the blank tab.
             if (newWindow) {
                 newWindow.close();
             }
@@ -122,7 +334,6 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
         }
     };
 
-    // FIXED: Download function with proper authentication
     const handleDownloadReceipt = async (receipt) => {
         try {
             const downloadUrl = receipt.download_url;
@@ -138,41 +349,29 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                 return;
             }
 
-            // FIXED: Proper authenticated download
-            try {
-                const response = await fetch(downloadUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                    },
-                });
+            const response = await fetch(downloadUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                // Get the blob
-                const blob = await response.blob();
-
-                // Create download link
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = blobUrl;
-                link.download = receipt.file_name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-
-                // Clean up
-                URL.revokeObjectURL(blobUrl);
-
-            } catch (fetchError) {
-                console.error('❌ Error downloading file:', fetchError);
-                alert('خطا در دانلود فایل. لطفاً دوباره تلاش کنید.');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = receipt.file_name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+
         } catch (error) {
-            console.error('❌ Error in download handler:', error);
+            console.error('❌ Error downloading file:', error);
             alert('خطا در دانلود فایل');
         }
     };
@@ -218,13 +417,13 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                     <h4>رسید {index + 1}</h4>
                                     <div className="receipt-meta">
                                         <span className="receipt-type">
-                                            {receipt.file_type === 'pdf' ? ' PDF' : ' تصویر'}
+                                            {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
                                         </span>
                                         <span className="receipt-size">
                                             {formatFileSize(receipt.file_size)}
                                         </span>
                                         <span className={`receipt-status ${receipt.is_verified ? 'verified' : 'pending'}`}>
-                                            {receipt.is_verified ? '✅ تایید شده' : ' در انتظار بررسی'}
+                                            {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
                                         </span>
                                     </div>
                                 </div>
@@ -253,25 +452,22 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                         )}
                                     </div>
 
-                                    {/* FIXED: Receipt preview with proper URLs */}
+                                    {/* Receipt preview */}
                                     <div className="receipt-preview">
                                         {receipt.file_type === 'image' ? (
-                                            <img
-                                                src={receipt.file_url}
-                                                alt={`رسید پرداخت ${index + 1}`}
-                                                className="receipt-image"
-                                                onClick={() => handleImageClick([receipt], 0)}
-                                                onError={(e) => {
-                                                    console.error('❌ Image load error:', e.target.src);
-                                                    e.target.src = '/placeholder-image.png'; // Add a placeholder
-                                                    e.target.onerror = null; // Prevent infinite loop
+                                            <ImageComponent
+                                                receipt={receipt}
+                                                onError={(err) => {
+                                                    console.error(`Receipt ${receipt.id} image load error:`, err);
                                                 }}
+                                                className="verification-receipt-image"
                                             />
                                         ) : (
                                             <div className="pdf-preview">
+                                                <div className="pdf-icon">📄</div>
                                                 <p className="pdf-name">{receipt.file_name}</p>
                                                 <NeoBrutalistButton
-                                                    text=" مشاهده PDF"
+                                                    text="🔍 مشاهده PDF"
                                                     color="blue-400"
                                                     textColor="white"
                                                     onClick={() => handleViewPDF(receipt)}
@@ -282,10 +478,9 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                     </div>
                                 </div>
 
-                                {/* FIXED: Receipt actions */}
                                 <div className="receipt-actions">
                                     <NeoBrutalistButton
-                                        text=" دانلود"
+                                        text="📥 دانلود"
                                         color="green-400"
                                         textColor="black"
                                         onClick={() => handleDownloadReceipt(receipt)}
@@ -296,11 +491,11 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                         ))}
                     </div>
 
-                    {/* Gallery view for all images */}
+                    {/* FIXED: Gallery button - should trigger modal */}
                     {paymentReceipts.filter(r => r.file_type === 'image').length > 1 && (
                         <div className="gallery-section">
                             <NeoBrutalistButton
-                                text=" مشاهده همه تصاویر در گالری"
+                                text="🖼️ مشاهده همه تصاویر در گالری"
                                 color="purple-400"
                                 textColor="white"
                                 onClick={() => handleImageClick(paymentReceipts.filter(r => r.file_type === 'image'), 0)}
@@ -324,6 +519,10 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                                 alt="رسید پرداخت"
                                 className="receipt-image"
                                 onClick={() => window.open(order.payment_receipt, '_blank')}
+                                onError={(e) => {
+                                    console.error('❌ Legacy receipt image load error:', e.target.src);
+                                    e.target.style.display = 'none';
+                                }}
                             />
                             <p className="receipt-hint">برای مشاهده در اندازه کامل کلیک کنید</p>
                         </div>
@@ -353,7 +552,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
 
                 <div className="verification-actions">
                     <NeoBrutalistButton
-                        text={verifying ? "در حال تایید..." : " تایید پرداخت و تکمیل سفارش"}
+                        text={verifying ? "در حال تایید..." : "✅ تایید پرداخت و تکمیل سفارش"}
                         color="green-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(true)}
@@ -362,7 +561,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                     />
 
                     <NeoBrutalistButton
-                        text={verifying ? "در حال رد..." : " رد رسید پرداخت"}
+                        text={verifying ? "در حال رد..." : "❌ رد رسید پرداخت"}
                         color="red-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(false)}
@@ -372,43 +571,173 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
                 </div>
             </div>
 
-            {/* FIXED: Image Gallery Modal with proper URLs */}
+            {/* FIXED: Image Gallery Modal with proper positioning */}
             {isImageModalOpen && (
-                <div className="image-modal-overlay" onClick={() => setIsImageModalOpen(false)}>
-                    <div className="image-modal-container" onClick={(e) => e.stopPropagation()}>
-                        <div className="image-modal-header">
-                            <h3>گالری رسیدهای پرداخت</h3>
+                <div
+                    className="image-modal-overlay"
+                    onClick={closeModal}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        zIndex: 9999,
+                        backdropFilter: 'blur(2px)'
+                    }}
+                >
+                    <div
+                        className="image-modal-container"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'white',
+                            borderRadius: '12px',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            maxWidth: '90vw',
+                            maxHeight: '90vh',
+                            width: '800px',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            border: '3px solid #000'
+                        }}
+                    >
+                        <div className="image-modal-header" style={{
+                            padding: '16px 20px',
+                            borderBottom: '2px solid #000',
+                            background: '#f9fafb',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
+                            <h3 style={{
+                                margin: 0,
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                color: '#111827'
+                            }}>گالری رسیدهای پرداخت</h3>
                             <button
                                 className="image-modal-close"
-                                onClick={() => setIsImageModalOpen(false)}
+                                onClick={closeModal}
+                                style={{
+                                    background: '#ef4444',
+                                    border: '2px solid #000',
+                                    color: 'white',
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '4px',
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
                             >
                                 ×
                             </button>
                         </div>
 
-                        <div className="image-modal-content">
+                        <div className="image-modal-content" style={{
+                            padding: '20px',
+                            maxHeight: 'calc(90vh - 80px)',
+                            overflowY: 'auto'
+                        }}>
                             {selectedImages.length > 0 && (
                                 <>
-                                    <div className="main-image-container">
-                                        <img
-                                            src={selectedImages[currentImageIndex]?.file_url}
-                                            alt={`رسید ${currentImageIndex + 1}`}
-                                            className="main-modal-image"
-                                            onError={(e) => {
-                                                console.error('❌ Modal image load error:', e.target.src);
-                                                e.target.style.display = 'none';
-                                            }}
-                                        />
+                                    <div className="main-image-container" style={{
+                                        position: 'relative',
+                                        background: '#f3f4f6',
+                                        border: '2px solid #000',
+                                        borderRadius: '8px',
+                                        overflow: 'hidden',
+                                        marginBottom: '20px'
+                                    }}>
+                                        <div style={{
+                                            width: '100%',
+                                            height: '500px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            background: 'white'
+                                        }}>
+                                            <ImageComponent
+                                                receipt={selectedImages[currentImageIndex]}
+                                                onError={(err) => {
+                                                    console.error('Modal image load error:', err);
+                                                }}
+                                                className="main-modal-image"
+                                            />
+                                        </div>
 
                                         {selectedImages.length > 1 && (
                                             <>
-                                                <button className="image-nav-btn prev-btn" onClick={prevImage}>
+                                                <button
+                                                    className="image-nav-btn prev-btn"
+                                                    onClick={prevImage}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '50%',
+                                                        left: '10px',
+                                                        transform: 'translateY(-50%)',
+                                                        background: 'rgba(0, 0, 0, 0.7)',
+                                                        color: 'white',
+                                                        border: '2px solid #000',
+                                                        width: '48px',
+                                                        height: '48px',
+                                                        borderRadius: '50%',
+                                                        fontSize: '24px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        zIndex: 10
+                                                    }}
+                                                >
                                                     ‹
                                                 </button>
-                                                <button className="image-nav-btn next-btn" onClick={nextImage}>
+                                                <button
+                                                    className="image-nav-btn next-btn"
+                                                    onClick={nextImage}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '50%',
+                                                        right: '10px',
+                                                        transform: 'translateY(-50%)',
+                                                        background: 'rgba(0, 0, 0, 0.7)',
+                                                        color: 'white',
+                                                        border: '2px solid #000',
+                                                        width: '48px',
+                                                        height: '48px',
+                                                        borderRadius: '50%',
+                                                        fontSize: '24px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        zIndex: 10
+                                                    }}
+                                                >
                                                     ›
                                                 </button>
-                                                <div className="image-counter">
+                                                <div className="image-counter" style={{
+                                                    position: 'absolute',
+                                                    bottom: '10px',
+                                                    left: '50%',
+                                                    transform: 'translateX(-50%)',
+                                                    background: 'rgba(0, 0, 0, 0.8)',
+                                                    color: 'white',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '20px',
+                                                    border: '2px solid #000',
+                                                    fontSize: '14px',
+                                                    fontWeight: 'bold'
+                                                }}>
                                                     {currentImageIndex + 1} از {selectedImages.length}
                                                 </div>
                                             </>
@@ -417,36 +746,80 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified }) => {
 
                                     {/* Thumbnail Navigation */}
                                     {selectedImages.length > 1 && (
-                                        <div className="thumbnail-navigation">
+                                        <div className="thumbnail-navigation" style={{
+                                            display: 'flex',
+                                            gap: '8px',
+                                            justifyContent: 'center',
+                                            flexWrap: 'wrap',
+                                            marginBottom: '20px',
+                                            padding: '10px',
+                                            background: '#f9fafb',
+                                            border: '2px solid #000',
+                                            borderRadius: '8px'
+                                        }}>
                                             {selectedImages.map((image, index) => (
                                                 <div
                                                     key={index}
                                                     className={`thumbnail-nav ${index === currentImageIndex ? 'active' : ''}`}
                                                     onClick={() => setCurrentImageIndex(index)}
+                                                    style={{
+                                                        width: '80px',
+                                                        height: '80px',
+                                                        border: index === currentImageIndex ? '3px solid #ef4444' : '2px solid #d1d5db',
+                                                        borderRadius: '6px',
+                                                        overflow: 'hidden',
+                                                        cursor: 'pointer',
+                                                        background: 'white',
+                                                        transform: index === currentImageIndex ? 'scale(1.1)' : 'scale(1)'
+                                                    }}
                                                 >
-                                                    <img
-                                                        src={image.file_url}
-                                                        alt={`Thumbnail ${index + 1}`}
-                                                        className="thumbnail-nav-image"
-                                                        onError={(e) => {
-                                                            e.target.style.display = 'none';
-                                                        }}
-                                                    />
+                                                    <div style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}>
+                                                        <ImageComponent
+                                                            receipt={image}
+                                                            onError={() => {}}
+                                                            className="thumbnail-nav-image"
+                                                        />
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                     )}
 
                                     {/* Image Info */}
-                                    <div className="image-info">
-                                        <div className="image-detail">
-                                            <strong>نام فایل:</strong> {selectedImages[currentImageIndex]?.file_name}
+                                    <div className="image-info" style={{
+                                        background: '#f9fafb',
+                                        border: '2px solid #000',
+                                        borderRadius: '8px',
+                                        padding: '16px'
+                                    }}>
+                                        <div className="image-detail" style={{
+                                            marginBottom: '8px',
+                                            fontSize: '14px',
+                                            color: '#374151'
+                                        }}>
+                                            <strong style={{ color: '#111827', marginLeft: '8px' }}>نام فایل:</strong>
+                                            {selectedImages[currentImageIndex]?.file_name}
                                         </div>
-                                        <div className="image-detail">
-                                            <strong>تاریخ آپلود:</strong> {new Date(selectedImages[currentImageIndex]?.uploaded_at).toLocaleDateString('fa-IR')}
+                                        <div className="image-detail" style={{
+                                            marginBottom: '8px',
+                                            fontSize: '14px',
+                                            color: '#374151'
+                                        }}>
+                                            <strong style={{ color: '#111827', marginLeft: '8px' }}>تاریخ آپلود:</strong>
+                                            {new Date(selectedImages[currentImageIndex]?.uploaded_at).toLocaleDateString('fa-IR')}
                                         </div>
-                                        <div className="image-detail">
-                                            <strong>حجم فایل:</strong> {formatFileSize(selectedImages[currentImageIndex]?.file_size)}
+                                        <div className="image-detail" style={{
+                                            fontSize: '14px',
+                                            color: '#374151'
+                                        }}>
+                                            <strong style={{ color: '#111827', marginLeft: '8px' }}>حجم فایل:</strong>
+                                            {formatFileSize(selectedImages[currentImageIndex]?.file_size)}
                                         </div>
                                     </div>
                                 </>

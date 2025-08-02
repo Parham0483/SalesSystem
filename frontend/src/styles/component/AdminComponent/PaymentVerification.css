@@ -506,6 +506,310 @@
     color: #374151;
 }
 
+.image-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Very high z-index to appear over everything */
+    backdrop-filter: blur(2px);
+}
+
+/* Modal Container */
+.image-modal-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 800px;
+    position: relative;
+    overflow: hidden;
+    border: 3px solid #000;
+}
+
+/* Modal Header */
+.image-modal-header {
+    padding: 16px 20px;
+    border-bottom: 2px solid #000;
+    background: #f9fafb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.image-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+    color: #111827;
+}
+
+.image-modal-close {
+    background: #ef4444;
+    border: 2px solid #000;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.image-modal-close:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+/* Modal Content */
+.image-modal-content {
+    padding: 20px;
+    max-height: calc(90vh - 80px);
+    overflow-y: auto;
+}
+
+/* Main Image Container */
+.main-image-container {
+    position: relative;
+    background: #f3f4f6;
+    border: 2px solid #000;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.main-modal-image {
+    width: 100% !important;
+    max-height: 500px !important;
+    object-fit: contain !important;
+    display: block !important;
+    background: white;
+}
+
+.main-modal-image img {
+    width: 100% !important;
+    max-height: 500px !important;
+    object-fit: contain !important;
+    display: block !important;
+    background: white;
+}
+
+/* Navigation Buttons */
+.image-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: 2px solid #000;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    z-index: 10;
+}
+
+.image-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.prev-btn {
+    left: 10px;
+}
+
+.next-btn {
+    right: 10px;
+}
+
+/* Image Counter */
+.image-counter {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 2px solid #000;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Thumbnail Navigation */
+.thumbnail-navigation {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: #f9fafb;
+    border: 2px solid #000;
+    border-radius: 8px;
+}
+
+.thumbnail-nav {
+    width: 80px;
+    height: 80px;
+    border: 2px solid #d1d5db;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+
+.thumbnail-nav:hover {
+    border-color: #3b82f6;
+    transform: scale(1.05);
+}
+
+.thumbnail-nav.active {
+    border-color: #ef4444;
+    border-width: 3px;
+    transform: scale(1.1);
+}
+
+.thumbnail-nav-image {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+
+.thumbnail-nav-image img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+}
+
+/* Image Info Section */
+.image-info {
+    background: #f9fafb;
+    border: 2px solid #000;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.image-detail {
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #374151;
+}
+
+.image-detail:last-child {
+    margin-bottom: 0;
+}
+
+.image-detail strong {
+    color: #111827;
+    margin-left: 8px;
+}
+
+/* Gallery Button Styling */
+.gallery-section {
+    margin-top: 20px;
+    text-align: center;
+    padding: 16px;
+    background: #f9fafb;
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+}
+
+.gallery-btn {
+    font-size: 16px !important;
+    padding: 12px 24px !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .image-modal-container {
+        max-width: 95vw;
+        max-height: 95vh;
+        width: auto;
+        margin: 10px;
+    }
+
+    .main-modal-image {
+        max-height: 300px !important;
+    }
+
+    .main-modal-image img {
+        max-height: 300px !important;
+    }
+
+    .thumbnail-nav {
+        width: 60px;
+        height: 60px;
+    }
+
+    .image-nav-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+
+    .prev-btn {
+        left: 5px;
+    }
+
+    .next-btn {
+        right: 5px;
+    }
+}
+
+/* Ensure modal appears over neo-brutalist components */
+.neo-order-detail,
+.admin-order-detail {
+    position: relative;
+    z-index: 1;
+}
+
+/* Fix any overflow issues */
+body.modal-open {
+    overflow: hidden;
+}
+
+/* Loading and Error States in Modal */
+.verification-image-loading,
+.verification-image-error,
+.verification-image-placeholder {
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-image-loading,
+.admin-image-error,
+.admin-image-placeholder {
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .receipts-grid {

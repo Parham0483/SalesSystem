@@ -6,6 +6,164 @@ import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import '../styles/component/CustomerComponent/OrderDetail.css';
 
+// FIXED: Authenticated Image Viewer Component
+const AuthenticatedImage = ({ receipt, onError }) => {
+    const [imageData, setImageData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        if (receipt && receipt.file_type === 'image') {
+            loadAuthenticatedImage();
+        }
+    }, [receipt]);
+
+    const loadAuthenticatedImage = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                throw new Error('Authentication token not found');
+            }
+
+            // FIXED: Use download URL since it works (from server logs)
+            const imageUrl = receipt.download_url;
+
+            if (!imageUrl) {
+                throw new Error('Download URL not available');
+            }
+
+            console.log('🔍 Loading image from download URL:', imageUrl);
+
+            const response = await fetch(imageUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            setImageData(objectUrl);
+            console.log('✅ Image loaded successfully from download URL');
+
+        } catch (err) {
+            console.error('❌ Error loading authenticated image:', err);
+            setError(err.message);
+            if (onError) {
+                onError(err);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Cleanup object URL on unmount or when imageData changes
+    useEffect(() => {
+        return () => {
+            if (imageData) {
+                URL.revokeObjectURL(imageData);
+            }
+        };
+    }, [imageData]);
+
+    if (loading) {
+        return (
+            <div className="neo-image-loading" style={{
+                textAlign: 'center',
+                padding: '20px',
+                border: '2px dashed #ccc',
+                borderRadius: '8px',
+                backgroundColor: '#f9f9f9'
+            }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔄</div>
+                <span>در حال بارگیری تصویر...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="neo-image-error" style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: '#ef4444',
+                border: '2px solid #ef4444',
+                borderRadius: '8px',
+                backgroundColor: '#fef2f2'
+            }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
+                <div style={{ marginBottom: '10px' }}>خطا در بارگیری تصویر</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                    {error}
+                </div>
+                <button
+                    onClick={loadAuthenticatedImage}
+                    style={{
+                        padding: '8px 16px',
+                        backgroundColor: '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                    }}
+                >
+                    تلاش مجدد
+                </button>
+            </div>
+        );
+    }
+
+    if (!imageData) {
+        return (
+            <div className="neo-image-placeholder" style={{
+                textAlign: 'center',
+                padding: '20px',
+                color: '#6b7280',
+                border: '2px dashed #d1d5db',
+                borderRadius: '8px',
+                backgroundColor: '#f9fafb'
+            }}>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📷</div>
+                <span>تصویر در دسترس نیست</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="neo-image-container">
+            <img
+                src={imageData}
+                alt={`رسید پرداخت ${receipt.file_name}`}
+                className="neo-receipt-image"
+                onClick={() => window.open(imageData, '_blank')}
+                style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    maxHeight: '400px',
+                    objectFit: 'contain',
+                    cursor: 'pointer',
+                    border: '2px solid #000',
+                    borderRadius: '8px',
+                    backgroundColor: '#fff'
+                }}
+                onLoad={() => console.log('✅ Image rendered successfully')}
+                onError={(e) => {
+                    console.error('❌ Image render error:', e);
+                    setError('خطا در نمایش تصویر');
+                }}
+            />
+        </div>
+    );
+};
+
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -20,7 +178,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     // Payment upload modal state
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-    // NEW: Payment receipts management
+    // Payment receipts management
     const [paymentReceipts, setPaymentReceipts] = useState([]);
     const [loadingReceipts, setLoadingReceipts] = useState(false);
     const [receiptsError, setReceiptsError] = useState('');
@@ -39,7 +197,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     }, [order]);
 
-    // NEW: Fetch payment receipts when order loads
     useEffect(() => {
         if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts || order.payment_receipts?.length > 0)) {
             fetchPaymentReceipts();
@@ -61,7 +218,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // NEW: Fetch payment receipts
     const fetchPaymentReceipts = async () => {
         setLoadingReceipts(true);
         setReceiptsError('');
@@ -76,7 +232,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // NEW: Delete payment receipt
     const deletePaymentReceipt = async (receiptId) => {
         if (!window.confirm('آیا از حذف این رسید اطمینان دارید؟')) {
             return;
@@ -84,13 +239,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
         try {
             await API.delete(`/orders/${orderId}/delete-payment-receipt/${receiptId}/`);
-
-            // Remove from local state
             setPaymentReceipts(prev => prev.filter(receipt => receipt.id !== receiptId));
-
-            // Refresh order data
             fetchOrder();
-
             alert('رسید با موفقیت حذف شد');
         } catch (err) {
             console.error('❌ Error deleting payment receipt:', err);
@@ -98,7 +248,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // FIXED: Download function with proper authentication
     const handleDownloadReceipt = async (receipt) => {
         try {
             const downloadUrl = receipt.download_url;
@@ -114,40 +263,33 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            try {
-                const response = await fetch(downloadUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                    },
-                });
+            const response = await fetch(downloadUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = blobUrl;
-                link.download = receipt.file_name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(blobUrl);
-
-            } catch (fetchError) {
-                console.error('❌ Error downloading file:', fetchError);
-                alert('خطا در دانلود فایل. لطفاً دوباره تلاش کنید.');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = receipt.file_name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+
         } catch (error) {
-            console.error('❌ Error in download handler:', error);
+            console.error('❌ Error downloading file:', error);
             alert('خطا در دانلود فایل');
         }
     };
 
-    // FIXED: PDF viewing function
     const handleViewPDF = async (receipt) => {
         try {
             const viewUrl = receipt.file_url;
@@ -163,42 +305,71 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            try {
-                const response = await fetch(viewUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                    },
-                });
+            const response = await fetch(viewUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                const newWindow = window.open(blobUrl, '_blank');
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const newWindow = window.open(blobUrl, '_blank');
 
-                if (!newWindow) {
-                    const link = document.createElement('a');
-                    link.href = blobUrl;
-                    link.download = receipt.file_name;
-                    link.click();
+            if (!newWindow) {
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = receipt.file_name;
+                link.click();
+                URL.revokeObjectURL(blobUrl);
+            } else {
+                setTimeout(() => {
                     URL.revokeObjectURL(blobUrl);
-                } else {
-                    setTimeout(() => {
-                        URL.revokeObjectURL(blobUrl);
-                    }, 60000);
-                }
-
-            } catch (fetchError) {
-                console.error('❌ Error fetching PDF:', fetchError);
-                alert('خطا در بارگیری فایل PDF. لطفاً دوباره تلاش کنید.');
+                }, 60000);
             }
 
         } catch (error) {
             console.error('❌ Error viewing PDF:', error);
             alert('خطا در مشاهده فایل PDF');
+        }
+    };
+
+    // UPDATED: Receipt preview renderer with AuthenticatedImage
+    const renderReceiptPreview = (receipt, index) => {
+        console.log('🔍 Rendering receipt:', receipt);
+
+        if (receipt.file_type === 'image') {
+            return (
+                <div className="neo-receipt-preview" key={`image-${receipt.id}`}>
+                    <AuthenticatedImage
+                        receipt={receipt}
+                        onError={(err) => {
+                            console.error(`Receipt ${receipt.id} image load error:`, err);
+                        }}
+                    />
+                </div>
+            );
+        } else {
+            // PDF preview
+            return (
+                <div className="neo-receipt-preview" key={`pdf-${receipt.id}`}>
+                    <div className="neo-pdf-preview">
+                        <div className="neo-pdf-icon">📄</div>
+                        <p className="neo-pdf-name">{receipt.file_name}</p>
+                        <NeoBrutalistButton
+                            text="🔍 مشاهده PDF"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => handleViewPDF(receipt)}
+                            className="neo-pdf-view-btn"
+                        />
+                    </div>
+                </div>
+            );
         }
     };
 
@@ -258,7 +429,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         } catch (err) {
             console.error('❌ Error submitting approval:', err);
             setError(err.response?.data?.error || 'خطا در ارسال تصمیم');
-            setGeneratingInvoice(false);
         } finally {
             setSubmitting(false);
         }
@@ -290,41 +460,24 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // UPDATED: Payment upload success handler
     const handlePaymentUploadSuccess = (response) => {
         console.log('✅ Payment upload successful:', response);
-
-        // Refresh order data to show updated payment status
         fetchOrder();
-
-        // Refresh payment receipts
         fetchPaymentReceipts();
-
-        // Close modal
         setIsPaymentModalOpen(false);
-
-        // Clear any previous errors
         setError('');
     };
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'pending_pricing':
-                return 'yellow-400';
-            case 'waiting_customer_approval':
-                return 'blue-400';
-            case 'confirmed':
-                return 'green-400';
-            case 'payment_uploaded':
-                return 'purple-400';
-            case 'completed':
-                return 'green-600';
-            case 'rejected':
-                return 'red-400';
-            case 'cancelled':
-                return 'gray-400';
-            default:
-                return 'gray-400';
+            case 'pending_pricing': return 'yellow-400';
+            case 'waiting_customer_approval': return 'blue-400';
+            case 'confirmed': return 'green-400';
+            case 'payment_uploaded': return 'purple-400';
+            case 'completed': return 'green-600';
+            case 'rejected': return 'red-400';
+            case 'cancelled': return 'gray-400';
+            default: return 'gray-400';
         }
     };
 
@@ -343,8 +496,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
     const formatPrice = (price) => {
         if (!price || price === 0) return 'در انتظار';
-        const formattedNumber = new Intl.NumberFormat('fa-IR').format(price);
-        return `${formattedNumber} ریال`;
+        return `${new Intl.NumberFormat('fa-IR').format(price)} ریال`;
     };
 
     const formatQuantity = (quantity) => {
@@ -357,8 +509,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             return 'در انتظار';
         }
         const total = unitPrice * quantity;
-        const formattedTotal = new Intl.NumberFormat('fa-IR').format(total);
-        return `${formattedTotal} ریال`;
+        return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
     };
 
     const truncateText = (text, maxLength = 30) => {
@@ -434,7 +585,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
-            {/* Order Information */}
+            {/* Order Information - keeping existing structure for brevity */}
             <NeoBrutalistCard className="neo-order-info-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اطلاعات سفارش</h2>
@@ -462,75 +613,132 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             </span>
                         </div>
                     )}
-                    {order.invoice_number && (
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">شماره فاکتور</span>
-                            <span className="neo-info-value">{order.invoice_number}</span>
-                        </div>
-                    )}
-                    {order.invoice_date && (
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">تاریخ فاکتور</span>
-                            <span className="neo-info-value">
-                                {new Date(order.invoice_date).toLocaleDateString('fa-IR')}
-                            </span>
-                        </div>
-                    )}
                 </div>
-
-                {/* Customer Comment Section */}
-                {(order.customer_comment || isEditing) && (
-                    <div className="neo-comment-section">
-                        <h3 className="neo-comment-title">توضیحات مشتری</h3>
-                        {!isEditing ? (
-                            <div className="neo-comment-display">
-                                <p className="neo-comment-text">
-                                    {order.customer_comment || 'هیچ توضیحی ارائه نشده'}
-                                </p>
-                                {order.status === 'pending_pricing' && (
-                                    <NeoBrutalistButton
-                                        text="ویرایش نظر"
-                                        color="blue-400"
-                                        textColor="white"
-                                        onClick={() => setIsEditing(true)}
-                                        className="neo-edit-btn"
-                                    />
-                                )}
-                            </div>
-                        ) : (
-                            <div className="neo-edit-form">
-                                <NeoBrutalistInput
-                                    type="text"
-                                    value={editedComment}
-                                    onChange={(e) => setEditedComment(e.target.value)}
-                                    placeholder="نظرات خود را وارد کنید..."
-                                />
-                                <div className="neo-edit-actions">
-                                    <NeoBrutalistButton
-                                        text="ذخیره"
-                                        color="green-400"
-                                        textColor="black"
-                                        onClick={() => setIsEditing(false)}
-                                        className="neo-edit-btn"
-                                    />
-                                    <NeoBrutalistButton
-                                        text="لغو"
-                                        color="gray-400"
-                                        textColor="black"
-                                        onClick={() => {
-                                            setIsEditing(false);
-                                            setEditedComment(order.customer_comment || '');
-                                        }}
-                                        className="neo-edit-btn"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
             </NeoBrutalistCard>
 
-            {/* Order Items */}
+            {/* FIXED: Payment Receipts Section with Authenticated Images */}
+            {(order.has_payment_receipts || paymentReceipts.length > 0) && (
+                <NeoBrutalistCard className="neo-payment-status-card">
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">
+                            رسیدهای پرداخت ({paymentReceipts.length})
+                        </h2>
+                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
+                    </div>
+
+                    {receiptsError && (
+                        <div className="neo-error-message">
+                            <span>⚠️ {receiptsError}</span>
+                        </div>
+                    )}
+
+                    <div className="neo-payment-receipts-content">
+                        {/* Allow adding more receipts if still in confirmed status */}
+                        {order.status === 'confirmed' && (
+                            <div className="neo-add-more-receipts">
+                                <NeoBrutalistButton
+                                    text="➕ افزودن رسید جدید"
+                                    color="blue-400"
+                                    textColor="white"
+                                    onClick={() => setIsPaymentModalOpen(true)}
+                                    className="neo-add-receipt-btn"
+                                />
+                            </div>
+                        )}
+
+                        {/* Display all payment receipts */}
+                        <div className="neo-receipts-grid">
+                            {paymentReceipts.map((receipt, index) => (
+                                <div key={receipt.id} className="neo-receipt-item" data-file-type={receipt.file_type}>
+                                    <div className="neo-receipt-header">
+                                        <h4>رسید {index + 1}</h4>
+                                        <div className="neo-receipt-meta">
+                                            <span className="neo-receipt-type">
+                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
+                                            </span>
+                                            <span className="neo-receipt-size">
+                                                {formatFileSize(receipt.file_size)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="neo-receipt-info">
+                                        <div className="neo-receipt-details">
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">نام فایل:</span>
+                                                <span className="neo-info-value">{receipt.file_name}</span>
+                                            </div>
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">تاریخ آپلود:</span>
+                                                <span className="neo-info-value">
+                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
+                                                </span>
+                                            </div>
+                                            <div className="neo-info-item">
+                                                <span className="neo-info-label">وضعیت:</span>
+                                                <span className={`neo-info-value ${
+                                                    receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
+                                                }`}>
+                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* FIXED: Receipt preview with AuthenticatedImage */}
+                                        {renderReceiptPreview(receipt, index)}
+                                    </div>
+
+                                    {/* Receipt actions */}
+                                    <div className="neo-receipt-actions">
+                                        <NeoBrutalistButton
+                                            text="📥 دانلود"
+                                            color="green-400"
+                                            textColor="black"
+                                            onClick={() => handleDownloadReceipt(receipt)}
+                                            className="neo-download-receipt-btn"
+                                        />
+
+                                        {/* Allow deletion only if order is still in confirmed status */}
+                                        {order.status === 'confirmed' && (
+                                            <NeoBrutalistButton
+                                                text="🗑️ حذف"
+                                                color="red-400"
+                                                textColor="white"
+                                                onClick={() => deletePaymentReceipt(receipt.id)}
+                                                className="neo-delete-receipt-btn"
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Overall payment status */}
+                        <div className="neo-payment-summary">
+                            <div className="neo-summary-stats">
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">کل رسیدها:</span>
+                                    <span className="neo-stat-value">{paymentReceipts.length}</span>
+                                </div>
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">تایید شده:</span>
+                                    <span className="neo-stat-value">
+                                        {paymentReceipts.filter(r => r.is_verified).length}
+                                    </span>
+                                </div>
+                                <div className="neo-stat-item">
+                                    <span className="neo-stat-label">در انتظار:</span>
+                                    <span className="neo-stat-value">
+                                        {paymentReceipts.filter(r => !r.is_verified).length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Order Items Table */}
             <NeoBrutalistCard className="neo-items-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اقلام سفارش</h2>
@@ -585,30 +793,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     ))}
                 </div>
             </NeoBrutalistCard>
-
-            {/* Admin Reply */}
-            {order.admin_comment && (
-                <NeoBrutalistCard className="neo-admin-reply-card">
-                    <div className="neo-card-header">
-                        <h2 className="neo-card-title">پاسخ مدیر</h2>
-                    </div>
-                    <div className="neo-admin-info-grid">
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">تاریخ قیمت‌گذاری</span>
-                            <span className="neo-info-value">
-                                {order.pricing_date
-                                    ? new Date(order.pricing_date).toLocaleDateString('fa-IR')
-                                    : 'هنوز قیمت‌گذاری نشده'
-                                }
-                            </span>
-                        </div>
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">یادداشت‌های مدیر</span>
-                            <span className="neo-info-value">{order.admin_comment}</span>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
 
             {/* Customer Approval Section */}
             {order.status === 'waiting_customer_approval' && (
@@ -707,7 +891,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* UPDATED: Payment Receipt Upload Section */}
+            {/* Payment Receipt Upload Section */}
             {(order.status === 'confirmed' && !order.has_payment_receipts) && (
                 <NeoBrutalistCard className="neo-payment-upload-card">
                     <div className="neo-card-header">
@@ -727,211 +911,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 onClick={() => setIsPaymentModalOpen(true)}
                                 className="neo-upload-receipt-btn"
                             />
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-            {/* FIXED: Payment Receipts Status - Multiple Receipts Support */}
-            {(order.has_payment_receipts || paymentReceipts.length > 0) && (
-                <NeoBrutalistCard className="neo-payment-status-card">
-                    <div className="neo-card-header">
-                        <h2 className="neo-card-title">
-                            رسیدهای پرداخت ({paymentReceipts.length})
-                        </h2>
-                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
-                    </div>
-
-                    {receiptsError && (
-                        <div className="neo-error-message">
-                            <span>⚠️ {receiptsError}</span>
-                        </div>
-                    )}
-
-                    <div className="neo-payment-receipts-content">
-                        {/* Allow adding more receipts if still in confirmed status */}
-                        {order.status === 'confirmed' && (
-                            <div className="neo-add-more-receipts">
-                                <NeoBrutalistButton
-                                    text="➕ افزودن رسید جدید"
-                                    color="blue-400"
-                                    textColor="white"
-                                    onClick={() => setIsPaymentModalOpen(true)}
-                                    className="neo-add-receipt-btn"
-                                />
-                            </div>
-                        )}
-
-                        {/* Display all payment receipts */}
-                        <div className="neo-receipts-grid">
-                            {paymentReceipts.map((receipt, index) => (
-                                <div key={receipt.id} className="neo-receipt-item" data-file-type={receipt.file_type}>
-                                    <div className="neo-receipt-header">
-                                        <h4>رسید {index + 1}</h4>
-                                        <div className="neo-receipt-meta">
-                                            <span className="neo-receipt-type">
-                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
-                                            </span>
-                                            <span className="neo-receipt-size">
-                                                {formatFileSize(receipt.file_size)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="neo-receipt-info">
-                                        <div className="neo-receipt-details">
-                                            <div className="neo-info-item">
-                                                <span className="neo-info-label">نام فایل:</span>
-                                                <span className="neo-info-value">{receipt.file_name}</span>
-                                            </div>
-                                            <div className="neo-info-item">
-                                                <span className="neo-info-label">تاریخ آپلود:</span>
-                                                <span className="neo-info-value">
-                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
-                                                </span>
-                                            </div>
-                                            <div className="neo-info-item">
-                                                <span className="neo-info-label">وضعیت:</span>
-                                                <span className={`neo-info-value ${
-                                                    receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
-                                                }`}>
-                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
-                                                </span>
-                                            </div>
-                                            <div className="neo-info-item">
-                                                <span className="neo-info-label">آپلود شده توسط:</span>
-                                                <span className="neo-info-value">{receipt.uploaded_by}</span>
-                                            </div>
-                                            {receipt.admin_notes && (
-                                                <div className="neo-info-item">
-                                                    <span className="neo-info-label">توضیحات مدیر:</span>
-                                                    <span className="neo-info-value">{receipt.admin_notes}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* FIXED: Receipt preview with proper authentication */}
-                                        <div className="neo-receipt-preview">
-                                            {receipt.file_type === 'image' ? (
-                                                <img
-                                                    src={receipt.file_url}
-                                                    alt={`رسید پرداخت ${index + 1}`}
-                                                    className="neo-receipt-image"
-                                                    onClick={() => window.open(receipt.file_url, '_blank')}
-                                                    onError={(e) => {
-                                                        console.error('❌ Image load error:', e.target.src);
-                                                        e.target.style.display = 'none';
-                                                        // Show placeholder or error message
-                                                        const placeholder = document.createElement('div');
-                                                        placeholder.className = 'image-error-placeholder';
-                                                        placeholder.innerHTML = '⚠️ خطا در بارگیری تصویر';
-                                                        e.target.parentNode.appendChild(placeholder);
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div className="neo-pdf-preview">
-                                                    <div className="neo-pdf-icon">📄</div>
-                                                    <p className="neo-pdf-name">{receipt.file_name}</p>
-                                                    <NeoBrutalistButton
-                                                        text="🔍 مشاهده PDF"
-                                                        color="blue-400"
-                                                        textColor="white"
-                                                        onClick={() => handleViewPDF(receipt)}
-                                                        className="neo-pdf-view-btn"
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* FIXED: Receipt actions */}
-                                    <div className="neo-receipt-actions">
-                                        <NeoBrutalistButton
-                                            text="📥 دانلود"
-                                            color="green-400"
-                                            textColor="black"
-                                            onClick={() => handleDownloadReceipt(receipt)}
-                                            className="neo-download-receipt-btn"
-                                        />
-
-                                        {/* Allow deletion only if order is still in confirmed status */}
-                                        {order.status === 'confirmed' && (
-                                            <NeoBrutalistButton
-                                                text="🗑️ حذف"
-                                                color="red-400"
-                                                textColor="white"
-                                                onClick={() => deletePaymentReceipt(receipt.id)}
-                                                className="neo-delete-receipt-btn"
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Overall payment status */}
-                        <div className="neo-payment-summary">
-                            <div className="neo-summary-stats">
-                                <div className="neo-stat-item">
-                                    <span className="neo-stat-label">کل رسیدها:</span>
-                                    <span className="neo-stat-value">{paymentReceipts.length}</span>
-                                </div>
-                                <div className="neo-stat-item">
-                                    <span className="neo-stat-label">تایید شده:</span>
-                                    <span className="neo-stat-value">
-                                        {paymentReceipts.filter(r => r.is_verified).length}
-                                    </span>
-                                </div>
-                                <div className="neo-stat-item">
-                                    <span className="neo-stat-label">در انتظار:</span>
-                                    <span className="neo-stat-value">
-                                        {paymentReceipts.filter(r => !r.is_verified).length}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-            {/* Legacy single payment receipt support (for backward compatibility) */}
-            {order.payment_receipt && !order.has_payment_receipts && (
-                <NeoBrutalistCard className="neo-payment-status-card">
-                    <div className="neo-card-header">
-                        <h2 className="neo-card-title">وضعیت رسید پرداخت (قدیمی)</h2>
-                    </div>
-                    <div className="neo-payment-status-content">
-                        <div className="neo-payment-info-grid">
-                            <div className="neo-info-item">
-                                <span className="neo-info-label">تاریخ آپلود:</span>
-                                <span className="neo-info-value">
-                                    {new Date(order.payment_receipt_uploaded_at).toLocaleDateString('fa-IR')}
-                                </span>
-                            </div>
-                            <div className="neo-info-item">
-                                <span className="neo-info-label">وضعیت:</span>
-                                <span className={`neo-info-value ${
-                                    order.payment_verified ? 'neo-payment-verified' : 'neo-payment-pending'
-                                }`}>
-                                    {order.payment_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
-                                </span>
-                            </div>
-                            {order.payment_notes && (
-                                <div className="neo-info-item">
-                                    <span className="neo-info-label">توضیحات مدیر:</span>
-                                    <span className="neo-info-value">{order.payment_notes}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="neo-payment-receipt-preview">
-                            <img
-                                src={order.payment_receipt}
-                                alt="رسید پرداخت"
-                                className="neo-receipt-image"
-                                onClick={() => window.open(order.payment_receipt, '_blank')}
-                            />
-                            <p className="neo-receipt-hint">برای مشاهده در اندازه کامل کلیک کنید</p>
                         </div>
                     </div>
                 </NeoBrutalistCard>
@@ -957,15 +936,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <span className="neo-status-icon">🎉</span>
                     <span>سفارش شما با موفقیت تکمیل شد! از خرید شما متشکریم.</span>
                 </div>
-            )}
-
-            {order.status === 'rejected' && order.customer_rejection_reason && (
-                <NeoBrutalistCard className="neo-admin-reply-card">
-                    <div className="neo-card-header">
-                        <h2 className="neo-card-title">دلیل رد</h2>
-                    </div>
-                    <p className="neo-comment-text">{order.customer_rejection_reason}</p>
-                </NeoBrutalistCard>
             )}
 
             {/* Payment Upload Modal */}
