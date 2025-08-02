@@ -22,6 +22,11 @@ const DashboardPage = () => {
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
     const [refreshKey, setRefreshKey] = useState(0); // Add refresh key for force updates
+
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [ordersPerPage] = useState(12);
+
     const navigate = useNavigate();
     const { categories } = useCategories();
 
@@ -43,6 +48,11 @@ const DashboardPage = () => {
             fetchRecentAnnouncements();
         }
     }, [navigate, refreshKey]); // Add refreshKey to dependencies
+
+    // Reset to first page when tab changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab]);
 
     // Auto-refresh orders every 30 seconds when on active tab
     useEffect(() => {
@@ -206,7 +216,46 @@ const DashboardPage = () => {
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
     };
 
+    // Get current filtered orders
     const filteredOrders = getFilteredOrders();
+
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+    const indexOfLastOrder = currentPage * ordersPerPage;
+    const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+    const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Generate page numbers for pagination
+    const getPageNumbers = () => {
+        const delta = 2;
+        const range = [];
+        const rangeWithDots = [];
+
+        for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+            range.push(i);
+        }
+
+        if (currentPage - delta > 2) {
+            rangeWithDots.push(1, '...');
+        } else {
+            rangeWithDots.push(1);
+        }
+
+        rangeWithDots.push(...range);
+
+        if (currentPage + delta < totalPages - 1) {
+            rangeWithDots.push('...', totalPages);
+        } else {
+            rangeWithDots.push(totalPages);
+        }
+
+        return rangeWithDots.filter((item, index, array) => array.indexOf(item) === index && item !== 1 || index === 0);
+    };
 
     if (loading) {
         return (
@@ -224,7 +273,10 @@ const DashboardPage = () => {
             <div className="dashboard-header">
                 <div className="user-info">
                     <h1>داشبورد</h1>
-                    <span className="welcome-text">{getUserInfo()?.name} خوش آمدی</span>
+                    <span className="welcome-text">
+                        {getUserInfo()?.name} خوش آمدی
+                        {totalPages > 1 && ` - صفحه ${currentPage} از ${totalPages}`}
+                    </span>
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
@@ -389,9 +441,9 @@ const DashboardPage = () => {
                 />
             </div>
 
-            {/* Orders Grid */}
+            {/* Orders Grid with Pagination */}
             <div className="orders-grid">
-                {filteredOrders.map((order) => (
+                {currentOrders.map((order) => (
                     <NeoBrutalistCard
                         key={`${order.id}-${refreshKey}`} // Add refreshKey to force re-render
                         className="order-card"
@@ -507,7 +559,7 @@ const DashboardPage = () => {
                                     borderRadius: '4px'
                                 }}>
                                     <div style={{ color: '#c2410c', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-                                         نظر مدیر:
+                                        نظر مدیر:
                                     </div>
                                     <div style={{ color: '#9a3412' }}>
                                         {order.admin_comment.length > 60
@@ -570,8 +622,83 @@ const DashboardPage = () => {
                 ))}
             </div>
 
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <NeoBrutalistCard className="pagination-card" style={{ marginBottom: '2rem' }}>
+                    <div className="pagination-container" style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '1rem',
+                        padding: '1.5rem'
+                    }}>
+                        <div className="pagination-info">
+                            <span>صفحه {currentPage} از {totalPages}</span>
+                            <span> ({filteredOrders.length} سفارش)</span>
+                        </div>
+
+                        <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <NeoBrutalistButton
+                                text="قبلی"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="pagination-btn"
+                            />
+
+                            <div className="page-numbers" style={{ display: 'flex', gap: '0.25rem' }}>
+                                {getPageNumbers().map((pageNumber, index) => (
+                                    pageNumber === '...' ? (
+                                        <span key={index} className="pagination-dots" style={{ padding: '0.5rem' }}>...</span>
+                                    ) : (
+                                        <NeoBrutalistButton
+                                            key={index}
+                                            text={pageNumber.toString()}
+                                            color={currentPage === pageNumber ? "blue-400" : "gray-200"}
+                                            textColor={currentPage === pageNumber ? "white" : "black"}
+                                            onClick={() => handlePageChange(pageNumber)}
+                                            className="page-number-btn"
+                                            style={{ minWidth: '40px', padding: '0.5rem' }}
+                                        />
+                                    )
+                                ))}
+                            </div>
+
+                            <NeoBrutalistButton
+                                text="بعدی"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="pagination-btn"
+                            />
+                        </div>
+
+                        <div className="pagination-jump" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>برو به صفحه:</span>
+                            <select
+                                value={currentPage}
+                                onChange={(e) => handlePageChange(parseInt(e.target.value))}
+                                style={{
+                                    padding: '0.5rem',
+                                    border: '2px solid #000',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#fff'
+                                }}
+                            >
+                                {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
+                                    <option key={page} value={page}>صفحه {page}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
             {/* Empty State */}
-            {filteredOrders.length === 0 && !error && (
+            {currentOrders.length === 0 && !error && (
                 <div className="empty-state">
                     <NeoBrutalistCard className="empty-card">
                         <h3>

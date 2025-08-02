@@ -14,6 +14,7 @@ import NeoBrutalistToggle from '../../component/NeoBrutalist/NeoBrutalistToggle'
 import API from '../../component/api';
 import '../../styles/Admin/AdminAnnouncements.css';
 
+
 const AdminAnnouncementsPage = () => {
     const [announcements, setAnnouncements] = useState([]);
     const [filteredAnnouncements, setFilteredAnnouncements] = useState([]);

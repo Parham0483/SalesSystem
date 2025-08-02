@@ -19,8 +19,12 @@ const DealerDashboard = () => {
     const [dealerStats, setDealerStats] = useState(null);
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
-    const navigate = useNavigate();
 
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [ordersPerPage] = useState(12);
+
+    const navigate = useNavigate();
 
     useEffect(() => {
         const userDataString = localStorage.getItem('userData');
@@ -37,18 +41,21 @@ const DealerDashboard = () => {
         fetchRecentAnnouncements();
     }, [navigate]);
 
+    // Reset to first page when tab changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab]);
+
     const fetchAssignedOrders = async () => {
         setLoading(true);
         setError('');
 
         try {
             const response = await API.get('/orders/my-assigned-orders/');
-
             setOrders(response.data.orders || []);
-
             if (response.data.summary) {
+                // Handle summary if needed
             }
-
         } catch (err) {
             if (err.response?.status === 403) {
                 setError('دسترسی رد شد. لطفاً مجدداً وارد شوید.');
@@ -70,7 +77,6 @@ const DealerDashboard = () => {
             setDealerStats(response.data);
         } catch (err) {
             console.error('❌ Error fetching dealer stats:', err);
-            // Stats are optional, don't show error for this
         }
     };
 
@@ -100,11 +106,30 @@ const DealerDashboard = () => {
         navigate('/');
     };
 
+    // Fixed filter function with new statuses
+    const getFilteredOrders = () => {
+        switch (activeTab) {
+            case 'active':
+                return orders.filter(order =>
+                    ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(order.status)
+                );
+            case 'completed':
+                return orders.filter(order => order.status === 'completed');
+            case 'rejected':
+                return orders.filter(order =>
+                    ['rejected', 'cancelled'].includes(order.status)
+                );
+            default:
+                return orders;
+        }
+    };
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'pending_pricing': return 'yellow-400';
             case 'waiting_customer_approval': return 'blue-400';
             case 'confirmed': return 'green-400';
+            case 'payment_uploaded': return 'purple-400';
             case 'completed': return 'green-600';
             case 'rejected': return 'red-400';
             case 'cancelled': return 'gray-400';
@@ -116,7 +141,8 @@ const DealerDashboard = () => {
         const statusMap = {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید مشتری',
-            'confirmed': 'تأیید شده',
+            'confirmed': 'تأیید شده - فاکتور صادر شد',
+            'payment_uploaded': 'رسید پرداخت آپلود شده',
             'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
@@ -131,6 +157,47 @@ const DealerDashboard = () => {
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
+    // Get current filtered orders
+    const filteredOrders = getFilteredOrders();
+
+    // Pagination calculations
+    const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
+    const indexOfLastOrder = currentPage * ordersPerPage;
+    const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
+    const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    // Generate page numbers for pagination
+    const getPageNumbers = () => {
+        const delta = 2;
+        const range = [];
+        const rangeWithDots = [];
+
+        for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
+            range.push(i);
+        }
+
+        if (currentPage - delta > 2) {
+            rangeWithDots.push(1, '...');
+        } else {
+            rangeWithDots.push(1);
+        }
+
+        rangeWithDots.push(...range);
+
+        if (currentPage + delta < totalPages - 1) {
+            rangeWithDots.push('...', totalPages);
+        } else {
+            rangeWithDots.push(totalPages);
+        }
+
+        return rangeWithDots.filter((item, index, array) => array.indexOf(item) === index && item !== 1 || index === 0);
     };
 
     if (loading) {
@@ -164,6 +231,7 @@ const DealerDashboard = () => {
                     <span className="welcome-text" style={{ color: '#666' }}>
                         {dealerStats?.dealer && `${dealerStats.dealer.name} - `}
                         مشاهده سفارشات و محصولات
+                        {totalPages > 1 && ` - صفحه ${currentPage} از ${totalPages}`}
                     </span>
                 </div>
                 <div className="header-actions">
@@ -188,18 +256,17 @@ const DealerDashboard = () => {
                         onClick={() => navigate('/product')}
                         className="products-btn"
                     />
-
                     <NeoBrutalistButton
                         text="پروفایل"
                         color="yellow-400"
-                        textColor="white"
+                        textColor="black"
                         onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
                     />
                 </div>
             </div>
 
-            {/* Stats Cards */}
+            {/* Enhanced Stats Cards */}
             {dealerStats?.stats && (
                 <div className="stats-grid" style={{
                     display: 'grid',
@@ -213,12 +280,19 @@ const DealerDashboard = () => {
                     </NeoBrutalistCard>
 
                     <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#f3e5f5' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#7b1fa2' }}>تکمیل شده</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.completed_orders}</div>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#7b1fa2' }}>فعال</h3>
+                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                            {orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(o.status)).length}
+                        </div>
                     </NeoBrutalistCard>
 
                     <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#e8f5e8' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#388e3c' }}>کمیسیون کل</h3>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#388e3c' }}>تکمیل شده</h3>
+                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.completed_orders}</div>
+                    </NeoBrutalistCard>
+
+                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#fff3e0' }}>
+                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>کمیسیون کل</h3>
                         <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                             {dealerStats.stats.total_commission_earned.toLocaleString('fa-IR')} ریال
                         </div>
@@ -271,8 +345,8 @@ const DealerDashboard = () => {
                                             fontSize: '0.75rem',
                                             fontWeight: 'bold'
                                         }}>
-                                ویژه
-                            </span>
+                                            ویژه
+                                        </span>
                                     )}
                                 </div>
                                 <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
@@ -301,9 +375,10 @@ const DealerDashboard = () => {
                 </div>
             )}
 
-            <div className="dashboard-tabs">
+            {/* Enhanced Dashboard Tabs */}
+            <div className="dashboard-tabs" style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                 <NeoBrutalistButton
-                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(o.status)).length})`}
+                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(o.status)).length})`}
                     color={activeTab === 'active' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('active')}
@@ -323,15 +398,23 @@ const DealerDashboard = () => {
                     onClick={() => setActiveTab('rejected')}
                     className="tab-btn"
                 />
+                <NeoBrutalistButton
+                    text="🔄 بروزرسانی"
+                    color="blue-400"
+                    textColor="white"
+                    onClick={fetchAssignedOrders}
+                    className="refresh-btn"
+                />
             </div>
 
-            {/* Orders Grid */}
+            {/* Orders Grid with Pagination */}
             <div className="orders-grid" style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-                gap: '2rem'
+                gap: '2rem',
+                marginBottom: '2rem'
             }}>
-                {orders.map((order) => (
+                {currentOrders.map((order) => (
                     <NeoBrutalistCard
                         key={order.id}
                         className="order-card"
@@ -364,7 +447,23 @@ const DealerDashboard = () => {
 
                             {/* Show who priced the order */}
                             {order.priced_by_name && (
-                                <p><strong>قیمت‌گذاری توسط:</strong> {order.priced_by_name}</p>
+                                <div style={{
+                                    backgroundColor: '#e0f2fe',
+                                    border: '1px solid #0284c7',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.9rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#0369a1', fontWeight: 'bold' }}>
+                                        💼 قیمت‌گذاری توسط: {order.priced_by_name}
+                                    </div>
+                                    {order.pricing_date && (
+                                        <div style={{ fontSize: '0.8rem', color: '#0284c7' }}>
+                                            تاریخ: {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
+                                        </div>
+                                    )}
+                                </div>
                             )}
 
                             {order.quoted_total > 0 && (
@@ -374,7 +473,42 @@ const DealerDashboard = () => {
                                 <p><strong>تاریخ تخصیص:</strong> {new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}</p>
                             )}
 
-                            {/* Enhanced commission info - shows per-order commission rate */}
+                            {/* Show payment upload status */}
+                            {order.status === 'payment_uploaded' && order.has_payment_receipts && (
+                                <div style={{
+                                    backgroundColor: '#f3e8ff',
+                                    border: '1px solid #8b5cf6',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#7c3aed', fontWeight: 'bold' }}>
+                                        📄 رسید پرداخت آپلود شده
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
+                                        در انتظار بررسی مدیر
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Show completion date for completed orders */}
+                            {order.status === 'completed' && order.completion_date && (
+                                <div style={{
+                                    backgroundColor: '#f0fdf4',
+                                    border: '1px solid #16a34a',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                                        ✅ تاریخ تکمیل: {new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Enhanced commission info */}
                             {order.effective_commission_rate > 0 && (
                                 <div style={{
                                     backgroundColor: '#f0f9ff',
@@ -417,8 +551,83 @@ const DealerDashboard = () => {
                 ))}
             </div>
 
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <NeoBrutalistCard className="pagination-card" style={{ marginBottom: '2rem' }}>
+                    <div className="pagination-container" style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: '1rem',
+                        padding: '1rem'
+                    }}>
+                        <div className="pagination-info">
+                            <span>صفحه {currentPage} از {totalPages}</span>
+                            <span> ({filteredOrders.length} سفارش)</span>
+                        </div>
+
+                        <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <NeoBrutalistButton
+                                text="قبلی"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="pagination-btn"
+                            />
+
+                            <div className="page-numbers" style={{ display: 'flex', gap: '0.25rem' }}>
+                                {getPageNumbers().map((pageNumber, index) => (
+                                    pageNumber === '...' ? (
+                                        <span key={index} style={{ padding: '0.5rem' }}>...</span>
+                                    ) : (
+                                        <NeoBrutalistButton
+                                            key={index}
+                                            text={pageNumber.toString()}
+                                            color={currentPage === pageNumber ? "blue-400" : "gray-200"}
+                                            textColor={currentPage === pageNumber ? "white" : "black"}
+                                            onClick={() => handlePageChange(pageNumber)}
+                                            className="page-number-btn"
+                                            style={{ minWidth: '40px', padding: '0.5rem' }}
+                                        />
+                                    )
+                                ))}
+                            </div>
+
+                            <NeoBrutalistButton
+                                text="بعدی"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="pagination-btn"
+                            />
+                        </div>
+
+                        <div className="pagination-jump" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>برو به صفحه:</span>
+                            <select
+                                value={currentPage}
+                                onChange={(e) => handlePageChange(parseInt(e.target.value))}
+                                style={{
+                                    padding: '0.5rem',
+                                    border: '2px solid #000',
+                                    borderRadius: '4px',
+                                    backgroundColor: '#fff'
+                                }}
+                            >
+                                {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
+                                    <option key={page} value={page}>صفحه {page}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
             {/* Empty State */}
-            {orders.length === 0 && !error && (
+            {currentOrders.length === 0 && !error && (
                 <div className="empty-state" style={{
                     display: 'flex',
                     justifyContent: 'center',
@@ -430,8 +639,16 @@ const DealerDashboard = () => {
                         maxWidth: '500px',
                         cursor: 'default'
                     }}>
-                        <h3>هیچ سفارشی تخصیص نیافته</h3>
-                        <p>تا کنون هیچ سفارشی به شما تخصیص داده نشده است.</p>
+                        <h3>
+                            {activeTab === 'active' && 'هیچ سفارش فعالی ندارید'}
+                            {activeTab === 'completed' && 'هیچ سفارش تکمیل شده‌ای ندارید'}
+                            {activeTab === 'rejected' && 'هیچ سفارش رد شده‌ای ندارید'}
+                        </h3>
+                        <p>
+                            {activeTab === 'active' && 'سفارشات تخصیص داده شده در اینجا نمایش داده می‌شود.'}
+                            {activeTab === 'completed' && 'سفارشات تکمیل شده شما در اینجا نمایش داده می‌شود.'}
+                            {activeTab === 'rejected' && 'سفارشات رد شده یا لغو شده شما در اینجا نمایش داده می‌شود.'}
+                        </p>
                         <div style={{ marginTop: '1rem' }}>
                             <NeoBrutalistButton
                                 text="بروزرسانی"
@@ -490,7 +707,7 @@ const DealerDashboard = () => {
                 </NeoBrutalistCard>
             </div>
 
-            {/* Order Detail Modal - Now using DealerOrderDetailPage */}
+            {/* Order Detail Modal */}
             <NeoBrutalistModal
                 isOpen={!!selectedOrder}
                 onClose={() => setSelectedOrder(null)}
@@ -523,6 +740,8 @@ const DealerDashboard = () => {
                     </div>
                 )}
             </NeoBrutalistModal>
+
+            {/* Profile Modal */}
             <NeoBrutalistModal
                 isOpen={showProfileModal}
                 onClose={() => setShowProfileModal(false)}

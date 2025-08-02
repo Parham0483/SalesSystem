@@ -13,7 +13,7 @@ class KavenegarSMSService:
 
     def __init__(self):
         self.api_key = settings.KAVENEGAR_API_KEY
-        self.sender_domestic = settings.KAVENEGAR_SENDER_DOMESTIC  # 2000660110
+        self.sender_domestic = settings.KAVENEGAR_SENDER_DOMESTIC
 
         if not self.api_key:
             logger.error("❌ KAVENEGAR_API_KEY not configured in settings")
