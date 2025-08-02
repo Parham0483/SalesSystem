@@ -246,27 +246,6 @@ const AdminDashboardPage = () => {
                             className="card-action-btn"
                         />
                     </NeoBrutalistCard>
-
-                    {/* Reports & Analytics */}
-                    <NeoBrutalistCard className="action-card reports-card" onClick={() => navigate('/admin/reports')}>
-                        <div className="card-icon">📊</div>
-                        <div className="card-content">
-                            <h3>گزارشات و آمار</h3>
-                            <p>مشاهده گزارشات فروش و آمار سیستم</p>
-                            <ul className="card-features">
-                                <li>- گزارش فروش ماهانه</li>
-                                <li>- آمار محصولات پرفروش</li>
-                                <li>- عملکرد نمایندگان</li>
-                                <li>- خروجی Excel</li>
-                            </ul>
-                        </div>
-                        <NeoBrutalistButton
-                            text="مشاهده گزارشات"
-                            color="indigo-400"
-                            textColor="white"
-                            className="card-action-btn"
-                        />
-                    </NeoBrutalistCard>
                 </div>
             </div>
 

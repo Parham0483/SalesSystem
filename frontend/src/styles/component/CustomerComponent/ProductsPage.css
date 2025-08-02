@@ -520,7 +520,7 @@
     width: 10%;
     position: absolute;
     top: 6rem;
-    left: 10px;
+    left: 20px;
 }
 
 .stock-description {
@@ -642,6 +642,7 @@
     font-size: 14px !important;
     margin-bottom: 1rem;
     border-radius: 4px 4px 0 4px;
+    max-width: 100%;
 }
 
 .modal-close-btn:hover {
