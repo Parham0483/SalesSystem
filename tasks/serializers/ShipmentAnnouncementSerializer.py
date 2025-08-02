@@ -1,5 +1,3 @@
-# tasks/serializers/ShipmentAnnouncementSerializer.py - FIXED VERSION
-
 from rest_framework import serializers
 from tasks.models import ShipmentAnnouncementImage, ShipmentAnnouncement, Product
 

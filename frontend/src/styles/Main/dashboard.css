@@ -43,7 +43,8 @@
     align-items: center;
 }
 .profile-btn, .products-btn ,
-.new-arrivals-btn, .logout-btn{
+.new-arrivals-btn, .logout-btn
+,.refresh-btn{
     padding: 10px 16px !important;
     font-size: 13px !important;
     font-weight: bold !important;
@@ -80,6 +81,7 @@
     font-weight: bold ;
     min-width: auto ;
 }
+
 
 .orders-grid {
     display: grid;

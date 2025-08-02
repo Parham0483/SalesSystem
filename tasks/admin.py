@@ -382,7 +382,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
     def has_pdf(self, obj):
         if obj.pdf_file:
-            return format_html('<a href="{}" target="_blank">📄 View PDF</a>', obj.pdf_file.url)
+            return format_html('<a href="{}" target="_blank">View PDF</a>', obj.pdf_file.url)
         return "❌ No PDF"
 
     has_pdf.short_description = 'PDF'

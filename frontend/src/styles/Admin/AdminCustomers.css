@@ -574,7 +574,7 @@
 /* Orders Section - Scrollable */
 .orders-section {
     position: relative;
-    height: 400px; /* Set a fixed height for the card */
+    height: 400px;
     display: flex;
     flex-direction: column;
 }

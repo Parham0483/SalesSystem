@@ -73,7 +73,6 @@ class NotificationService:
 
     @staticmethod
     def send_sms_notification(phone, message, order=None, sms_type='general', announcement=None, dealer=None):
-        """Send SMS notification - FIXED to prevent duplicates"""
 
         # Check if SMS is enabled
         if not getattr(settings, 'SMS_NOTIFICATIONS_ENABLED', False):
@@ -95,7 +94,6 @@ class NotificationService:
 
             logger.info(f"📱 SMS: {phone} -> {clean_phone}")
 
-            # FIXED: Check for duplicates before sending
             if sms_service.is_duplicate_sms(clean_phone, message, sms_type):
                 logger.warning(f"⚠️ Duplicate SMS prevented for {clean_phone} - {sms_type}")
                 return True  # Return True because technically it "succeeded" (already sent)
@@ -237,7 +235,6 @@ class NotificationService:
 
     @staticmethod
     def notify_admin_new_order(order):
-        """FIXED: Step 1 - Notify admin when customer submits order (EMAIL ONLY)"""
         try:
             subject = f"سفارش جدید #{order.id} - {order.customer.name}"
 
@@ -635,7 +632,6 @@ class NotificationService:
 
     @staticmethod
     def notify_dealers_new_arrival(announcement):
-        """FIXED: Special notification to dealers about new arrivals with business opportunities"""
         try:
             # Get all active dealers
             dealers = Customer.objects.filter(
@@ -703,9 +699,8 @@ class NotificationService:
                         fail_silently=False,
                     )
 
-                    # FIXED: Track notification without order
                     EmailNotification.objects.create(
-                        order=None,  # FIXED: Explicitly set to None
+                        order=None,
                         email_type='new_arrival_dealer',
                         recipient_email=dealer.email,
                         subject=subject,
@@ -718,9 +713,8 @@ class NotificationService:
 
                 except Exception as e:
                     logger.error(f"❌ Failed to send new arrival notification to dealer {dealer.email}: {e}")
-                    # FIXED: Track failed notification without order
                     EmailNotification.objects.create(
-                        order=None,  # FIXED: Explicitly set to None
+                        order=None,
                         email_type='new_arrival_dealer',
                         recipient_email=dealer.email,
                         subject=subject,
@@ -878,7 +872,6 @@ class NotificationService:
             return False
 
     def notify_dealer_commission_paid(dealer, commissions_list, payment_reference=""):
-        """FIXED: Notify dealer when their commissions are paid"""
         try:
             total_amount = sum(commission.commission_amount for commission in commissions_list)
             total_orders = len(commissions_list)
@@ -936,9 +929,8 @@ class NotificationService:
                 fail_silently=False,
             )
 
-            # FIXED: Track notification without order
             EmailNotification.objects.create(
-                order=None,  # FIXED: Explicitly set to None
+                order=None,
                 email_type='commission_paid',
                 recipient_email=dealer.email,
                 subject=subject,
@@ -950,9 +942,8 @@ class NotificationService:
 
         except Exception as e:
             logger.error(f"❌ Failed to send commission payment notification: {e}")
-            # FIXED: Track failed notification without order
             EmailNotification.objects.create(
-                order=None,  # FIXED: Explicitly set to None
+                order=None,
                 email_type='commission_paid',
                 recipient_email=dealer.email,
                 subject=subject if 'subject' in locals() else "پرداخت کمیسیون",

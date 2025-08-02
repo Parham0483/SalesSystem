@@ -1,4 +1,3 @@
-// frontend/src/pages/ProductsPage.js - FIXED FILTERS
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../component/api';
@@ -12,7 +11,6 @@ import '../../styles/component/CustomerComponent/ProductsPage.css';
 import {Filter, Search} from "lucide-react";
 
 const ProductsPage = () => {
-    // FIXED: Use consistent state variables
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -20,7 +18,6 @@ const ProductsPage = () => {
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
-    // FIXED: Remove duplicate filter states, keep only these
     const [filterStatus, setFilterStatus] = useState('all'); // For stock status
     const [selectedCategory, setSelectedCategory] = useState('all'); // For category
     const [sortBy, setSortBy] = useState('newest');
@@ -29,7 +26,6 @@ const ProductsPage = () => {
     const navigate = useNavigate();
     const { isDealer } = useAuth();
 
-    // FIXED: Updated useEffect with correct dependencies
     useEffect(() => {
         fetchProducts();
         fetchCategories();
@@ -145,7 +141,6 @@ const ProductsPage = () => {
         }
     };
 
-    // FIXED: Clear filters function
     const clearFilters = () => {
         setSearchTerm('');
         setFilterStatus('all');
@@ -153,7 +148,6 @@ const ProductsPage = () => {
         setSortBy('newest');
     };
 
-    // FIXED: Updated dropdown options
     const stockOptions = [
         { value: 'all', label: 'همه موجودی‌ها' },
         { value: 'in_stock', label: 'موجود' },
@@ -257,7 +251,6 @@ const ProductsPage = () => {
                 </div>
             )}
 
-            {/* FIXED: Filters Section with correct state variables */}
             <NeoBrutalistCard className="filters-card">
                 <div className="filters-header">
                     <h3>
@@ -283,7 +276,6 @@ const ProductsPage = () => {
                         />
                     </div>
 
-                    {/* FIXED: Use correct state variables */}
                     <NeoBrutalistDropdown
                         label="موجودی"
                         options={stockOptions}

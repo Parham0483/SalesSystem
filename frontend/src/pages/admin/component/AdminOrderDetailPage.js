@@ -55,16 +55,19 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setError('');
 
         try {
-            // Show success message
-            alert('سفارش با موفقیت تکمیل شد!');
+            const response = await API.post(`/orders/${orderId}/complete/`);
 
-            // Update parent component
-            if (onOrderUpdated) {
-                onOrderUpdated();
+            if (response.status === 200) {
+                alert('سفارش با موفقیت تکمیل شد!');
+
+                // Update parent component
+                if (onOrderUpdated) {
+                    onOrderUpdated();
+                }
+
+                // Refresh order data
+                fetchOrder();
             }
-
-            // Refresh order data
-            fetchOrder();
 
         } catch (err) {
             console.error('❌ Error completing order:', err);
@@ -81,14 +84,18 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
 
         try {
-            alert('نماینده با موفقیت حذف شد!');
+            const response = await API.post(`/orders/${orderId}/remove-dealer/`);
 
-            // Refresh order data
-            fetchOrder();
+            if (response.status === 200) {
+                alert('نماینده با موفقیت حذف شد!');
 
-            // Update parent component
-            if (onOrderUpdated) {
-                onOrderUpdated();
+                // Refresh order data
+                fetchOrder();
+
+                // Update parent component
+                if (onOrderUpdated) {
+                    onOrderUpdated();
+                }
             }
 
         } catch (err) {
@@ -124,6 +131,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         });
     };
 
+    // FIXED: Actually submit pricing to the API
     const handlePricingSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
@@ -153,15 +161,25 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 }))
             };
 
-            // Show success message
-            alert('قیمت‌گذاری با موفقیت ثبت شد!');
+            console.log('📤 Submitting pricing data:', submissionData);
 
-            if (onOrderUpdated) {
-                onOrderUpdated();
+            // FIXED: Actually make the API call
+            const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
+
+            if (response.status === 200) {
+                console.log('✅ Pricing submission successful:', response.data);
+
+                // Show success message
+                alert('قیمت‌گذاری با موفقیت ثبت شد!');
+
+                // Update parent component first
+                if (onOrderUpdated) {
+                    onOrderUpdated();
+                }
+
+                // Then refresh order data
+                fetchOrder();
             }
-
-            // Refresh order data
-            fetchOrder();
 
         } catch (err) {
             console.error('❌ Error submitting pricing:', err);

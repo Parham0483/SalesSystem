@@ -18,9 +18,10 @@ const DashboardPage = () => {
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState('active'); // 'active', 'completed', 'rejected'
+    const [activeTab, setActiveTab] = useState('active');
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
+    const [refreshKey, setRefreshKey] = useState(0); // Add refresh key for force updates
     const navigate = useNavigate();
     const { categories } = useCategories();
 
@@ -41,14 +42,27 @@ const DashboardPage = () => {
             fetchRecentProducts();
             fetchRecentAnnouncements();
         }
-    }, [navigate]);
+    }, [navigate, refreshKey]); // Add refreshKey to dependencies
+
+    // Auto-refresh orders every 30 seconds when on active tab
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (activeTab === 'active' && !loading) {
+                fetchOrders();
+            }
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [activeTab, loading]);
 
     const fetchOrders = async () => {
         setLoading(true);
         setError('');
 
         try {
+            console.log('🔄 Fetching orders...');
             const response = await API.get('/orders/');
+            console.log('✅ Orders fetched:', response.data.length);
             setOrders(response.data);
         } catch (error) {
             console.error('❌ Error fetching orders:', error);
@@ -66,7 +80,7 @@ const DashboardPage = () => {
     const fetchRecentProducts = async () => {
         try {
             const response = await API.get('/products/new-arrivals/');
-            setRecentProducts(response.data.slice(0, 6)); // Show 6 recent products
+            setRecentProducts(response.data.slice(0, 6));
         } catch (error) {
             console.error('❌ Error fetching recent products:', error);
         }
@@ -75,18 +89,18 @@ const DashboardPage = () => {
     const fetchRecentAnnouncements = async () => {
         try {
             const response = await API.get('/shipment-announcements/');
-            setRecentAnnouncements(response.data.slice(0, 3)); // Show 3 recent announcements
+            setRecentAnnouncements(response.data.slice(0, 3));
         } catch (error) {
             console.error('❌ Error fetching announcements:', error);
         }
     };
 
-    // Filter orders by status
+    // Filter orders by status - Updated with new statuses
     const getFilteredOrders = () => {
         switch (activeTab) {
             case 'active':
                 return orders.filter(order =>
-                    ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(order.status)
+                    ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(order.status)
                 );
             case 'completed':
                 return orders.filter(order => order.status === 'completed');
@@ -102,6 +116,14 @@ const DashboardPage = () => {
     const handleOrderCreated = () => {
         setMessage('سفارش با موفقیت ثبت شد! به زودی رسیدگی میشود');
         setShowCreateOrder(false);
+        setRefreshKey(prev => prev + 1); // Force refresh
+        fetchOrders();
+    };
+
+    const handleOrderUpdated = () => {
+        console.log('🔄 Order updated, refreshing...');
+        setSelectedOrder(null);
+        setRefreshKey(prev => prev + 1); // Force refresh
         fetchOrders();
     };
 
@@ -126,6 +148,8 @@ const DashboardPage = () => {
                 return 'blue-400';
             case 'confirmed':
                 return 'green-400';
+            case 'payment_uploaded':
+                return 'purple-400';
             case 'completed':
                 return 'green-600';
             case 'rejected':
@@ -141,7 +165,8 @@ const DashboardPage = () => {
         const statusMap = {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید',
-            'confirmed': 'تأیید شده',
+            'confirmed': 'تأیید شده - فاکتور صادر شد',
+            'payment_uploaded': 'رسید پرداخت آپلود شده',
             'completed': 'تکمیل شده',
             'rejected': 'رد شده',
             'cancelled': 'لغو شده'
@@ -237,7 +262,6 @@ const DashboardPage = () => {
                         onClick={() => setShowProfileModal(true)}
                         className="profile-btn"
                     />
-
                 </div>
             </div>
 
@@ -330,10 +354,10 @@ const DashboardPage = () => {
                 </div>
             )}
 
-            {/* Order Tabs */}
+            {/* Order Tabs - Updated counts */}
             <div className="dashboard-tabs">
                 <NeoBrutalistButton
-                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed'].includes(o.status)).length})`}
+                    text={`سفارشات فعال (${orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(o.status)).length})`}
                     color={activeTab === 'active' ? 'yellow-400' : 'gray-400'}
                     textColor="black"
                     onClick={() => setActiveTab('active')}
@@ -353,13 +377,23 @@ const DashboardPage = () => {
                     onClick={() => setActiveTab('rejected')}
                     className="tab-btn"
                 />
+                <NeoBrutalistButton
+                    text="🔄"
+                    color="gray-400"
+                    textColor="black"
+                    onClick={() => {
+                        setRefreshKey(prev => prev + 1);
+                        fetchOrders();
+                    }}
+                    className="refresh-btn"
+                />
             </div>
 
             {/* Orders Grid */}
             <div className="orders-grid">
                 {filteredOrders.map((order) => (
                     <NeoBrutalistCard
-                        key={order.id}
+                        key={`${order.id}-${refreshKey}`} // Add refreshKey to force re-render
                         className="order-card"
                         onClick={() => setSelectedOrder(order)}
                     >
@@ -438,6 +472,30 @@ const DashboardPage = () => {
                                 </p>
                             )}
 
+                            {/* Show payment upload status */}
+                            {order.status === 'payment_uploaded' && (
+                                <div style={{
+                                    backgroundColor: '#f3e8ff',
+                                    border: '1px solid #8b5cf6',
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{ color: '#7c3aed', fontWeight: 'bold' }}>
+                                        📄 رسید پرداخت آپلود شده
+                                    </div>
+                                    <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
+                                        در انتظار بررسی مدیر
+                                    </div>
+                                    {order.has_payment_receipts && (
+                                        <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
+                                            تعداد رسیدها: {order.payment_receipts_count || 'چندین فایل'}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Show admin comments for customer transparency */}
                             {order.admin_comment && order.status !== 'pending_pricing' && (
                                 <div style={{
@@ -449,7 +507,7 @@ const DashboardPage = () => {
                                     borderRadius: '4px'
                                 }}>
                                     <div style={{ color: '#c2410c', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-                                        📝 نظر مدیر:
+                                         نظر مدیر:
                                     </div>
                                     <div style={{ color: '#9a3412' }}>
                                         {order.admin_comment.length > 60
@@ -472,6 +530,31 @@ const DashboardPage = () => {
                                     setSelectedOrder(order);
                                 }}
                             />
+                            {/* Show different actions based on status */}
+                            {order.status === 'waiting_customer_approval' && (
+                                <NeoBrutalistButton
+                                    text="تأیید/رد سفارش"
+                                    color="yellow-400"
+                                    textColor="black"
+                                    className="approve-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOrder(order);
+                                    }}
+                                />
+                            )}
+                            {order.status === 'confirmed' && !order.has_payment_receipts && (
+                                <NeoBrutalistButton
+                                    text="آپلود رسید پرداخت"
+                                    color="purple-400"
+                                    textColor="white"
+                                    className="upload-payment-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedOrder(order);
+                                    }}
+                                />
+                            )}
                             {/* Download PDF button for completed orders */}
                             {order.status === 'completed' && order.invoice_id && (
                                 <NeoBrutalistButton
@@ -572,7 +655,7 @@ const DashboardPage = () => {
                 {selectedOrder && (
                     <OrderDetailPage
                         orderId={selectedOrder.id}
-                        onOrderUpdated={handleOrderCreated}
+                        onOrderUpdated={handleOrderUpdated}
                     />
                 )}
             </NeoBrutalistModal>

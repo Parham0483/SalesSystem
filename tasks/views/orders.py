@@ -82,13 +82,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
     def create(self, request, *args, **kwargs):
-        """FIXED: Create order with single SMS notification"""
         try:
             serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
                 order = serializer.save()
 
-                # FIXED: Send notifications separately to prevent duplicates
                 email_sent = False
                 sms_sent = False
 
@@ -949,7 +947,6 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['GET'], url_path='payment-receipts')
     def get_payment_receipts(self, request, *args, **kwargs):
-        """FIXED: Get all payment receipts with proper URLs"""
         try:
             order = self.get_object()
 
@@ -963,7 +960,6 @@ class OrderViewSet(viewsets.ModelViewSet):
             receipts_data = []
 
             for receipt in receipts:
-                # FIXED: Build proper URLs for file access
                 base_url = request.build_absolute_uri('/')[:-1]  # Remove trailing slash
 
                 receipts_data.append({
@@ -975,7 +971,6 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'uploaded_by': receipt.uploaded_by.name,
                     'is_verified': receipt.is_verified,
                     'admin_notes': receipt.admin_notes,
-                    # FIXED: Use proper API endpoints for file access
                     'file_url': f"{base_url}/api/receipts/{receipt.id}/view/",
                     'download_url': f"{base_url}/api/receipts/{receipt.id}/download/"
                 })
@@ -1081,9 +1076,6 @@ class OrderItemViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def view_payment_receipt(request, receipt_id):
-    """
-    FIXED: Serve payment receipt files (images and PDFs) with proper headers
-    """
     try:
         # Find the specific receipt
         receipt = get_object_or_404(OrderPaymentReceipt, pk=receipt_id)
@@ -1170,9 +1162,6 @@ def view_payment_receipt(request, receipt_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def download_payment_receipt(request, receipt_id):
-    """
-    FIXED: Force download of payment receipt files
-    """
     try:
         # Find the specific receipt
         receipt = get_object_or_404(OrderPaymentReceipt, pk=receipt_id)

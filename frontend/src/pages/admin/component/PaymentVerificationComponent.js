@@ -1,5 +1,3 @@
-// UPDATED PaymentVerificationComponent.js with Fixed Modal Positioning
-
 import React, { useState, useEffect } from 'react';
 import API from '../../../component/api';
 import NeoBrutalistButton from "../../../component/NeoBrutalist/NeoBrutalistButton";
@@ -126,7 +124,6 @@ const DefaultAuthenticatedImage = ({ receipt, onError, className = "" }) => {
                 borderRadius: '8px',
                 backgroundColor: '#f9fafb'
             }}>
-                <div style={{ fontSize: '16px', marginBottom: '6px' }}>📷</div>
                 <span style={{ fontSize: '12px' }}>تصویر در دسترس نیست</span>
             </div>
         );
@@ -178,7 +175,6 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
         }
     }, [order]);
 
-    // FIXED: Handle modal state properly to prevent body overflow
     useEffect(() => {
         if (isImageModalOpen) {
             document.body.classList.add('modal-open');
@@ -268,7 +264,6 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
         );
     };
 
-    // FIXED: Handle keyboard navigation
     useEffect(() => {
         const handleKeyPress = (e) => {
             if (isImageModalOpen) {
@@ -423,7 +418,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                                             {formatFileSize(receipt.file_size)}
                                         </span>
                                         <span className={`receipt-status ${receipt.is_verified ? 'verified' : 'pending'}`}>
-                                            {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                            {receipt.is_verified ? ' تایید شده' : ' در انتظار بررسی'}
                                         </span>
                                     </div>
                                 </div>
@@ -464,10 +459,10 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                                             />
                                         ) : (
                                             <div className="pdf-preview">
-                                                <div className="pdf-icon">📄</div>
+
                                                 <p className="pdf-name">{receipt.file_name}</p>
                                                 <NeoBrutalistButton
-                                                    text="🔍 مشاهده PDF"
+                                                    text=" مشاهده PDF"
                                                     color="blue-400"
                                                     textColor="white"
                                                     onClick={() => handleViewPDF(receipt)}
@@ -480,7 +475,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
 
                                 <div className="receipt-actions">
                                     <NeoBrutalistButton
-                                        text="📥 دانلود"
+                                        text=" دانلود"
                                         color="green-400"
                                         textColor="black"
                                         onClick={() => handleDownloadReceipt(receipt)}
@@ -491,11 +486,10 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                         ))}
                     </div>
 
-                    {/* FIXED: Gallery button - should trigger modal */}
                     {paymentReceipts.filter(r => r.file_type === 'image').length > 1 && (
                         <div className="gallery-section">
                             <NeoBrutalistButton
-                                text="🖼️ مشاهده همه تصاویر در گالری"
+                                text="مشاهده همه تصاویر در گالری"
                                 color="purple-400"
                                 textColor="white"
                                 onClick={() => handleImageClick(paymentReceipts.filter(r => r.file_type === 'image'), 0)}
@@ -552,7 +546,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
 
                 <div className="verification-actions">
                     <NeoBrutalistButton
-                        text={verifying ? "در حال تایید..." : "✅ تایید پرداخت و تکمیل سفارش"}
+                        text={verifying ? "در حال تایید..." : " تایید پرداخت و تکمیل سفارش"}
                         color="green-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(true)}
@@ -561,7 +555,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                     />
 
                     <NeoBrutalistButton
-                        text={verifying ? "در حال رد..." : "❌ رد رسید پرداخت"}
+                        text={verifying ? "در حال رد..." : " رد رسید پرداخت"}
                         color="red-400"
                         textColor="white"
                         onClick={() => handleVerifyPayment(false)}
@@ -571,7 +565,6 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                 </div>
             </div>
 
-            {/* FIXED: Image Gallery Modal with proper positioning */}
             {isImageModalOpen && (
                 <div
                     className="image-modal-overlay"
@@ -698,7 +691,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                                                         zIndex: 10
                                                     }}
                                                 >
-                                                    ‹
+                                                    ›
                                                 </button>
                                                 <button
                                                     className="image-nav-btn next-btn"
@@ -723,7 +716,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                                                         zIndex: 10
                                                     }}
                                                 >
-                                                    ›
+                                                    ‹
                                                 </button>
                                                 <div className="image-counter" style={{
                                                     position: 'absolute',

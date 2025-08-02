@@ -1,4 +1,3 @@
-# tasks/models.py - FIXED COMPLETE VERSION
 from datetime import timedelta
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
@@ -1021,7 +1020,6 @@ class DealerCommission(models.Model):
         ordering = ['-created_at']
 
 
-# FIXED: OrderPaymentReceipt model with proper User reference
 class OrderPaymentReceipt(models.Model):
     """Model for storing multiple payment receipts per order"""
 
@@ -1058,7 +1056,7 @@ class OrderPaymentReceipt(models.Model):
 
     uploaded_at = models.DateTimeField(auto_now_add=True)
     uploaded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # FIXED: Use settings.AUTH_USER_MODEL instead of User
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         help_text="User who uploaded this receipt"
     )
@@ -1074,7 +1072,7 @@ class OrderPaymentReceipt(models.Model):
         help_text="When this receipt was verified"
     )
     verified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # FIXED: Use settings.AUTH_USER_MODEL instead of User
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

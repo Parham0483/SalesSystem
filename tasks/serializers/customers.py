@@ -1,4 +1,3 @@
-# tasks/serializers/customers.py - FIXED VERSION
 from rest_framework import serializers
 from ..models import Customer
 

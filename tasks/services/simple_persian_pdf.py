@@ -53,7 +53,7 @@ class SimpleInvoicePDFGenerator:
         # Company and Customer Info Side by Side
         info_data = [
             ["FROM:", "TO:"],
-            ["Yan Tejarat Puya Kavir", self.order.customer.name],
+            ["Kyan Tejarat Puya Kavir", self.order.customer.name],
             ["Yazd, Modarres Blvd", self.order.customer.email],
             ["Phone: 021-12345678", f"Company: {self.order.customer.company_name or 'N/A'}"],
             ["gtc.1210770@gmail.com", f"Phone: {self.order.customer.phone or 'N/A'}"]

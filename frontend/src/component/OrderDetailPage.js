@@ -6,7 +6,6 @@ import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import '../styles/component/CustomerComponent/OrderDetail.css';
 
-// FIXED: Authenticated Image Viewer Component
 const AuthenticatedImage = ({ receipt, onError }) => {
     const [imageData, setImageData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -28,7 +27,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                 throw new Error('Authentication token not found');
             }
 
-            // FIXED: Use download URL since it works (from server logs)
             const imageUrl = receipt.download_url;
 
             if (!imageUrl) {
@@ -131,7 +129,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                 borderRadius: '8px',
                 backgroundColor: '#f9fafb'
             }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📷</div>
                 <span>تصویر در دسترس نیست</span>
             </div>
         );
@@ -358,10 +355,9 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             return (
                 <div className="neo-receipt-preview" key={`pdf-${receipt.id}`}>
                     <div className="neo-pdf-preview">
-                        <div className="neo-pdf-icon">📄</div>
                         <p className="neo-pdf-name">{receipt.file_name}</p>
                         <NeoBrutalistButton
-                            text="🔍 مشاهده PDF"
+                            text=" مشاهده PDF"
                             color="blue-400"
                             textColor="white"
                             onClick={() => handleViewPDF(receipt)}
@@ -461,7 +457,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const handlePaymentUploadSuccess = (response) => {
-        console.log('✅ Payment upload successful:', response);
         fetchOrder();
         fetchPaymentReceipts();
         setIsPaymentModalOpen(false);
@@ -616,7 +611,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
-            {/* FIXED: Payment Receipts Section with Authenticated Images */}
             {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">
@@ -679,19 +673,18 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                 <span className={`neo-info-value ${
                                                     receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
                                                 }`}>
-                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                                    {receipt.is_verified ? ' تایید شده' : ' در انتظار بررسی'}
                                                 </span>
                                             </div>
                                         </div>
 
-                                        {/* FIXED: Receipt preview with AuthenticatedImage */}
                                         {renderReceiptPreview(receipt, index)}
                                     </div>
 
                                     {/* Receipt actions */}
                                     <div className="neo-receipt-actions">
                                         <NeoBrutalistButton
-                                            text="📥 دانلود"
+                                            text=" دانلود"
                                             color="green-400"
                                             textColor="black"
                                             onClick={() => handleDownloadReceipt(receipt)}
@@ -701,7 +694,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         {/* Allow deletion only if order is still in confirmed status */}
                                         {order.status === 'confirmed' && (
                                             <NeoBrutalistButton
-                                                text="🗑️ حذف"
+                                                text="حذف"
                                                 color="red-400"
                                                 textColor="white"
                                                 onClick={() => deletePaymentReceipt(receipt.id)}
@@ -926,14 +919,12 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
             {order.status === 'payment_uploaded' && (
                 <div className="neo-status-message neo-info">
-                    <span className="neo-status-icon">📄</span>
                     <span>رسیدهای پرداخت شما آپلود شد و در انتظار بررسی توسط مدیر می‌باشد.</span>
                 </div>
             )}
 
             {order.status === 'completed' && (
                 <div className="neo-status-message neo-success">
-                    <span className="neo-status-icon">🎉</span>
                     <span>سفارش شما با موفقیت تکمیل شد! از خرید شما متشکریم.</span>
                 </div>
             )}

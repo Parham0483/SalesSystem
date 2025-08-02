@@ -213,7 +213,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             let responseData = null;
             try {
                 const responseText = await response.text();
-                console.log('📄 Raw response:', responseText);
                 if (responseText) {
                     responseData = JSON.parse(responseText);
                 }
@@ -354,7 +353,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                             onClick={openFileDialog}
                         >
                             <div className="dropzone-content">
-                                <div className="dropzone-icon">📄</div>
                                 <div className="dropzone-text">
                                     {isDragOver ? (
                                         <p>فایل‌ها را اینجا رها کنید...</p>
