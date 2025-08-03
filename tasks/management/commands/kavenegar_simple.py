@@ -10,7 +10,7 @@ def test_kavenegar_api():
     api_key = '45716874386B306854636F50762B6E4A645039536F703970784239495146586C304C73326E514752776C6F3D'
 
     # Your senders
-    sender_domestic = '20001210770'
+    sender_domestic = '2000660110'
     sender_international = '0018018949161'
 
     try:

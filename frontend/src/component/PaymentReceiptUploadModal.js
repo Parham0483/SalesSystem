@@ -199,7 +199,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
             console.log('📤 Uploading', selectedFiles.length, 'payment receipts for order:', orderId);
-            const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api';
+            const API_URL = process.env.REACT_APP_API_URL || '/api';
             const uploadUrl = `${API_URL}orders/${orderId}/upload-payment-receipt/`;
 
             const response = await fetch(uploadUrl, {

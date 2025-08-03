@@ -1,19 +1,31 @@
 import axios from 'axios';
 
+// Use environment variable without fallback
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+if (!API_BASE_URL) {
+    console.error('❌ REACT_APP_API_URL is not defined!');
+    console.log('Available env vars:', process.env);
+}
+
 const API = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/',
+    baseURL: API_BASE_URL,
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     }
 });
+
+console.log('🔧 API Base URL:', API_BASE_URL);
+console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
+
 // Add this enhanced debugging to your api.js
 API.interceptors.request.use(
     (config) => {
+        console.log('🚀 API Request:', config.method?.toUpperCase(), config.baseURL + config.url);
         const token = localStorage.getItem('access_token');
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`
-        } else {
         }
         return config;
     },
@@ -22,9 +34,11 @@ API.interceptors.request.use(
 
 API.interceptors.response.use(
     (response) => {
+        console.log('✅ API Response:', response.status, response.config.url);
         return response;
     },
     async (error) => {
+        console.error('❌ API Error:', error.response?.status, error.config?.url, error.message);
 
         const originalRequest = error.config;
 
@@ -38,7 +52,7 @@ API.interceptors.response.use(
                 }
 
                 const refreshResponse = await axios.post(
-                    `${process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000/api/'}auth/token/refresh/`,
+                    `${API_BASE_URL}auth/token/refresh/`,
                     { refresh: refreshToken },
                     {
                         headers: { 'Content-Type': 'application/json' },
@@ -62,4 +76,6 @@ API.interceptors.response.use(
 
         return Promise.reject(error);
     }
-);export default API;
+);
+
+export default API;

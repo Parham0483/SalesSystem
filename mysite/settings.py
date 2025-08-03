@@ -141,6 +141,7 @@ if 'corsheaders' in INSTALLED_APPS:
         "http://127.0.0.1:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3001",
+        "http://frontend:3000",
     ]
 
 
@@ -240,7 +241,7 @@ if DEBUG:
     KAVENEGAR_API_KEY = '45716874386B306854636F50762B6E4A645039536F703970784239495146586C304C73326E514752776C6F3D'
 
     # Sender numbers based on your account info
-    KAVENEGAR_SENDER_DOMESTIC = '20001210770'  # آزمایشی - برای ایران
+    KAVENEGAR_SENDER_DOMESTIC = '2000660110'  # آزمایشی - برای ایران
     KAVENEGAR_SENDER_INTERNATIONAL = '0018018949161'  # بین المللی - برای 148 کشور
 
     # Default sender (use domestic for Iran)

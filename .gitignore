@@ -1,15 +1,21 @@
-# .gitignore
-
-# Ignore Python virtual environment and cache
-__pycache__/
-*.pyc
-
-# Ignore environment files containing secrets
+# Environment files
 .env
-frontend/.env
-.env
+.env.local
+.env.production
+.env.staging
+docker-compose.override.yml
 
-# Ignore node modules
-node_modules/
+# Database
+postgres_data/
+postgres_production_data/
 
-**/.env
+# Logs
+*.log
+debug.log
+django.log
+
+# Temporary files
+temp_app.js
+package.json
+package-lock.json
+EOF

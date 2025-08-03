@@ -1,0 +1,17 @@
+Django>=5.2.0
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
+psycopg2-binary
+python-dotenv
+Pillow
+requests
+pytz
+gunicorn
+reportlab
+kavenegar
+python-bidi
+arabic-reshaper
+google-auth
+google-auth-oauthlib
+google-auth-httplib2

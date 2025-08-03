@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: salesDb
+      POSTGRES_USER: salesuser
+      POSTGRES_PASSWORD: yourpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U salesuser -d salesDb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    environment:
+      - DJANGO_SETTINGS_MODULE=mysite.settings_docker
+      - DATABASE_HOST=db
+      - DATABASE_NAME=salesDb
+      - DATABASE_USER=salesuser
+      - DATABASE_PASSWORD=yourpassword
+      - GOOGLE_OAUTH_CLIENT_ID=775814213572-h7009vmkdj87gpuko2puh3n22oesfnj5.apps.googleusercontent.com
+      - GOOGLE_OAUTH_CLIENT_SECRET=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
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./media:/app/media
+      - ./staticfiles:/app/staticfiles
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=/api/
+
+volumes:
+  postgres_data:
