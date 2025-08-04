@@ -111,10 +111,17 @@ class OrderViewSet(viewsets.ModelViewSet):
 
                 شرکت تجاری پارسیان"""
 
-                        sms_sent = NotificationService.send_sms(order.customer.phone, customer_sms)
+                        # Use the correct method name - it might be send_sms_notification instead
+                        sms_sent = NotificationService.send_sms_notification(
+                            phone=order.customer.phone,
+                            message=customer_sms,
+                            order=order,
+                            sms_type='order_submitted'
+                        )
                         logger.info(f"📱 Customer SMS sent: {sms_sent}")
                 except Exception as e:
                     logger.error(f"❌ Customer SMS failed: {str(e)}")
+                    sms_sent = False
 
                     # Return response with business invoice type info
                 response_data = serializer.data

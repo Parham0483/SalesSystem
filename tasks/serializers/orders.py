@@ -3,6 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer
+from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -17,31 +18,60 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
 
-    # ADD THIS FIELD
     business_invoice_type = serializers.ChoiceField(
         choices=Order.BUSINESS_INVOICE_TYPE_CHOICES,
         default='unofficial',
         help_text="Business type of invoice - Official or Unofficial"
     )
 
+    customer_info = serializers.JSONField(
+        required=False,
+        help_text="Customer information for invoice (name, address, etc.)"
+    )
+
     class Meta:
         model = Order
-        fields = ['id', 'customer_comment', 'business_invoice_type', 'items']  # Added business_invoice_type
+        fields = ['id', 'customer_comment', 'business_invoice_type','customer_info' ,'items']  # Added business_invoice_type
         read_only_fields = ['id']
+
+    def validate_customer_info(self, value):
+        """Validate customer info based on invoice type"""
+        if not value:
+            return value
+
+        invoice_type = self.initial_data.get('business_invoice_type', 'unofficial')
+
+        # Use CustomerInvoiceInfoUpdateSerializer for validation
+        serializer = CustomerInvoiceInfoUpdateSerializer(
+            data=value,
+            context={'invoice_type': invoice_type}
+        )
+
+        if not serializer.is_valid():
+            raise serializers.ValidationError(serializer.errors)
+
+        return serializer.validated_data
 
     def create(self, validated_data):
         request = self.context.get('request')
         customer = request.user
         items_data = validated_data.pop('items')
-        # Use pop() to remove business_invoice_type from validated_data
         business_invoice_type = validated_data.pop('business_invoice_type', 'unofficial')
+        customer_info = validated_data.pop('customer_info', {})
 
         with transaction.atomic():
+            if customer_info:
+                for field, value in customer_info.items():
+                    if hasattr(customer, field) and value is not None:
+                        setattr(customer, field, value)
+                customer.save()
+
             order = Order.objects.create(
                 customer=customer,
                 business_invoice_type=business_invoice_type,
-                **validated_data  # Now business_invoice_type is not in validated_data anymore
+                **validated_data
             )
+
             for item_data in items_data:
                 OrderItem.objects.create(
                     order=order,

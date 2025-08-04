@@ -180,3 +180,66 @@ class AuthCustomerSerializer(serializers.ModelSerializer):
                 instance.dealer_commission_rate) if instance.dealer_commission_rate else 0.0
 
         return data
+
+
+class CustomerInvoiceInfoSerializer(serializers.ModelSerializer):
+    """Serializer for customer invoice information"""
+
+    class Meta:
+        model = Customer
+        fields = [
+            'name', 'phone', 'company_name', 'email',
+            'national_id', 'economic_id', 'postal_code', 'complete_address'
+        ]
+
+    def validate_national_id(self, value):
+        """Validate national ID format (basic validation)"""
+        if value and len(value) not in [8, 10]:
+            raise serializers.ValidationError("شناسه ملی باید 8 یا 10 رقم باشد")
+        return value
+
+    def validate_postal_code(self, value):
+        """Validate postal code format"""
+        if value and (not value.isdigit() or len(value) != 10):
+            raise serializers.ValidationError("کد پستی باید 10 رقم باشد")
+        return value
+
+
+class CustomerInvoiceInfoUpdateSerializer(serializers.Serializer):
+    """Serializer for updating customer info during order creation"""
+
+    # Basic info (always required)
+    name = serializers.CharField(max_length=100, required=False)
+    phone = serializers.CharField(max_length=15, required=False)
+    company_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    # Official invoice fields (required only for official invoices)
+    national_id = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    economic_id = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    postal_code = serializers.CharField(max_length=10, required=False, allow_blank=True)
+    complete_address = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        """Custom validation based on invoice type"""
+        invoice_type = self.context.get('invoice_type', 'unofficial')
+
+        if invoice_type == 'official':
+            required_fields = ['national_id', 'complete_address', 'postal_code']
+            missing_fields = []
+
+            for field in required_fields:
+                if not data.get(field):
+                    missing_fields.append(field)
+
+            if missing_fields:
+                field_names = {
+                    'national_id': 'شناسه ملی',
+                    'complete_address': 'آدرس کامل',
+                    'postal_code': 'کد پستی'
+                }
+                missing_names = [field_names[field] for field in missing_fields]
+                raise serializers.ValidationError(
+                    f"برای فاکتور رسمی این فیلدها الزامی است: {', '.join(missing_names)}"
+                )
+
+        return data

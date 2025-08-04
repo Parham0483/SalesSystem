@@ -1,11 +1,9 @@
-# mysite/settings.py - Updated email settings
-
 import os
 import ssl
 import certifi
 from pathlib import Path
 from datetime import timedelta
-
+from decouple import config
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -310,3 +308,11 @@ if DEBUG:
 
         # You might want to log SMS instead of sending in development
         SMS_CONFIG['log_instead_of_send'] = False  # Set to True to only log SMS
+
+#Invoice fields
+BUSINESS_NAME = config('BUSINESS_NAME', default='')
+BUSINESS_NATIONAL_ID = config('BUSINESS_NATIONAL_ID', default='')
+BUSINESS_ECONOMIC_ID = config('BUSINESS_ECONOMIC_ID', default='')
+BUSINESS_ADDRESS = config('BUSINESS_ADDRESS', default='')
+BUSINESS_PHONE = config('BUSINESS_PHONE', default='')
+BUSINESS_POSTAL_CODE = config('BUSINESS_POSTAL_CODE', default='')

@@ -66,6 +66,13 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         help_text="Commission percentage"
     )
 
+    #For invoice generation
+    national_id = models.CharField(max_length=20, blank=True, null=True)
+    economic_id = models.CharField(max_length=20, blank=True, null=True)
+    postal_code = models.CharField(max_length=10, blank=True, null=True)
+    complete_address = models.TextField(blank=True, null=True)
+
+
     objects = CustomerManager()
 
     USERNAME_FIELD = 'email'
@@ -550,7 +557,28 @@ class Order(models.Model):
             return invoice
 
     def generate_invoice_number(self):
-        return f"INV-{timezone.now().year}-{self.id:06d}"
+        """Generate unique invoice number"""
+        import random
+        timestamp = timezone.now().strftime('%Y%m%d')
+        random_suffix = random.randint(1000, 9999)
+
+        # Create unique invoice number: INV + timestamp + random + order_id
+        invoice_number = f"INV{timestamp}{random_suffix}{self.id:04d}"
+
+        # Check for uniqueness (just in case)
+        while Invoice.objects.filter(invoice_number=invoice_number).exists():
+            random_suffix = random.randint(1000, 9999)
+            invoice_number = f"INV{timestamp}{random_suffix}{self.id:04d}"
+
+        return invoice_number
+
+    # Also fix the generate_invoice_based_on_type method in Order class:
+    def generate_invoice_based_on_type(self):
+        """Generate invoice PDF based on business type"""
+        if hasattr(self, 'invoice'):
+            generator = FixedPersianInvoicePDFGenerator(self.invoice)
+            return generator.generate_pdf()
+        return None
 
     # Dealer management methods
     def assign_dealer(self, dealer, assigned_by, custom_commission_rate=None):

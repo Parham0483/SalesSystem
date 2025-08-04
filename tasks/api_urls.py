@@ -1,7 +1,13 @@
+# To check your current URL patterns, run this command:
+# python manage.py show_urls
+
+# But based on the error, I think your api_urls.py needs to be updated
+# Update your api_urls.py file with this corrected version:
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
-from tasks.views.customers import CustomerViewSet
+from tasks.views.customers import CustomerViewSet, CustomerInfoViewSet
 from tasks.views.orders import OrderViewSet, OrderItemViewSet, view_payment_receipt, download_payment_receipt
 from tasks.views.invoices import InvoiceViewSet
 from tasks.views.dealers import DealerViewSet
@@ -19,8 +25,6 @@ from tasks.views.profile import (
     reset_password
 )
 from tasks.views.google_auth import google_auth, complete_google_profile, link_google_account
-
-
 
 # Create router and register viewsets
 router = DefaultRouter()
@@ -50,20 +54,28 @@ urlpatterns = [
     path('auth/register/', customer_register, name='customer_register'),
     path('auth/login/', customer_login, name='customer_login'),
     path('auth/logout/', customer_logout, name='customer_logout'),
+
+    # Customer invoice info endpoints
+    path('customers/invoice-info/',
+         CustomerInfoViewSet.as_view({'get': 'get_invoice_info'}),
+         name='customer-invoice-info'),
+    path('customers/update-invoice-info/',
+         CustomerInfoViewSet.as_view({'post': 'update_invoice_info'}),
+         name='update-customer-invoice-info'),
+
     path('receipts/<int:receipt_id>/view/', view_payment_receipt, name='view-payment-receipt'),
     path('receipts/<int:receipt_id>/download/', download_payment_receipt, name='download-payment-receipt'),
-
 
     # JWT token endpoints
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
 
-# Google OAuth endpoints
+    # Google OAuth endpoints
     path('auth/google/', google_auth, name='google_auth'),
     path('auth/google/complete-profile/', complete_google_profile, name='google_complete_profile'),
     path('auth/google/link-account/', link_google_account, name='google_link_account'),
 
-    #Password Reset URLs
+    # Password Reset URLs
     path('auth/password-reset/request/', request_password_reset, name='password_reset_request'),
     path('auth/password-reset/verify-otp/', verify_reset_otp, name='password_reset_verify'),
     path('auth/password-reset/reset/', reset_password, name='password_reset_complete'),
