@@ -6,8 +6,8 @@ from django.db import models
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
-from .services.simple_persian_pdf import  FixedPersianInvoicePDFGenerator
-import uuid
+from .services.simple_persian_pdf import EnhancedPersianInvoicePDFGenerator
+
 from django.conf import settings
 import os
 
@@ -71,7 +71,17 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     economic_id = models.CharField(max_length=20, blank=True, null=True)
     postal_code = models.CharField(max_length=10, blank=True, null=True)
     complete_address = models.TextField(blank=True, null=True)
-
+    city = models.CharField(max_length=100,blank=True,null=True)
+    province = models.CharField(max_length=100,blank=True,null=True,)
+    customer_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('individual', 'شخص حقیقی'),
+            ('company', 'شخص حقوقی')
+        ],
+        default='individual',
+        help_text="نوع مشتری"
+    )
 
     objects = CustomerManager()
 
@@ -576,7 +586,7 @@ class Order(models.Model):
     def generate_invoice_based_on_type(self):
         """Generate invoice PDF based on business type"""
         if hasattr(self, 'invoice'):
-            generator = FixedPersianInvoicePDFGenerator(self.invoice)
+            generator = EnhancedPersianInvoicePDFGenerator(self.invoice)
             return generator.generate_pdf()
         return None
 
@@ -768,7 +778,7 @@ class Invoice(models.Model):
             self.save()
 
     def generate_pdf(self):
-        generator = FixedPersianInvoicePDFGenerator(self)
+        generator = EnhancedPersianInvoicePDFGenerator(self)
         pdf_buffer = generator.generate_pdf()
 
         filename = f"invoice_{self.invoice_number}.pdf"
@@ -776,7 +786,7 @@ class Invoice(models.Model):
         return self.pdf_file
 
     def download_pdf_response(self):
-        generator = FixedPersianInvoicePDFGenerator(self)
+        generator = EnhancedPersianInvoicePDFGenerator(self)
         return generator.get_http_response()
 
     def save(self, *args, **kwargs):

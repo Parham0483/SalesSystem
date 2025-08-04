@@ -184,16 +184,11 @@ const DashboardPage = () => {
         return statusMap[status] || status;
     };
 
-    // Download PDF function for completed orders
     const handleDownloadPDF = async (order, e) => {
         e.stopPropagation();
         try {
-            if (!order.invoice_id) {
-                setError('فاکتور برای این سفارش موجود نیست');
-                return;
-            }
-
-            const response = await API.get(`/invoices/${order.invoice_id}/download-pdf/`, {
+            // Use orders endpoint instead of invoices endpoint
+            const response = await API.get(`/orders/${order.id}/download-invoice/`, {
                 responseType: 'blob'
             });
 
@@ -207,6 +202,7 @@ const DashboardPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error) {
+            console.error('❌ Error downloading invoice:', error);
             setError('خطا در دانلود فاکتور');
         }
     };
@@ -633,14 +629,14 @@ const DashboardPage = () => {
                                 />
                             )}
                             {/* Download PDF button for completed orders */}
-                            {order.status === 'completed' && order.invoice_id && (
-                                <NeoBrutalistButton
-                                    text="دانلود فاکتور"
-                                    color="green-400"
-                                    textColor="white"
-                                    className="download-btn"
-                                    onClick={(e) => handleDownloadPDF(order, e)}
-                                />
+                            {order.status === 'completed' && (
+                            <NeoBrutalistButton
+                                text="دانلود فاکتور"
+                                color="green-400"
+                                textColor="white"
+                                className="download-btn"
+                                onClick={(e) => handleDownloadPDF(order, e)}
+                            />
                             )}
                         </div>
                     </NeoBrutalistCard>

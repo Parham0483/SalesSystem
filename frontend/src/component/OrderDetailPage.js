@@ -6,6 +6,170 @@ import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import CustomerInfoManagement from './CustomerInfoManagement';
 import '../styles/component/CustomerComponent/OrderDetail.css';
+import axios from 'axios';
+
+const InvoiceManager = ({ order, onUpdate }) => {
+    const [loading, setLoading] = useState(false);
+
+    const handleInvoiceTypeChange = async (newType) => {
+        if (!window.confirm(`آیا می‌خواهید نوع فاکتور را به "${newType === 'official' ? 'رسمی' : 'غیررسمی'}" تغییر دهید؟`)) {
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const response = await API.post(
+                `/orders/${order.id}/update-business-invoice-type/`,
+                { business_invoice_type: newType }
+            );
+
+            alert('نوع فاکتور با موفقیت تغییر یافت');
+            onUpdate(); // Refresh parent component
+        } catch (error) {
+            alert('خطا در تغییر نوع فاکتور');
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    function setError(خطادردانلودفاکتور) {
+        
+    }
+
+    const downloadInvoice = async () => {
+        try {
+            // Use the order download endpoint instead of invoice endpoint
+            const response = await API.get(`/orders/${order.id}/download-invoice/`, {
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `invoice_${order.id}_${order.business_invoice_type}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('❌ Error downloading invoice:', err);
+            setError('خطا در دانلود فاکتور');
+        }
+    };
+
+    const previewInvoice = async () => {
+        setLoading(true);
+        try {
+            const response = await API.get(
+                `/orders/${order.id}/preview-invoice/`,
+                { responseType: 'blob' }
+            );
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            window.open(url, '_blank');
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('خطا در نمایش پیش‌نمایش فاکتور');
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="neo-invoice-card">
+            <div className="neo-card-header">
+                <h3 className="neo-card-title">مدیریت فاکتور</h3>
+            </div>
+
+            <div className="neo-invoice-info-grid">
+                <div className="neo-info-item">
+                    <span className="neo-info-label">نوع فاکتور فعلی</span>
+                    <span className={`neo-info-value ${order.business_invoice_type === 'official' ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
+                        {order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی'}
+                    </span>
+                </div>
+
+                {order.business_invoice_type === 'official' && order.quoted_total && (
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">مالیات (۹٪)</span>
+                        <span className="neo-info-value neo-tax-badge">
+                            {(order.quoted_total * 0.09).toLocaleString('fa-IR')} تومان
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            <div className="neo-invoice-actions">
+                {order.status === 'completed' && (
+                    <>
+                        <button
+                            className="neo-btn neo-btn-primary"
+                            onClick={downloadInvoice}
+                            disabled={loading}
+                        >
+                            {loading ? 'در حال دانلود...' : 'دانلود فاکتور'}
+                        </button>
+
+                        <button
+                            className="neo-btn neo-btn-secondary"
+                            onClick={previewInvoice}
+                            disabled={loading}
+                        >
+                            {loading ? 'در حال بارگذاری...' : 'پیش‌نمایش فاکتور'}
+                        </button>
+                    </>
+                )}
+
+                {/* Admin only - change invoice type */}
+                {window.userRole === 'admin' && order.status !== 'completed' && (
+                    <div className="neo-invoice-type-controls">
+                        <label className="neo-label">تغییر نوع فاکتور:</label>
+                        <div className="neo-radio-group">
+                            <label className="neo-radio-label">
+                                <input
+                                    type="radio"
+                                    name={`invoiceType_${order.id}`}
+                                    value="unofficial"
+                                    checked={order.business_invoice_type === 'unofficial'}
+                                    onChange={() => handleInvoiceTypeChange('unofficial')}
+                                    disabled={loading}
+                                />
+                                <span className="neo-radio-text">غیررسمی</span>
+                            </label>
+
+                            <label className="neo-radio-label">
+                                <input
+                                    type="radio"
+                                    name={`invoiceType_${order.id}`}
+                                    value="official"
+                                    checked={order.business_invoice_type === 'official'}
+                                    onChange={() => handleInvoiceTypeChange('official')}
+                                    disabled={loading}
+                                />
+                                <span className="neo-radio-text">رسمی</span>
+                            </label>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {order.business_invoice_type === 'official' && (
+                <div className="neo-invoice-requirements">
+                    <h4 className="neo-requirements-title">الزامات فاکتور رسمی:</h4>
+                    <ul className="neo-requirements-list">
+                        <li>کد اقتصادی مشتری</li>
+                        <li>کد پستی ۱۰ رقمی</li>
+                        <li>نشانی کامل</li>
+                        <li>محاسبه مالیات ۹٪</li>
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const AuthenticatedImage = ({ receipt, onError }) => {
     const [imageData, setImageData] = useState(null);
@@ -446,12 +610,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
     const downloadInvoice = async () => {
         try {
-            if (!order.invoice_id) {
-                setError('فاکتور هنوز ایجاد نشده است');
-                return;
-            }
-
-            const response = await API.get(`/invoices/${order.invoice_id}/download-pdf/`, {
+            const response = await API.get(`/orders/${order.id}/download-invoice/`, {
                 responseType: 'blob'
             });
 
@@ -459,7 +618,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `invoice_${order.id}.pdf`;
+            link.download = `invoice_${order.id}_${order.business_invoice_type}.pdf`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -469,7 +628,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setError('خطا در دانلود فاکتور');
         }
     };
-
+    
     const handlePaymentUploadSuccess = (response) => {
         fetchOrder();
         fetchPaymentReceipts();
@@ -655,6 +814,11 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     )}
                 </div>
             </NeoBrutalistCard>
+
+            {/* Invoice Manager Component */}
+            {(order.status === 'completed' || window.userRole === 'admin') && (
+                <InvoiceManager order={order} onUpdate={fetchOrder} />
+            )}
 
             {/*Customer Invoice Information (for official invoices) */}
             {isOfficialInvoice() && (

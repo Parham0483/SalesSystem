@@ -1,387 +1,427 @@
-# Update tasks/services/simple_persian_pdf.py - add these methods
+# Complete simple_persian_pdf.py with proper font integration:
 
-import os
-from django.conf import settings
 from io import BytesIO
+import os
 from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from bidi.algorithm import get_display
-import arabic_reshaper
+from django.conf import settings
 from django.http import HttpResponse
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 
-class FixedPersianInvoicePDFGenerator:
+class EnhancedPersianInvoicePDFGenerator:
     def __init__(self, invoice):
         self.invoice = invoice
         self.order = invoice.order
-        self.persian_font = 'Vazir'
+        self.persian_font = 'Helvetica'  # Default fallback
         self.setup_fonts()
 
     def setup_fonts(self):
-        """Setup Persian fonts"""
+        """Setup Persian fonts with better error handling"""
         try:
-            font_path = os.path.join(settings.BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
-            if os.path.exists(font_path):
-                pdfmetrics.registerFont(TTFont('Vazir', font_path))
-            else:
-                # Fallback to system fonts
+            # Try multiple potential font locations
+            possible_paths = [
+                # Static files locations
+                os.path.join(settings.BASE_DIR, 'static', 'fonts', 'Vazir.ttf'),
+                os.path.join(settings.BASE_DIR, 'staticfiles', 'fonts', 'Vazir.ttf'),
+            ]
+
+            # Add STATIC_ROOT if it exists
+            if hasattr(settings, 'STATIC_ROOT') and settings.STATIC_ROOT:
+                possible_paths.append(os.path.join(settings.STATIC_ROOT, 'fonts', 'Vazir.ttf'))
+
+            # Add STATICFILES_DIRS if it exists
+            if hasattr(settings, 'STATICFILES_DIRS') and settings.STATICFILES_DIRS:
+                for static_dir in settings.STATICFILES_DIRS:
+                    possible_paths.append(os.path.join(static_dir, 'fonts', 'Vazir.ttf'))
+
+            font_registered = False
+            for font_path in possible_paths:
+                if os.path.exists(font_path):
+                    try:
+                        # Check if font is already registered
+                        if 'Vazir' not in pdfmetrics.getRegisteredFontNames():
+                            pdfmetrics.registerFont(TTFont('Vazir', font_path))
+                        self.persian_font = 'Vazir'
+                        font_registered = True
+                        print(f"✅ Font registered successfully: {font_path}")
+                        break
+                    except Exception as e:
+                        print(f"❌ Failed to register font {font_path}: {str(e)}")
+                        continue
+
+            if not font_registered:
+                print("⚠️ Vazir font not found, using Helvetica as fallback")
+                print(f"Searched paths: {possible_paths}")
                 self.persian_font = 'Helvetica'
+
         except Exception as e:
-            print(f"Font setup error: {e}")
+            print(f"❌ Font setup error: {str(e)}")
             self.persian_font = 'Helvetica'
 
     def reshape_persian_text(self, text):
-        """Handle Persian text shaping and direction"""
+        """Reshape Persian text for proper display"""
         if not text:
             return ""
         try:
-            reshaped_text = arabic_reshaper.reshape(str(text))
-            return get_display(reshaped_text)
-        except:
+            text_str = str(text)
+            if any('\u0600' <= char <= '\u06FF' for char in text_str):
+                reshaped_text = arabic_reshaper.reshape(text_str)
+                return get_display(reshaped_text)
+            else:
+                return text_str
+        except Exception as e:
+            print(f"❌ Text reshaping error: {str(e)}")
             return str(text)
 
     def format_persian_number(self, number):
         """Convert English numbers to Persian"""
-        if number is None:
-            return ""
-
-        english_to_persian = {
-            '0': '۰', '1': '۱', '2': '۲', '3': '۳', '4': '۴',
-            '5': '۵', '6': '۶', '7': '۷', '8': '۸', '9': '۹'
-        }
-
-        result = str(number)
-        for eng, per in english_to_persian.items():
-            result = result.replace(eng, per)
-        return result
-
-    def get_business_info(self):
-        """Get business information from settings"""
-        return {
-            'name': getattr(settings, 'BUSINESS_NAME', 'شرکت دستیخت مادر بزرگ'),
-            'national_id': getattr(settings, 'BUSINESS_NATIONAL_ID', ''),
-            'economic_id': getattr(settings, 'BUSINESS_ECONOMIC_ID', ''),
-            'address': getattr(settings, 'BUSINESS_ADDRESS', ''),
-            'phone': getattr(settings, 'BUSINESS_PHONE', ''),
-            'postal_code': getattr(settings, 'BUSINESS_POSTAL_CODE', ''),
-        }
-
-    def create_styled_table(self, data, col_widths, header_row=True):
-        """Create a styled table"""
-        table = Table(data, colWidths=col_widths)
-
-        style_commands = [
-            ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('PADDING', (0, 0), (-1, -1), 6),
-        ]
-
-        if header_row:
-            style_commands.extend([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ])
-
-        table.setStyle(TableStyle(style_commands))
-        return table
-
-    def generate_official_invoice(self):
-        """Generate official invoice with all required fields"""
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=2 * cm,
-            leftMargin=2 * cm,
-            topMargin=2 * cm,
-            bottomMargin=2 * cm,
-            title=f"Official-Invoice-{self.invoice.invoice_number}"
-        )
-
-        elements = []
-        business_info = self.get_business_info()
-
-        # Title
-        title_style = ParagraphStyle(
-            'InvoiceTitle',
-            fontName=self.persian_font,
-            fontSize=20,
-            alignment=1,  # Center
-            textColor=colors.darkred,
-            spaceAfter=20,
-            spaceBefore=10
-        )
-
-        invoice_type = "فاکتور رسمی"
-        title_text = f"{invoice_type} شماره {self.format_persian_number(self.invoice.invoice_number)}"
-        elements.append(Paragraph(self.reshape_persian_text(title_text), title_style))
-
-        # Section header style
-        section_style = ParagraphStyle(
-            'SectionHeader',
-            fontName=self.persian_font,
-            fontSize=14,
-            textColor=colors.darkblue,
-            alignment=2,  # Right align
-            spaceAfter=10,
-            spaceBefore=15
-        )
-
-        # Vendor Information (مشخصات فروشنده)
-        elements.append(Paragraph(self.reshape_persian_text("مشخصات فروشنده"), section_style))
-
-        vendor_data = [
-            [self.reshape_persian_text("نام فروشنده:"), self.reshape_persian_text(business_info['name'])],
-            [self.reshape_persian_text("شناسه ملی:"), self.format_persian_number(business_info['national_id'])],
-            [self.reshape_persian_text("شناسه اقتصادی:"), self.format_persian_number(business_info['economic_id'])],
-            [self.reshape_persian_text("آدرس:"), self.reshape_persian_text(business_info['address'])],
-            [self.reshape_persian_text("شماره تماس:"), self.format_persian_number(business_info['phone'])],
-            [self.reshape_persian_text("کد پستی:"), self.format_persian_number(business_info['postal_code'])],
-        ]
-
-        vendor_table = self.create_styled_table(vendor_data, [4 * cm, 10 * cm], header_row=False)
-        elements.append(vendor_table)
-        elements.append(Spacer(1, 15))
-
-        # Customer Information (مشخصات خریدار)
-        elements.append(Paragraph(self.reshape_persian_text("مشخصات خریدار"), section_style))
-
-        customer = self.order.customer
-        customer_data = [
-            [self.reshape_persian_text("نام خریدار:"), self.reshape_persian_text(customer.name or "نامشخص")],
-            [self.reshape_persian_text("شناسه ملی:"), self.format_persian_number(customer.national_id or "ندارد")],
-            [self.reshape_persian_text("شناسه اقتصادی:"), self.format_persian_number(customer.economic_id or "ندارد")],
-            [self.reshape_persian_text("آدرس کامل:"), self.reshape_persian_text(customer.complete_address or "ندارد")],
-            [self.reshape_persian_text("شماره تماس:"), self.format_persian_number(customer.phone or "ندارد")],
-            [self.reshape_persian_text("کد پستی:"), self.format_persian_number(customer.postal_code or "ندارد")],
-            [self.reshape_persian_text("شرکت:"), self.reshape_persian_text(customer.company_name or "شخصی")],
-        ]
-
-        customer_table = self.create_styled_table(customer_data, [4 * cm, 10 * cm], header_row=False)
-        elements.append(customer_table)
-        elements.append(Spacer(1, 20))
-
-        # Invoice Details
-        self._add_invoice_details(elements, section_style)
-
-        # Items Table
-        self._add_items_table(elements, section_style)
-
-        # Totals and signature
-        self._add_totals_and_signature(elements)
-
-        doc.build(elements)
-        return buffer
-
-    def generate_unofficial_invoice(self):
-        """Generate unofficial invoice with minimal fields"""
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=2 * cm,
-            leftMargin=2 * cm,
-            topMargin=2 * cm,
-            bottomMargin=2 * cm,
-            title=f"Unofficial-Invoice-{self.invoice.invoice_number}"
-        )
-
-        elements = []
-        business_info = self.get_business_info()
-
-        # Title
-        title_style = ParagraphStyle(
-            'InvoiceTitle',
-            fontName=self.persian_font,
-            fontSize=20,
-            alignment=1,  # Center
-            textColor=colors.darkblue,
-            spaceAfter=20,
-            spaceBefore=10
-        )
-
-        invoice_type = "فاکتور غیررسمی"
-        title_text = f"{invoice_type} شماره {self.format_persian_number(self.invoice.invoice_number)}"
-        elements.append(Paragraph(self.reshape_persian_text(title_text), title_style))
-
-        # Section header style
-        section_style = ParagraphStyle(
-            'SectionHeader',
-            fontName=self.persian_font,
-            fontSize=14,
-            textColor=colors.darkblue,
-            alignment=2,  # Right align
-            spaceAfter=10,
-            spaceBefore=15
-        )
-
-        # Simple vendor info
-        elements.append(Paragraph(self.reshape_persian_text("فروشنده"), section_style))
-        vendor_simple = [
-            [self.reshape_persian_text("نام فروشنده:"), self.reshape_persian_text(business_info['name'])],
-        ]
-        vendor_table = self.create_styled_table(vendor_simple, [4 * cm, 10 * cm], header_row=False)
-        elements.append(vendor_table)
-        elements.append(Spacer(1, 15))
-
-        # Simple customer info
-        elements.append(Paragraph(self.reshape_persian_text("خریدار"), section_style))
-        customer = self.order.customer
-        customer_simple = [
-            [self.reshape_persian_text("نام خریدار:"), self.reshape_persian_text(customer.name or "نامشخص")],
-        ]
-        customer_table = self.create_styled_table(customer_simple, [4 * cm, 10 * cm], header_row=False)
-        elements.append(customer_table)
-        elements.append(Spacer(1, 15))
-
-        # Date
-        elements.append(Paragraph(self.reshape_persian_text("تاریخ"), section_style))
         try:
-            issue_date = self.invoice.issued_at.strftime('%Y/%m/%d')
-        except:
-            issue_date = "نامشخص"
+            persian_digits = '۰۱۲۳۴۵۶۷۸۹'
+            english_digits = '0123456789'
 
-        date_data = [
-            [self.reshape_persian_text("تاریخ صدور:"), self.format_persian_number(issue_date)],
-        ]
-        date_table = self.create_styled_table(date_data, [4 * cm, 10 * cm], header_row=False)
-        elements.append(date_table)
-        elements.append(Spacer(1, 20))
+            number_str = str(number)
+            for eng, per in zip(english_digits, persian_digits):
+                number_str = number_str.replace(eng, per)
+            return number_str
+        except Exception:
+            return str(number)
 
-        # Items Table (simplified)
-        self._add_items_table(elements, section_style, simplified=True)
-
-        # Simple totals and signature
-        self._add_totals_and_signature(elements, simplified=True)
-
-        doc.build(elements)
-        return buffer
-
-    def _add_invoice_details(self, elements, section_style):
-        """Add invoice details section"""
-        elements.append(Paragraph(self.reshape_persian_text("جزئیات فاکتور"), section_style))
-
-        try:
-            issue_date = self.invoice.issued_at.strftime('%Y/%m/%d')
-            order_date = self.order.created_at.strftime('%Y/%m/%d')
-            due_date = self.invoice.due_date.strftime('%Y/%m/%d') if self.invoice.due_date else "تعیین نشده"
-        except:
-            issue_date = order_date = due_date = "نامشخص"
-
-        invoice_type = "فاکتور رسمی" if self.order.business_invoice_type == 'official' else "فاکتور غیررسمی"
-
-        details_data = [
-            [self.reshape_persian_text("شماره سفارش:"), self.format_persian_number(str(self.order.id))],
-            [self.reshape_persian_text("تاریخ سفارش:"), self.format_persian_number(order_date)],
-            [self.reshape_persian_text("تاریخ صدور:"), self.format_persian_number(issue_date)],
-            [self.reshape_persian_text("نوع فاکتور:"), self.reshape_persian_text(invoice_type)],
-            [self.reshape_persian_text("سررسید:"),
-             self.format_persian_number(due_date) if due_date != "تعیین نشده" else self.reshape_persian_text(due_date)]
-        ]
-
-        details_table = self.create_styled_table(details_data, [4 * cm, 10 * cm], header_row=False)
-        elements.append(details_table)
-        elements.append(Spacer(1, 20))
-
-    def _add_items_table(self, elements, section_style, simplified=False):
-        """Add items table"""
-        elements.append(Paragraph(self.reshape_persian_text("اجناس خریداری شده"), section_style))
-
-        if simplified:
-            # Simplified table for unofficial invoice
-            items_data = [[
-                self.reshape_persian_text("ردیف"),
-                self.reshape_persian_text("نام محصول"),
-                self.reshape_persian_text("تعداد"),
-                self.reshape_persian_text("مبلغ کل")
-            ]]
-            col_widths = [2 * cm, 6 * cm, 3 * cm, 3 * cm]
-        else:
-            # Full table for official invoice
-            items_data = [[
-                self.reshape_persian_text("ردیف"),
-                self.reshape_persian_text("نام محصول"),
-                self.reshape_persian_text("تعداد"),
-                self.reshape_persian_text("قیمت واحد"),
-                self.reshape_persian_text("مبلغ کل")
-            ]]
-            col_widths = [2 * cm, 5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm]
-
-        # Add items
-        for index, item in enumerate(self.order.items.all(), 1):
-            if simplified:
-                row = [
-                    self.format_persian_number(str(index)),
-                    self.reshape_persian_text(item.product.name),
-                    self.format_persian_number(str(item.final_quantity or item.requested_quantity)),
-                    self.format_persian_number(f"{item.total_price:,.0f}")
-                ]
-            else:
-                row = [
-                    self.format_persian_number(str(index)),
-                    self.reshape_persian_text(item.product.name),
-                    self.format_persian_number(str(item.final_quantity or item.requested_quantity)),
-                    self.format_persian_number(f"{item.quoted_unit_price:,.0f}"),
-                    self.format_persian_number(f"{item.total_price:,.0f}")
-                ]
-            items_data.append(row)
-
-        items_table = self.create_styled_table(items_data, col_widths)
-        elements.append(items_table)
-        elements.append(Spacer(1, 20))
-
-    def _add_totals_and_signature(self, elements, simplified=False):
-        """Add totals and signature section"""
-        # Totals
-        total_style = ParagraphStyle(
-            'TotalStyle',
-            fontName=self.persian_font,
-            fontSize=14,
-            alignment=2,
-            spaceAfter=10
-        )
-
-        total_amount = self.invoice.payable_amount or self.invoice.total_amount
-        total_text = f"مجموع کل: {self.format_persian_number(f'{total_amount:,.0f}')} تومان"
-        elements.append(Paragraph(self.reshape_persian_text(total_text), total_style))
-
-        if not simplified and self.invoice.tax_amount > 0:
-            tax_text = f"مالیات: {self.format_persian_number(f'{self.invoice.tax_amount:,.0f}')} تومان"
-            elements.append(Paragraph(self.reshape_persian_text(tax_text), total_style))
-
-        elements.append(Spacer(1, 30))
-
-        # Signature section
-        signature_data = [
-            [self.reshape_persian_text("مهر و امضای فروشنده"), self.reshape_persian_text("مهر و امضای خریدار")],
-            ["", ""],  # Empty row for signatures
-            ["", ""]  # Empty row for signatures
-        ]
-
-        signature_table = self.create_styled_table(signature_data, [7 * cm, 7 * cm], header_row=True)
-        elements.append(signature_table)
+    def create_paragraph_style(self, name, **kwargs):
+        """Create paragraph style with safe defaults"""
+        defaults = {
+            'fontName': self.persian_font,
+            'fontSize': 12,
+            'alignment': 2,  # Right align for Persian
+        }
+        defaults.update(kwargs)
+        return ParagraphStyle(name, **defaults)
 
     def generate_pdf(self):
-        """Generate PDF based on invoice type"""
-        if self.order.business_invoice_type == 'official':
-            return self.generate_official_invoice()
-        else:
-            return self.generate_unofficial_invoice()
+        """Generate PDF with comprehensive error handling"""
+        try:
+            is_official = self.order.business_invoice_type == 'official'
+
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                rightMargin=2 * cm,
+                leftMargin=2 * cm,
+                topMargin=2 * cm,
+                bottomMargin=2 * cm,
+                title=f"Invoice-{self.invoice.invoice_number}"
+            )
+
+            elements = []
+
+            # Company Header
+            self.add_company_header(elements)
+
+            # Invoice Header
+            self.add_invoice_header(elements, is_official)
+
+            # Customer Info
+            self.add_customer_info(elements, is_official)
+
+            # Items Table
+            self.add_items_table(elements, is_official)
+
+            # Totals
+            self.add_totals_section(elements, is_official)
+
+            # Signature
+            self.add_signature_section(elements)
+
+            doc.build(elements)
+            return buffer
+
+        except Exception as e:
+            print(f"❌ PDF generation error: {str(e)}")
+            return self.create_fallback_pdf()
+
+    def add_company_header(self, elements):
+        """Add company header"""
+        try:
+            # Title
+            title_style = self.create_paragraph_style(
+                'CompanyTitle',
+                fontSize=18,
+                alignment=1,  # Center
+                textColor=colors.darkblue,
+                spaceAfter=10
+            )
+
+            elements.append(Paragraph("GOLMOHAMMADI TRADING CO.",
+                                      ParagraphStyle('EnglishTitle', fontName='Helvetica-Bold', fontSize=16,
+                                                     alignment=1)))
+            elements.append(
+                Paragraph(self.reshape_persian_text("شرکت تولیدی بازرگانی گلمحمدی کیان تجارت پویا کویر"), title_style))
+            elements.append(Spacer(1, 20))
+
+            # Contact info table
+            contact_data = [
+                [self.reshape_persian_text("آدرس: یزد، بلوار مدرس شماره ۱۳"),
+                 "Address: No 13, Modares Blvd, Yazd, Iran"],
+                [self.reshape_persian_text("تلفن: ۰۳۵-۹۱۰۰۷۷۱۱"), "Tel: 035-91007711"],
+                [self.reshape_persian_text("موبایل: ۰۹۹۸۹۱۲۱۲۱۰۷۷۰"), "Mobile: 0098 9121210770"],
+                ["Email: gtc1210770@gmail.com", "Web: https://gtc.market/home_ktc"]
+            ]
+
+            contact_table = Table(contact_data, colWidths=[8 * cm, 8 * cm])
+            contact_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('PADDING', (0, 0), (-1, -1), 4),
+            ]))
+
+            elements.append(contact_table)
+            elements.append(Spacer(1, 20))
+
+        except Exception as e:
+            print(f"❌ Company header error: {str(e)}")
+            elements.append(Paragraph("GOLMOHAMMADI TRADING CO.",
+                                      ParagraphStyle('Fallback', fontName='Helvetica-Bold', fontSize=16, alignment=1)))
+
+    def add_invoice_header(self, elements, is_official):
+        """Add invoice header"""
+        try:
+            invoice_type = "صورتحساب فروش کالا و خدمات" if is_official else "فاکتور فروش"
+
+            title_style = self.create_paragraph_style(
+                'InvoiceType',
+                fontSize=16,
+                alignment=1,
+                textColor=colors.darkred if is_official else colors.darkblue,
+                spaceAfter=15
+            )
+
+            elements.append(Paragraph(self.reshape_persian_text(invoice_type), title_style))
+
+            # Invoice details table
+            info_data = [
+                [
+                    self.reshape_persian_text("شماره فاکتور:"),
+                    self.format_persian_number(str(self.invoice.invoice_number)),
+                    self.reshape_persian_text("تاریخ:"),
+                    self.reshape_persian_text(self.invoice.issued_at.strftime('%Y/%m/%d'))
+                ]
+            ]
+
+            info_table = Table(info_data, colWidths=[3 * cm, 4 * cm, 2 * cm, 3 * cm])
+            info_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('PADDING', (0, 0), (-1, -1), 6),
+            ]))
+
+            elements.append(info_table)
+            elements.append(Spacer(1, 15))
+
+        except Exception as e:
+            print(f"❌ Invoice header error: {str(e)}")
+
+    def add_customer_info(self, elements, is_official):
+        """Add customer information"""
+        try:
+            if is_official:
+                # Detailed customer info for official invoice
+                customer_data = [
+                    [self.reshape_persian_text("مشخصات خریدار"), ""],
+                    [self.reshape_persian_text("نام:"), self.reshape_persian_text(self.order.customer.name)],
+                    [self.reshape_persian_text("کد ملی:"),
+                     self.reshape_persian_text(getattr(self.order.customer, 'national_id', '') or 'ثبت نشده')],
+                    [self.reshape_persian_text("آدرس:"),
+                     self.reshape_persian_text(getattr(self.order.customer, 'complete_address', '') or 'ثبت نشده')],
+                ]
+            else:
+                # Simple customer info for unofficial invoice
+                customer_data = [
+                    [self.reshape_persian_text("خریدار:"), self.reshape_persian_text(self.order.customer.name)]
+                ]
+
+            customer_table = Table(customer_data, colWidths=[4 * cm, 10 * cm])
+            customer_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('BACKGROUND', (0, 0), (1, 0), colors.lightgrey),
+            ]))
+
+            elements.append(customer_table)
+            elements.append(Spacer(1, 15))
+
+        except Exception as e:
+            print(f"❌ Customer info error: {str(e)}")
+
+    def add_items_table(self, elements, is_official):
+        """Add items table"""
+        try:
+            if is_official:
+                headers = [
+                    self.reshape_persian_text("کد کالا"),
+                    self.reshape_persian_text("شرح کالا"),
+                    self.reshape_persian_text("تعداد"),
+                    self.reshape_persian_text("قیمت واحد"),
+                    self.reshape_persian_text("مبلغ کل"),
+                    self.reshape_persian_text("مالیات"),
+                    self.reshape_persian_text("جمع با مالیات")
+                ]
+                col_widths = [2 * cm, 4 * cm, 1.5 * cm, 2 * cm, 2 * cm, 1.5 * cm, 2 * cm]
+            else:
+                headers = [
+                    self.reshape_persian_text("کالا"),
+                    self.reshape_persian_text("تعداد"),
+                    self.reshape_persian_text("قیمت واحد"),
+                    self.reshape_persian_text("مبلغ کل")
+                ]
+                col_widths = [6 * cm, 2 * cm, 3 * cm, 3 * cm]
+
+            items_data = [headers]
+
+            for item in self.order.items.all():
+                unit_price = item.quoted_unit_price or 0
+                quantity = item.final_quantity or item.requested_quantity
+                total_price = unit_price * quantity
+
+                if is_official:
+                    tax_amount = total_price * 0.09
+                    total_with_tax = total_price + tax_amount
+
+                    row = [
+                        self.reshape_persian_text(str(getattr(item.product, 'sku', '') or item.product.id)),
+                        self.reshape_persian_text(item.product.name),
+                        self.format_persian_number(str(quantity)),
+                        self.format_persian_number(f"{unit_price:,.0f}"),
+                        self.format_persian_number(f"{total_price:,.0f}"),
+                        self.format_persian_number(f"{tax_amount:,.0f}"),
+                        self.format_persian_number(f"{total_with_tax:,.0f}")
+                    ]
+                else:
+                    row = [
+                        self.reshape_persian_text(item.product.name),
+                        self.format_persian_number(str(quantity)),
+                        self.format_persian_number(f"{unit_price:,.0f}"),
+                        self.format_persian_number(f"{total_price:,.0f}")
+                    ]
+
+                items_data.append(row)
+
+            items_table = Table(items_data, colWidths=col_widths)
+            items_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('PADDING', (0, 0), (-1, -1), 4),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ]))
+
+            elements.append(items_table)
+            elements.append(Spacer(1, 15))
+
+        except Exception as e:
+            print(f"❌ Items table error: {str(e)}")
+
+    def add_totals_section(self, elements, is_official):
+        """Add totals section"""
+        try:
+            total_style = self.create_paragraph_style(
+                'Total',
+                fontSize=14,
+                alignment=2,
+                spaceAfter=10
+            )
+
+            total_amount = self.invoice.total_amount
+            elements.append(Paragraph(
+                self.reshape_persian_text(f"مجموع: {self.format_persian_number(f'{total_amount:,.0f}')} تومان"),
+                total_style
+            ))
+
+            if is_official:
+                tax_amount = total_amount * 0.09
+                total_with_tax = total_amount + tax_amount
+
+                elements.append(Paragraph(
+                    self.reshape_persian_text(f"مالیات (۹٪): {self.format_persian_number(f'{tax_amount:,.0f}')} تومان"),
+                    total_style
+                ))
+                elements.append(Paragraph(
+                    self.reshape_persian_text(
+                        f"مبلغ نهایی: {self.format_persian_number(f'{total_with_tax:,.0f}')} تومان"),
+                    total_style
+                ))
+
+            elements.append(Spacer(1, 20))
+
+        except Exception as e:
+            print(f"❌ Totals error: {str(e)}")
+
+    def add_signature_section(self, elements):
+        """Add signature section"""
+        try:
+            signature_data = [
+                [self.reshape_persian_text("مهر و امضای فروشنده"), self.reshape_persian_text("مهر و امضای خریدار")],
+                ["", ""],
+                ["", ""]
+            ]
+
+            signature_table = Table(signature_data, colWidths=[8 * cm, 8 * cm], rowHeights=[1 * cm, 2 * cm, 1 * cm])
+            signature_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), self.persian_font),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ]))
+
+            elements.append(signature_table)
+
+        except Exception as e:
+            print(f"❌ Signature error: {str(e)}")
+
+    def create_fallback_pdf(self):
+        """Create simple fallback PDF if main generation fails"""
+        buffer = BytesIO()
+        doc = SimpleDocDocument(buffer, pagesize=A4)
+
+        elements = [
+            Paragraph(f"Invoice #{self.invoice.invoice_number}",
+                      ParagraphStyle('Fallback', fontName='Helvetica-Bold', fontSize=16)),
+            Spacer(1, 20),
+            Paragraph(f"Customer: {self.order.customer.name}",
+                      ParagraphStyle('Normal', fontName='Helvetica', fontSize=12)),
+            Paragraph(f"Total: {self.invoice.total_amount:,.0f} Toman",
+                      ParagraphStyle('Normal', fontName='Helvetica', fontSize=12)),
+        ]
+
+        doc.build(elements)
+        return buffer
 
     def get_http_response(self):
         """Return HTTP response with PDF"""
         buffer = self.generate_pdf()
 
-        filename = f"invoice_{self.invoice.invoice_number}_{self.order.business_invoice_type}.pdf"
+        invoice_type = "official" if self.order.business_invoice_type == 'official' else "unofficial"
+        filename = f"invoice_{self.invoice.invoice_number}_{invoice_type}.pdf"
 
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'

@@ -13,7 +13,7 @@ import logging
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
-from ..models import OrderPaymentReceipt # Import the receipt model
+from ..models import OrderPaymentReceipt, Invoice  # Import the receipt model
 
 from ..serializers import (
     OrderCreateSerializer,
@@ -27,6 +27,7 @@ from ..serializers.dealers import (
 )
 from ..models import Order, OrderItem, Customer, OrderLog
 from ..services.notification_service import NotificationService
+from ..services.simple_persian_pdf import EnhancedPersianInvoicePDFGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -1093,29 +1094,94 @@ class OrderViewSet(viewsets.ModelViewSet):
         })
 
 # ADD THIS NEW ACTION
-@action(detail=False, methods=['get'])
-def filter_by_business_type(self, request):
-    """Filter orders by business invoice type"""
-    business_type = request.query_params.get('type')
-    if business_type not in ['official', 'unofficial']:
-        return Response({
+    @action(detail=False, methods=['get'])
+    def filter_by_business_type(self, request):
+        """Filter orders by business invoice type"""
+        business_type = request.query_params.get('type')
+        if business_type not in ['official', 'unofficial']:
+            return Response({
             'error': 'Invalid type. Use "official" or "unofficial"'
-        }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-    queryset = self.get_queryset().filter(business_invoice_type=business_type)
-    page = self.paginate_queryset(queryset)
+        queryset = self.get_queryset().filter(business_invoice_type=business_type)
+        page = self.paginate_queryset(queryset)
 
-    if page is not None:
-        serializer = self.get_serializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-    serializer = self.get_serializer(queryset, many=True)
-    return Response({
-        'count': queryset.count(),
-        'business_invoice_type': business_type,
-        'results': serializer.data
-    })
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'count': queryset.count(),
+            'business_invoice_type': business_type,
+            'results': serializer.data
+        })
 
+    @action(detail=True, methods=['get'], url_path='download-invoice')
+    def download_invoice(self, request, pk=None):
+        """Download invoice PDF"""
+        order = self.get_object()
+
+        if order.status != 'completed':
+            return Response({
+                'error': 'فقط برای سفارشات تکمیل شده امکان دانلود فاکتور وجود دارد'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Get or create invoice
+            invoice, created = Invoice.objects.get_or_create(
+                order=order,
+                defaults={
+                    'invoice_type': 'final_invoice',
+                    'total_amount': order.quoted_total,
+                    'issued_at': timezone.now(),
+                    'invoice_number': order.generate_invoice_number() if not hasattr(order,
+                                                                                     'invoice') else order.invoice.invoice_number
+                }
+            )
+
+            if created:
+                invoice.calculate_payable_amount()
+                invoice.save()
+
+            # Generate PDF using enhanced generator
+            return invoice.download_pdf_response()
+
+        except Exception as e:
+            logger.error(f"Error generating invoice PDF for order {order.id}: {str(e)}")
+            return Response({
+                'error': 'خطا در تولید فاکتور'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['get'], url_path='preview-invoice')
+    def preview_invoice(self, request, pk=None):
+        """Preview invoice without downloading"""
+        order = self.get_object()
+
+        try:
+            # Create temporary invoice for preview
+            temp_invoice = Invoice(
+                order=order,
+                invoice_type='preview',
+                total_amount=order.quoted_total or 0,
+                issued_at=timezone.now(),
+                invoice_number=f"PREVIEW_{order.id}"
+            )
+            temp_invoice.calculate_payable_amount()
+
+            # Generate PDF
+            generator = EnhancedPersianInvoicePDFGenerator(temp_invoice)
+            buffer = generator.generate_pdf()
+
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="preview_invoice_{order.id}.pdf"'
+            return response
+
+        except Exception as e:
+            logger.error(f"Error previewing invoice for order {order.id}: {str(e)}")
+            return Response({
+                'error': 'خطا در نمایش پیش‌نمایش فاکتور'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderItemViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]

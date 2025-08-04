@@ -85,6 +85,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static'),
+]
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024  # 15MB
@@ -316,3 +319,32 @@ BUSINESS_ECONOMIC_ID = config('BUSINESS_ECONOMIC_ID', default='')
 BUSINESS_ADDRESS = config('BUSINESS_ADDRESS', default='')
 BUSINESS_PHONE = config('BUSINESS_PHONE', default='')
 BUSINESS_POSTAL_CODE = config('BUSINESS_POSTAL_CODE', default='')
+
+# Company Information for Invoices
+BUSINESS_NAME = "شرکت تولیدی بازرگانی گلمحمدی کیان تجارت پویا کویر"
+BUSINESS_NAME_EN = "GOLMOHAMMADI TRADING CO."
+BUSINESS_SUBTITLE = "KIYAN TEJARAT POOYA KAVIR COMPANY"
+BUSINESS_SERVICES = "EXPORT - IMPORT"
+
+# Company Contact Information
+BUSINESS_ADDRESS = "یزد، بلوار مدرس شماره ۱۳"
+BUSINESS_ADDRESS_EN = "No 13, Modares Blvd, Yazd, Iran"
+BUSINESS_PHONE = "۰۳۵-۹۱۰۰۷۷۱۱"
+BUSINESS_PHONE_EN = "035-91007711"
+BUSINESS_MOBILE = "۰۹۹۸۹۱۲۱۲۱۰۷۷۰"
+BUSINESS_MOBILE_EN = "0098 9121210770"
+BUSINESS_WEBSITE = "https://gtc.market"
+BUSINESS_EMAIL = "gtc1210770@gmail.com"
+
+# Official Invoice Information
+BUSINESS_ECONOMIC_ID = "411559956544"
+BUSINESS_NATIONAL_ID = "14006982584"
+BUSINESS_POSTAL_CODE = "8916845846"
+
+# PDF Generation Settings
+INVOICE_FONT_PATH = os.path.join(BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
+INVOICE_LOGO_PATH = os.path.join(BASE_DIR, 'static', 'images', 'company_logo.png')
+
+# Tax Settings
+DEFAULT_TAX_RATE = 0.09
+INCLUDE_TAX_IN_OFFICIAL_INVOICES = True
