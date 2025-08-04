@@ -106,7 +106,7 @@ const DealerDashboard = () => {
         navigate('/');
     };
 
-    // Fixed filter function with new statuses
+    // filter function with new statuses
     const getFilteredOrders = () => {
         switch (activeTab) {
             case 'active':

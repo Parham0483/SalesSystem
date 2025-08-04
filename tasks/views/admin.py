@@ -1,4 +1,3 @@
-# tasks/views/admin.py - Complete Admin API
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,6 +18,10 @@ from ..serializers.orders import OrderDetailSerializer
 from ..serializers.dealers import DealerSerializer, DealerCommissionSerializer
 
 from ..services.notification_service import NotificationService
+import logging
+from ..serializers.customers import CustomerInvoiceInfoSerializer
+
+logger = logging.getLogger(__name__)
 
 class AdminDashboardViewSet(viewsets.ViewSet):
     """Admin dashboard statistics and overview"""
@@ -314,6 +317,39 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['GET'], url_path='customer-info')
+    def get_customer_info(self, request, pk=None):
+        """Get customer invoice info for an order"""
+        try:
+            order = self.get_object()
+            customer = order.customer
+
+            from ..serializers.customers import CustomerInvoiceInfoSerializer
+            serializer = CustomerInvoiceInfoSerializer(customer)
+
+            return Response({
+                'customer_info': serializer.data,
+                'has_complete_info': self._check_complete_info(customer),
+                'missing_fields': self._get_missing_fields(customer)
+            })
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching customer info for admin: {str(e)}")
+            return Response(
+                {'error': 'خطا در دریافت اطلاعات مشتری'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def _check_complete_info(self, customer):
+        """Check if customer info is complete for invoice"""
+        required_fields = ['national_id', 'complete_address', 'postal_code']
+        return all(getattr(customer, field, None) for field in required_fields)
+
+    def _get_missing_fields(self, customer):
+        """Get list of missing required fields"""
+        required_fields = ['national_id', 'complete_address', 'postal_code']
+        return [field for field in required_fields if not getattr(customer, field, None)]
 
     @action(detail=False, methods=['GET'], url_path='export')
     def export_orders(self, request):

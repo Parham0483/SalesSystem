@@ -31,7 +31,6 @@ const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
             });
 
             if (response.status === 200) {
-                // Display Persian success message
                 alert(response.data.message);
                 if (onUpdate) {
                     onUpdate();
@@ -39,8 +38,6 @@ const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
             }
         } catch (err) {
             console.error('❌ Error updating business invoice type:', err);
-
-            // Show Persian error message from backend if available
             const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی نوع فاکتور';
             alert(errorMessage);
         } finally {
@@ -74,7 +71,7 @@ const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
                             backgroundColor: '#fff',
                             marginTop: '0.5rem',
                             width: '100%',
-                            fontFamily: 'IRANSans, Tahoma, Arial, sans-serif' // Persian font support
+                            fontFamily: 'IRANSans, Tahoma, Arial, sans-serif'
                         }}
                     >
                         <option value="unofficial">فاکتور غیررسمی (بدون مالیات)</option>
@@ -134,8 +131,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [completing, setCompleting] = useState(false);
+    const [customerInfo, setCustomerInfo] = useState(null);
+    const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
     const tableRef = useRef(null);
-
 
     useEffect(() => {
         if (orderId) {
@@ -144,17 +142,22 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     }, [orderId]);
 
     useEffect(() => {
-        // Apply smart font sizing after component mounts
         if (order?.items && tableRef.current) {
             applySmartTextSizing();
         }
     }, [order]);
 
+
+    useEffect(() => {
+        if (order?.customer) {
+            fetchCustomerInfo();
+        }
+    }, [order?.customer]);
+
     const fetchOrder = async () => {
         setLoading(true);
         try {
             const res = await API.get(`/orders/${orderId}/`);
-
             setOrder(res.data);
             setItems(res.data.items || []);
             setAdminComment(res.data.admin_comment || '');
@@ -165,6 +168,46 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setLoading(false);
         }
     };
+
+    const fetchCustomerInfo = async () => {
+        if (!order?.customer) return;
+
+        setLoadingCustomerInfo(true);
+        try {
+            const response = await API.get(`/admin/orders/${orderId}/customer-info/`);
+            if (response.status === 200) {
+                setCustomerInfo(response.data);
+                console.log('✅ Customer info fetched for admin:', response.data);
+            }
+        } catch (err) {
+            console.error('❌ Error fetching customer info for admin:', err);
+            if (order.customer_info) {
+                setCustomerInfo({ customer_info: order.customer_info });
+            }
+        } finally {
+            setLoadingCustomerInfo(false);
+        }
+    };
+
+    const getCustomerInvoiceInfo = () => {
+        if (!customerInfo && !order?.customer) return null;
+
+        const info = customerInfo?.customer_info || order.customer || {};
+        return {
+            name: info.name || '',
+            phone: info.phone || '',
+            company_name: info.company_name || '',
+            national_id: info.national_id || '',
+            economic_id: info.economic_id || '',
+            postal_code: info.postal_code || '',
+            complete_address: info.complete_address || ''
+        };
+    };
+
+    const isOfficialInvoice = () => {
+        return order?.business_invoice_type === 'official';
+    };
+
 
     const handleCompleteOrder = async () => {
         if (!window.confirm('آیا مطمئن هستید که می‌خواهید این سفارش را تکمیل کنید؟')) {
@@ -180,12 +223,10 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             if (response.status === 200) {
                 alert('سفارش با موفقیت تکمیل شد!');
 
-                // Update parent component
                 if (onOrderUpdated) {
                     onOrderUpdated();
                 }
 
-                // Refresh order data
                 fetchOrder();
             }
 
@@ -208,11 +249,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
             if (response.status === 200) {
                 alert('نماینده با موفقیت حذف شد!');
-
-                // Refresh order data
                 fetchOrder();
 
-                // Update parent component
                 if (onOrderUpdated) {
                     onOrderUpdated();
                 }
@@ -225,7 +263,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // Smart text sizing function
     const applySmartTextSizing = () => {
         const productCells = tableRef.current?.querySelectorAll('.admin-table-cell:nth-child(1)');
         const notesCells = tableRef.current?.querySelectorAll('.admin-table-cell:nth-child(3)');
@@ -251,16 +288,12 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         });
     };
 
-
-
-    // FIXED: Actually submit pricing to the API
     const handlePricingSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError('');
 
         try {
-            // Validate items
             const hasValidItems = items.some(item =>
                 item.quoted_unit_price && item.quoted_unit_price > 0 &&
                 item.final_quantity && item.final_quantity > 0
@@ -272,7 +305,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            // Prepare data for submission
             const submissionData = {
                 admin_comment: adminComment,
                 items: items.map(item => ({
@@ -285,21 +317,16 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
             console.log('📤 Submitting pricing data:', submissionData);
 
-            // FIXED: Actually make the API call
             const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
 
             if (response.status === 200) {
                 console.log('✅ Pricing submission successful:', response.data);
-
-                // Show success message
                 alert('قیمت‌گذاری با موفقیت ثبت شد!');
 
-                // Update parent component first
                 if (onOrderUpdated) {
                     onOrderUpdated();
                 }
 
-                // Then refresh order data
                 fetchOrder();
             }
 
@@ -351,7 +378,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         };
         return statusMap[status] || status;
     };
-
 
     const formatQuantity = (quantity) => {
         if (!quantity || quantity === 0) return '';
@@ -467,12 +493,13 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="admin-info-value">{formatStatus(order.status)}</span>
                     </div>
 
+                    {/* Invoice Type Display */}
                     <div className="admin-info-item">
                         <span className="admin-info-label">نوع فاکتور</span>
                         <span className="admin-info-value">
-                        {order.business_invoice_type_display ||
-                            (order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی')}
-                    </span>
+                            {order.business_invoice_type_display ||
+                                (order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی')}
+                        </span>
                     </div>
 
                     <div className="admin-info-item">
@@ -488,8 +515,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         </span>
                     </div>
 
-
-
                     {/* Show completion info for completed orders */}
                     {order.status === 'completed' && order.completion_date && (
                         <div className="admin-info-item">
@@ -501,6 +526,99 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     )}
                 </div>
             </NeoBrutalistCard>
+
+            {/* Customer Invoice Information (for official invoices) */}
+            {isOfficialInvoice() && (
+                <NeoBrutalistCard className="admin-customer-invoice-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">اطلاعات فاکتور رسمی مشتری</h2>
+                    </div>
+                    <div className="admin-customer-invoice-content">
+                        {loadingCustomerInfo ? (
+                            <div style={{ textAlign: 'center', padding: '2rem' }}>
+                                <span>🔄 در حال بارگیری اطلاعات مشتری...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="admin-customer-info-grid">
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">کد ملی:</span>
+                                        <span className="admin-info-value">
+                                            {getCustomerInvoiceInfo()?.national_id ||
+                                                <span className="missing-info">ثبت نشده</span>}
+                                        </span>
+                                    </div>
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">شناسه اقتصادی:</span>
+                                        <span className="admin-info-value">
+                                            {getCustomerInvoiceInfo()?.economic_id ||
+                                                <span className="missing-info">ثبت نشده</span>}
+                                        </span>
+                                    </div>
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">کد پستی:</span>
+                                        <span className="admin-info-value">
+                                            {getCustomerInvoiceInfo()?.postal_code ||
+                                                <span className="missing-info">ثبت نشده</span>}
+                                        </span>
+                                    </div>
+                                    <div className="admin-info-item">
+                                        <span className="admin-info-label">نام شرکت:</span>
+                                        <span className="admin-info-value">
+                                            {getCustomerInvoiceInfo()?.company_name ||
+                                                <span className="missing-info">شخصی</span>}
+                                        </span>
+                                    </div>
+                                    <div className="admin-info-item full-width">
+                                        <span className="admin-info-label">آدرس کامل:</span>
+                                        <span className="admin-info-value">
+                                            {getCustomerInvoiceInfo()?.complete_address ||
+                                                <span className="missing-info">ثبت نشده</span>}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/*Invoice readiness indicator */}
+                                <div className="invoice-readiness" style={{ marginTop: '1rem' }}>
+                                    {(() => {
+                                        const info = getCustomerInvoiceInfo();
+                                        const isComplete = info?.national_id && info?.complete_address && info?.postal_code;
+                                        return isComplete ? (
+                                            <div className="readiness-indicator ready" style={{
+                                                color: '#059669',
+                                                backgroundColor: '#d1fae5',
+                                                padding: '0.75rem',
+                                                borderRadius: '6px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                border: '2px solid #059669'
+                                            }}>
+                                                <span>✅</span>
+                                                <span>اطلاعات فاکتور رسمی کامل است</span>
+                                            </div>
+                                        ) : (
+                                            <div className="readiness-indicator incomplete" style={{
+                                                color: '#d97706',
+                                                backgroundColor: '#fef3c7',
+                                                padding: '0.75rem',
+                                                borderRadius: '6px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                border: '2px solid #f59e0b'
+                                            }}>
+                                                <span>⚠️</span>
+                                                <span>برخی اطلاعات فاکتور رسمی ناقص است</span>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </NeoBrutalistCard>
+            )}
 
             <BusinessInvoiceTypeUpdate
                 order={order}

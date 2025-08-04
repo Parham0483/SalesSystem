@@ -4,6 +4,7 @@ import NeoBrutalistCard from './NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from './NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
+import CustomerInfoManagement from './CustomerInfoManagement';
 import '../styles/component/CustomerComponent/OrderDetail.css';
 
 const AuthenticatedImage = ({ receipt, onError }) => {
@@ -33,8 +34,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                 throw new Error('Download URL not available');
             }
 
-            console.log('🔍 Loading image from download URL:', imageUrl);
-
             const response = await fetch(imageUrl, {
                 method: 'GET',
                 headers: {
@@ -49,7 +48,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
             const blob = await response.blob();
             const objectUrl = URL.createObjectURL(blob);
             setImageData(objectUrl);
-            console.log('✅ Image loaded successfully from download URL');
 
         } catch (err) {
             console.error('❌ Error loading authenticated image:', err);
@@ -62,7 +60,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
         }
     };
 
-    // Cleanup object URL on unmount or when imageData changes
     useEffect(() => {
         return () => {
             if (imageData) {
@@ -165,8 +162,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [isEditing, setIsEditing] = useState(false);
-    const [editedComment, setEditedComment] = useState('');
     const [approvalDecision, setApprovalDecision] = useState('');
     const [rejectionReason, setRejectionReason] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -174,6 +169,11 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
     // Payment upload modal state
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+    // Customer info management
+    const [isCustomerInfoModalOpen, setIsCustomerInfoModalOpen] = useState(false);
+    const [customerInfo, setCustomerInfo] = useState(null);
+    const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
 
     // Payment receipts management
     const [paymentReceipts, setPaymentReceipts] = useState([]);
@@ -185,6 +185,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     useEffect(() => {
         if (orderId) {
             fetchOrder();
+            fetchCustomerInfo();
         }
     }, [orderId]);
 
@@ -206,12 +207,29 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         try {
             const response = await API.get(`/orders/${orderId}/`);
             setOrder(response.data);
-            setEditedComment(response.data.customer_comment || '');
+            console.log('✅ Order fetched:', response.data);
         } catch (err) {
             console.error('❌ Error fetching order:', err);
             setError('خطا در بارگیری جزئیات سفارش');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Fetch customer info separately
+    const fetchCustomerInfo = async () => {
+        setLoadingCustomerInfo(true);
+        try {
+            const response = await API.get('/customers/invoice-info/');
+            if (response.status === 200) {
+                setCustomerInfo(response.data.customer_info);
+                console.log('✅ Customer info fetched:', response.data.customer_info);
+            }
+        } catch (err) {
+            console.error('❌ Error fetching customer info:', err);
+            // Don't show error for missing customer info
+        } finally {
+            setLoadingCustomerInfo(false);
         }
     };
 
@@ -335,10 +353,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // UPDATED: Receipt preview renderer with AuthenticatedImage
     const renderReceiptPreview = (receipt, index) => {
-        console.log('🔍 Rendering receipt:', receipt);
-
         if (receipt.file_type === 'image') {
             return (
                 <div className="neo-receipt-preview" key={`image-${receipt.id}`}>
@@ -351,7 +366,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             );
         } else {
-            // PDF preview
             return (
                 <div className="neo-receipt-preview" key={`pdf-${receipt.id}`}>
                     <div className="neo-pdf-preview">
@@ -463,6 +477,12 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         setError('');
     };
 
+    const handleCustomerInfoUpdate = (updatedInfo) => {
+        setCustomerInfo(updatedInfo);
+        // Also refresh order to get updated customer info
+        fetchOrder();
+    };
+
     const getStatusColor = (status) => {
         switch (status) {
             case 'pending_pricing': return 'yellow-400';
@@ -519,6 +539,19 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    // Function to determine if order needs official invoice info
+    const isOfficialInvoice = () => {
+        return order?.business_invoice_type === 'official';
+    };
+
+    //Check if customer info is complete
+    const isCustomerInfoComplete = () => {
+        if (!customerInfo || !isOfficialInvoice()) return true;
+
+        const required = ['national_id', 'complete_address', 'postal_code'];
+        return required.every(field => customerInfo[field] && customerInfo[field].trim() !== '');
     };
 
     if (loading) {
@@ -580,7 +613,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
-            {/* Order Information - keeping existing structure for brevity */}
+            {/* Order Information */}
             <NeoBrutalistCard className="neo-order-info-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اطلاعات سفارش</h2>
@@ -600,6 +633,18 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="neo-info-label">وضعیت</span>
                         <span className="neo-info-value">{formatStatus(order.status)}</span>
                     </div>
+
+                    {/* Invoice Type Display */}
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">نوع فاکتور</span>
+                        <span className={`neo-info-value ${isOfficialInvoice() ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
+                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور غیررسمی')}
+                            {isOfficialInvoice() && (
+                                <span className="neo-tax-badge">دارای مالیات</span>
+                            )}
+                        </span>
+                    </div>
+
                     {order.quoted_total > 0 && (
                         <div className="neo-info-item">
                             <span className="neo-info-label">مبلغ کل</span>
@@ -611,16 +656,88 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
-            <div className="neo-info-item">
-                <span className="neo-info-label">نوع فاکتور:</span>
-                <span className={`neo-info-value ${order.business_invoice_type === 'official' ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
-                    {order.business_invoice_type_display}
-                    {order.is_official_invoice && (
-                        <span className="neo-tax-badge">دارای مالیات</span>
-                    )}
-                </span>
-            </div>
+            {/*Customer Invoice Information (for official invoices) */}
+            {isOfficialInvoice() && (
+                <NeoBrutalistCard className="neo-customer-invoice-info-card">
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">اطلاعات فاکتور رسمی</h2>
+                        <NeoBrutalistButton
+                            text="ویرایش اطلاعات"
+                            color="blue-400"
+                            textColor="white"
+                            onClick={() => setIsCustomerInfoModalOpen(true)}
+                            className="edit-customer-info-btn"
+                        />
+                    </div>
+                    <div className="neo-customer-invoice-info">
+                        {loadingCustomerInfo ? (
+                            <div style={{ textAlign: 'center', padding: '2rem' }}>
+                                <span>🔄 در حال بارگیری اطلاعات...</span>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="neo-info-grid">
+                                    <div className="neo-info-item">
+                                        <span className="neo-info-label">شناسه ملی:</span>
+                                        <span className="neo-info-value">{customerInfo?.national_id || 'ثبت نشده'}</span>
+                                    </div>
+                                    <div className="neo-info-item">
+                                        <span className="neo-info-label">شناسه اقتصادی:</span>
+                                        <span className="neo-info-value">{customerInfo?.economic_id || 'ثبت نشده'}</span>
+                                    </div>
+                                    <div className="neo-info-item">
+                                        <span className="neo-info-label">کد پستی:</span>
+                                        <span className="neo-info-value">{customerInfo?.postal_code || 'ثبت نشده'}</span>
+                                    </div>
+                                    <div className="neo-info-item">
+                                        <span className="neo-info-label">نام شرکت:</span>
+                                        <span className="neo-info-value">{customerInfo?.company_name || 'شخصی'}</span>
+                                    </div>
+                                    <div className="neo-info-item full-width">
+                                        <span className="neo-info-label">آدرس کامل:</span>
+                                        <span className="neo-info-value">{customerInfo?.complete_address || 'ثبت نشده'}</span>
+                                    </div>
+                                </div>
 
+                                {/*Invoice readiness indicator */}
+                                <div className="invoice-readiness" style={{ marginTop: '1rem' }}>
+                                    {isCustomerInfoComplete() ? (
+                                        <div className="readiness-indicator ready" style={{
+                                            color: '#059669',
+                                            backgroundColor: '#d1fae5',
+                                            padding: '0.75rem',
+                                            borderRadius: '6px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            border: '2px solid #059669'
+                                        }}>
+                                            <span>✅</span>
+                                            <span>اطلاعات فاکتور رسمی کامل است</span>
+                                        </div>
+                                    ) : (
+                                        <div className="readiness-indicator incomplete" style={{
+                                            color: '#d97706',
+                                            backgroundColor: '#fef3c7',
+                                            padding: '0.75rem',
+                                            borderRadius: '6px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            border: '2px solid #f59e0b'
+                                        }}>
+                                            <span>⚠️</span>
+                                            <span>برخی اطلاعات فاکتور رسمی ناقص است</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Payment receipts section */}
             {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">
@@ -937,6 +1054,14 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 <div className="neo-status-message neo-success">
                     <span>سفارش شما با موفقیت تکمیل شد! از خرید شما متشکریم.</span>
                 </div>
+            )}
+
+            {/* Customer Info Management Modal */}
+            {isCustomerInfoModalOpen && (
+                <CustomerInfoManagement
+                    onClose={() => setIsCustomerInfoModalOpen(false)}
+                    onUpdate={handleCustomerInfoUpdate}
+                />
             )}
 
             {/* Payment Upload Modal */}

@@ -984,6 +984,26 @@
     }
 }
 
+.neo-customer-invoice-info-card {
+    border-left: 4px solid #3b82f6;
+}
+
+.neo-customer-invoice-info .neo-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.neo-customer-invoice-info .neo-info-item.full-width {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+    .neo-customer-invoice-info .neo-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Responsive design for receipts */
 @media (max-width: 768px) {
     .neo-receipts-grid {

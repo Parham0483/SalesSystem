@@ -717,3 +717,19 @@
     letter-spacing: 0.5px;
     word-spacing: 2px;
 }
+
+.admin-customer-invoice-card {
+    border-left: 4px solid #3b82f6;
+    background: #f8fafc;
+}
+
+.admin-customer-invoice-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.admin-customer-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
