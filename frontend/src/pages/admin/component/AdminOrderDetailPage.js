@@ -7,6 +7,125 @@ import NeoBrutalistButton from '../../../component/NeoBrutalist/NeoBrutalistButt
 import NeoBrutalistInput from '../../../component/NeoBrutalist/NeoBrutalistInput';
 import '../../../styles/component/AdminComponent/AdminOrderDetail.css';
 
+const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
+    const [newInvoiceType, setNewInvoiceType] = useState(order.business_invoice_type);
+    const [updating, setUpdating] = useState(false);
+
+    const getInvoiceTypeDisplay = (type) => {
+        const typeMap = {
+            'official': 'فاکتور رسمی',
+            'unofficial': 'فاکتور غیررسمی'
+        };
+        return typeMap[type] || type;
+    };
+
+    const handleUpdateInvoiceType = async () => {
+        if (newInvoiceType === order.business_invoice_type) {
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            const response = await API.post(`/orders/${order.id}/update-business-invoice-type/`, {
+                business_invoice_type: newInvoiceType
+            });
+
+            if (response.status === 200) {
+                // Display Persian success message
+                alert(response.data.message);
+                if (onUpdate) {
+                    onUpdate();
+                }
+            }
+        } catch (err) {
+            console.error('❌ Error updating business invoice type:', err);
+
+            // Show Persian error message from backend if available
+            const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی نوع فاکتور';
+            alert(errorMessage);
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    return (
+        <NeoBrutalistCard className="admin-invoice-type-card" style={{ borderLeft: '6px solid #f59e0b' }}>
+            <div className="admin-card-header">
+                <h2 className="admin-card-title">تغییر نوع فاکتور</h2>
+            </div>
+            <div className="invoice-type-update-content">
+                <div className="current-type" style={{ marginBottom: '1rem' }}>
+                    <strong>نوع فعلی:</strong>
+                    <span className={`invoice-type-display ${order.business_invoice_type}`}>
+                        {order.business_invoice_type_display || getInvoiceTypeDisplay(order.business_invoice_type)}
+                    </span>
+                </div>
+
+                <div className="invoice-type-selector" style={{ marginBottom: '1rem' }}>
+                    <label>انتخاب نوع جدید:</label>
+                    <select
+                        value={newInvoiceType}
+                        onChange={(e) => setNewInvoiceType(e.target.value)}
+                        disabled={updating || order.status === 'completed'}
+                        style={{
+                            padding: '0.5rem',
+                            border: '2px solid #000',
+                            borderRadius: '4px',
+                            backgroundColor: '#fff',
+                            marginTop: '0.5rem',
+                            width: '100%',
+                            fontFamily: 'IRANSans, Tahoma, Arial, sans-serif' // Persian font support
+                        }}
+                    >
+                        <option value="unofficial">فاکتور غیررسمی (بدون مالیات)</option>
+                        <option value="official">فاکتور رسمی (با مالیات)</option>
+                    </select>
+                </div>
+
+                {newInvoiceType !== order.business_invoice_type && (
+                    <div className="update-actions">
+                        <NeoBrutalistButton
+                            text={updating ? "در حال به‌روزرسانی..." : "به‌روزرسانی نوع فاکتور"}
+                            color="yellow-400"
+                            textColor="black"
+                            onClick={handleUpdateInvoiceType}
+                            disabled={updating}
+                        />
+                    </div>
+                )}
+
+                {order.status === 'completed' && (
+                    <div style={{
+                        backgroundColor: '#fef3c7',
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.875rem',
+                        color: '#92400e',
+                        marginTop: '0.5rem',
+                        fontFamily: 'IRANSans, Tahoma, Arial, sans-serif'
+                    }}>
+                        ⚠️ امکان تغییر نوع فاکتور برای سفارشات تکمیل شده وجود ندارد
+                    </div>
+                )}
+
+                {order.status === 'cancelled' && (
+                    <div style={{
+                        backgroundColor: '#fee2e2',
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        fontSize: '0.875rem',
+                        color: '#991b1b',
+                        marginTop: '0.5rem',
+                        fontFamily: 'IRANSans, Tahoma, Arial, sans-serif'
+                    }}>
+                        ⚠️ امکان تغییر نوع فاکتور برای سفارشات لغو شده وجود ندارد
+                    </div>
+                )}
+            </div>
+        </NeoBrutalistCard>
+    );
+};
+
 const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
     const [items, setItems] = useState([]);
@@ -16,6 +135,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [submitting, setSubmitting] = useState(false);
     const [completing, setCompleting] = useState(false);
     const tableRef = useRef(null);
+
 
     useEffect(() => {
         if (orderId) {
@@ -130,6 +250,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
         });
     };
+
+
 
     // FIXED: Actually submit pricing to the API
     const handlePricingSubmit = async (e) => {
@@ -344,6 +466,15 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="admin-info-label">وضعیت</span>
                         <span className="admin-info-value">{formatStatus(order.status)}</span>
                     </div>
+
+                    <div className="admin-info-item">
+                        <span className="admin-info-label">نوع فاکتور</span>
+                        <span className="admin-info-value">
+                        {order.business_invoice_type_display ||
+                            (order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی')}
+                    </span>
+                    </div>
+
                     <div className="admin-info-item">
                         <span className="admin-info-label">توضیحات مشتری</span>
                         <span className="admin-info-value">
@@ -357,6 +488,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         </span>
                     </div>
 
+
+
                     {/* Show completion info for completed orders */}
                     {order.status === 'completed' && order.completion_date && (
                         <div className="admin-info-item">
@@ -368,6 +501,11 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     )}
                 </div>
             </NeoBrutalistCard>
+
+            <BusinessInvoiceTypeUpdate
+                order={order}
+                onUpdate={fetchOrder}
+            />
 
             {/* Dealer Assignment Section */}
             <NeoBrutalistCard className="admin-dealer-assignment-card">

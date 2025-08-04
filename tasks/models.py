@@ -6,7 +6,7 @@ from django.db import models
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
-from .services.simple_persian_pdf import SimpleInvoicePDFGenerator
+from .services.simple_persian_pdf import  FixedPersianInvoicePDFGenerator
 import uuid
 from django.conf import settings
 import os
@@ -371,6 +371,7 @@ STATUS_CHOICES = [
 ]
 
 
+
 class Order(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_pricing')
@@ -380,6 +381,11 @@ class Order(models.Model):
 
     customer_comment = models.TextField(blank=True, null=True, help_text="Customer's initial request/comments")
     admin_comment = models.TextField(blank=True, null=True, help_text="Admin's pricing notes")
+
+    BUSINESS_INVOICE_TYPE_CHOICES = [
+        ('official', 'فاکتور رسمی'),
+        ('unofficial', 'فاکتور غیررسمی'),
+    ]
 
     # Dealer assignment
     assigned_dealer = models.ForeignKey(
@@ -431,6 +437,13 @@ class Order(models.Model):
     # Customer response
     customer_response_date = models.DateTimeField(blank=True, null=True)
     customer_rejection_reason = models.TextField(blank=True, null=True)
+
+    business_invoice_type = models.CharField(
+        max_length=15,
+        choices=BUSINESS_INVOICE_TYPE_CHOICES,
+        default='unofficial',
+        help_text="Business type of invoice - Official (with tax) or Unofficial (without tax)"
+    )
 
     #Payment Fields
     payment_receipt = models.ImageField(
@@ -639,6 +652,11 @@ class Order(models.Model):
         db_table = 'orders'
         ordering = ['-created_at']
 
+    @property
+    def is_official_invoice(self):
+        """Check if this order requires official invoice"""
+        return self.business_invoice_type == 'official'
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
@@ -722,7 +740,7 @@ class Invoice(models.Model):
             self.save()
 
     def generate_pdf(self):
-        generator = SimpleInvoicePDFGenerator(self)
+        generator = FixedPersianInvoicePDFGenerator(self)
         pdf_buffer = generator.generate_pdf()
 
         filename = f"invoice_{self.invoice_number}.pdf"
@@ -730,7 +748,7 @@ class Invoice(models.Model):
         return self.pdf_file
 
     def download_pdf_response(self):
-        generator = SimpleInvoicePDFGenerator(self)
+        generator = FixedPersianInvoicePDFGenerator(self)
         return generator.get_http_response()
 
     def save(self, *args, **kwargs):

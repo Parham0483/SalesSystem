@@ -106,6 +106,25 @@
     color: #059669;
     direction: rtl;
 }
+.neo-official-invoice {
+    color: #dc2626 !important;
+    font-weight: bold;
+}
+
+.neo-unofficial-invoice {
+    color: #059669 !important;
+    font-weight: bold;
+}
+
+.neo-tax-badge {
+    background-color: #fef3c7;
+    color: #92400e;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin-left: 8px;
+    border: 1px solid #f59e0b;
+}
 
 /* Comment Section */
 .neo-comment-section {

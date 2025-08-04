@@ -8,6 +8,7 @@ from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer
 class OrderItemSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
 
+
     class Meta:
         model = OrderItem
         fields = ['product', 'requested_quantity', 'customer_notes']
@@ -16,20 +17,30 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
 
+    # ADD THIS FIELD
+    business_invoice_type = serializers.ChoiceField(
+        choices=Order.BUSINESS_INVOICE_TYPE_CHOICES,
+        default='unofficial',
+        help_text="Business type of invoice - Official or Unofficial"
+    )
+
     class Meta:
         model = Order
-        fields = ['id', 'customer_comment', 'items']
+        fields = ['id', 'customer_comment', 'business_invoice_type', 'items']  # Added business_invoice_type
         read_only_fields = ['id']
 
     def create(self, validated_data):
         request = self.context.get('request')
         customer = request.user
         items_data = validated_data.pop('items')
+        # Use pop() to remove business_invoice_type from validated_data
+        business_invoice_type = validated_data.pop('business_invoice_type', 'unofficial')
 
         with transaction.atomic():
             order = Order.objects.create(
                 customer=customer,
-                **validated_data
+                business_invoice_type=business_invoice_type,
+                **validated_data  # Now business_invoice_type is not in validated_data anymore
             )
             for item_data in items_data:
                 OrderItem.objects.create(
@@ -39,7 +50,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                     customer_notes=item_data.get('customer_notes', '')
                 )
         return order
-
 
 class OrderItemAdminUpdateSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -63,10 +73,15 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
     admin_comment = serializers.CharField(allow_blank=True, required=False)
     pricing_date = serializers.DateTimeField(read_only=True)
     quoted_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    business_invoice_type = serializers.ChoiceField(
+        choices=Order.BUSINESS_INVOICE_TYPE_CHOICES,
+        required=False,
+        help_text="Business type of invoice - Official or Unofficial"
+    )
 
     class Meta:
         model = Order
-        fields = ['id', 'status', 'admin_comment', 'pricing_date', 'quoted_total', 'items']
+        fields = ['id', 'status', 'admin_comment', 'pricing_date', 'quoted_total', 'items', 'business_invoice_type']
         read_only_fields = ['id', 'status', 'pricing_date', 'quoted_total']
 
     def validate_items(self, value):
@@ -95,6 +110,12 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', [])
         admin_comment = validated_data.get('admin_comment')
+
+        if 'business_invoice_type' in validated_data:
+            old_type = instance.get_business_invoice_type_display()
+            instance.business_invoice_type = validated_data['business_invoice_type']
+            new_type = instance.get_business_invoice_type_display()
+            print(f"Order #{instance.id} business invoice type: {old_type} → {new_type}")
 
         # CRITICAL: Check that order is in correct status for pricing
         if instance.status != 'pending_pricing':
@@ -205,6 +226,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemAdminUpdateSerializer(many=True)
 
     # Invoice fields
+    business_invoice_type_display = serializers.CharField(source='get_business_invoice_type_display', read_only=True)
+    is_official_invoice = serializers.BooleanField(read_only=True)
     invoice_id = serializers.SerializerMethodField()
     invoice_number = serializers.SerializerMethodField()
     invoice_date = serializers.SerializerMethodField()
@@ -232,6 +255,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
 
             # Invoice
             'invoice_id', 'invoice_number', 'invoice_date',
+            'business_invoice_type', 'business_invoice_type_display', 'is_official_invoice',
 
             # Payment fields
             'payment_receipt', 'payment_receipt_uploaded_at',

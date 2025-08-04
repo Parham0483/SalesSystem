@@ -87,6 +87,9 @@ class OrderViewSet(viewsets.ModelViewSet):
             if serializer.is_valid():
                 order = serializer.save()
 
+                logger.info(
+                    f"📋 Order #{order.id} created - Business Invoice Type: {order.get_business_invoice_type_display()}")
+
                 email_sent = False
                 sms_sent = False
 
@@ -100,41 +103,36 @@ class OrderViewSet(viewsets.ModelViewSet):
                 # 2. Send customer SMS notification (SINGLE CALL)
                 try:
                     if order.customer.phone:
+                        invoice_type_persian = "رسمی" if order.business_invoice_type == 'official' else "غیررسمی"
                         customer_sms = f"""سلام {order.customer.name}
-    سفارش #{order.id} با موفقیت ثبت شد.
-    منتظر قیمت‌گذاری باشید.
-    کیان تجارت پویا کویر"""
+                سفارش #{order.id} با موفقیت ثبت شد.
+                نوع فاکتور: {invoice_type_persian}
+                منتظر قیمت‌گذاری باشید.
 
-                        sms_sent = NotificationService.send_sms_notification(
-                            phone=order.customer.phone,
-                            message=customer_sms,
-                            order=order,
-                            sms_type='order_submitted'
-                        )
+                شرکت تجاری پارسیان"""
+
+                        sms_sent = NotificationService.send_sms(order.customer.phone, customer_sms)
                         logger.info(f"📱 Customer SMS sent: {sms_sent}")
                 except Exception as e:
                     logger.error(f"❌ Customer SMS failed: {str(e)}")
 
-                return Response({
-                    'message': 'Order created successfully',
-                    'order_id': order.id,
-                    'status': order.status,
+                    # Return response with business invoice type info
+                response_data = serializer.data
+                response_data.update({
                     'notifications': {
                         'admin_email_sent': email_sent,
                         'customer_sms_sent': sms_sent
-                    }
-                }, status=status.HTTP_201_CREATED)
+                    },
+                    'message': f'Order created successfully with {order.get_business_invoice_type_display()}'
+                })
 
-            return Response({
-                'error': 'Invalid data',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(response_data, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
             logger.error(f"❌ Order creation failed: {str(e)}")
-            return Response({
-                'error': f'Order creation failed: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': f'Order creation failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     @action(detail=True, methods=['POST'], url_path='submit_pricing')
@@ -1053,6 +1051,63 @@ class OrderViewSet(viewsets.ModelViewSet):
             'sms_sent': sms_sent,
             'recipient': order.customer.phone
         })
+
+    @action(detail=True, methods=['POST'], url_path='update-business-invoice-type')
+    def update_business_invoice_type(self, request, pk=None):
+        """Allow admin to update business invoice type"""
+        if not request.user.is_staff:
+            return Response({'error': 'فقط مدیر می‌تواند نوع فاکتور را تغییر دهد'}, status=status.HTTP_403_FORBIDDEN)
+
+        order = self.get_object()
+
+        # Check if order can be modified
+        if order.status in ['completed', 'cancelled']:
+            return Response({
+                'error': f' امکان تغییر نوع فاکتور برای سفارشات{order.status} وجود ندارد '
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        business_invoice_type = request.data.get('business_invoice_type')
+        if business_invoice_type not in ['official', 'unofficial']:
+            return Response({
+                'error': 'نوع فاکتور نامعتبر است. باید "official" یا "unofficial" باشد"'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        old_type = order.get_business_invoice_type_display()
+        order.business_invoice_type = business_invoice_type
+        order.save()
+
+        logger.info(
+            f"📋 Order #{order.id} business invoice type: {old_type} → {order.get_business_invoice_type_display()} (by {request.user.name})")
+
+        return Response({
+            'message': f'نوع فاکتور با موفقیت به {order.get_business_invoice_type_display()} تغییر یافت',
+            'business_invoice_type': business_invoice_type,
+            'business_invoice_type_display': order.get_business_invoice_type_display()
+        })
+
+# ADD THIS NEW ACTION
+@action(detail=False, methods=['get'])
+def filter_by_business_type(self, request):
+    """Filter orders by business invoice type"""
+    business_type = request.query_params.get('type')
+    if business_type not in ['official', 'unofficial']:
+        return Response({
+            'error': 'Invalid type. Use "official" or "unofficial"'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    queryset = self.get_queryset().filter(business_invoice_type=business_type)
+    page = self.paginate_queryset(queryset)
+
+    if page is not None:
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    serializer = self.get_serializer(queryset, many=True)
+    return Response({
+        'count': queryset.count(),
+        'business_invoice_type': business_type,
+        'results': serializer.data
+    })
 
 
 class OrderItemViewSet(viewsets.ModelViewSet):

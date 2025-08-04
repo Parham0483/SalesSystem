@@ -611,6 +611,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
+            <div className="neo-info-item">
+                <span className="neo-info-label">نوع فاکتور:</span>
+                <span className={`neo-info-value ${order.business_invoice_type === 'official' ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
+                    {order.business_invoice_type_display}
+                    {order.is_official_invoice && (
+                        <span className="neo-tax-badge">دارای مالیات</span>
+                    )}
+                </span>
+            </div>
+
             {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">

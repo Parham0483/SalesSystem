@@ -13,6 +13,9 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // NEW: Business invoice type state
+    const [businessInvoiceType, setBusinessInvoiceType] = useState('unofficial');
+
     useEffect(() => {
         fetchProducts();
     }, []);
@@ -65,6 +68,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
 
             const orderData = {
                 customer_comment: customerComment,
+                business_invoice_type: businessInvoiceType,
                 items: validItems.map(item => ({
                     product: parseInt(item.product),
                     requested_quantity: parseInt(item.requested_quantity),
@@ -72,14 +76,18 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 }))
             };
 
-            const response = await API.post('/orders/', orderData);
+            console.log('📤 Submitting order with business invoice type:', orderData);
+
+            const response = await API.post('orders/', orderData);
 
             if (response.status === 201) {
+                console.log('✅ Order created successfully:', response.data);
                 if (onOrderCreated) {
                     onOrderCreated();
                 }
             }
         } catch (err) {
+            console.error('❌ Order creation failed:', err);
             setError(err.response?.data?.error || err.message || 'Failed to create order');
         } finally {
             setLoading(false);
@@ -115,8 +123,47 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             )}
 
             <form className="neo-order-form" onSubmit={handleSubmit}>
+                {/* NEW: Business Invoice Type Selection */}
+                <NeoBrutalistCard className="neo-invoice-type-section">
+                    <h3>نوع فاکتور مورد نیاز</h3>
+                    <div className="neo-invoice-type-selection">
+                        <div className="neo-radio-group">
+                            <label className="neo-radio-label">
+                                <input
+                                    type="radio"
+                                    name="business_invoice_type"
+                                    value="unofficial"
+                                    checked={businessInvoiceType === 'unofficial'}
+                                    onChange={(e) => setBusinessInvoiceType(e.target.value)}
+                                    className="neo-radio-input"
+                                />
+                                <span className="neo-radio-text">
+                                    <strong>فاکتور غیررسمی</strong>
+                                    <br />
+                                    <small>بدون مالیات - برای خریدهای شخصی</small>
+                                </span>
+                            </label>
+                            <label className="neo-radio-label">
+                                <input
+                                    type="radio"
+                                    name="business_invoice_type"
+                                    value="official"
+                                    checked={businessInvoiceType === 'official'}
+                                    onChange={(e) => setBusinessInvoiceType(e.target.value)}
+                                    className="neo-radio-input"
+                                />
+                                <span className="neo-radio-text">
+                                    <strong>فاکتور رسمی</strong>
+                                    <br />
+                                    <small>با مالیات - برای ثبت در حسابداری شرکت</small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+
                 <NeoBrutalistCard className="neo-comment-section">
-                    <h3> جزئیات سفارش</h3>
+                    <h3>جزئیات سفارش</h3>
                     <NeoBrutalistInput
                         className="neo-comment-input"
                         type="text"
@@ -146,7 +193,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                                     <h3 className="neo-item-number">Item #{index + 1}</h3>
                                     {orderItems.length > 1 && (
                                         <NeoBrutalistButton
-                                            text="خذف"
+                                            text="حذف"
                                             color="red-400"
                                             textColor="white"
                                             onClick={() => removeOrderItem(index)}
@@ -163,7 +210,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                                             options={productOptions}
                                             value={item.product}
                                             onChange={(value) => updateOrderItem(index, 'product', value)}
-                                            placeholder="...محول مورد نظر را انتخاب کنید"
+                                            placeholder="...محصول مورد نظر را انتخاب کنید"
                                             required
                                         />
                                     </div>
@@ -197,7 +244,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
 
                 <div className="neo-form-actions">
                     <NeoBrutalistButton
-                        text={loading ? "... در حال ایحاد" : "ثبت سفارش"}
+                        text={loading ? "... در حال ایجاد" : "ثبت سفارش"}
                         color="yellow-400"
                         textColor="black"
                         type="submit"

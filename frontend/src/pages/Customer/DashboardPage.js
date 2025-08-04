@@ -60,7 +60,7 @@ const DashboardPage = () => {
             if (activeTab === 'active' && !loading) {
                 fetchOrders();
             }
-        }, 30000);
+        }, 1000000);
 
         return () => clearInterval(interval);
     }, [activeTab, loading]);
@@ -445,7 +445,7 @@ const DashboardPage = () => {
             <div className="orders-grid">
                 {currentOrders.map((order) => (
                     <NeoBrutalistCard
-                        key={`${order.id}-${refreshKey}`} // Add refreshKey to force re-render
+                        key={`${order.id}-${refreshKey}`}
                         className="order-card"
                         onClick={() => setSelectedOrder(order)}
                     >
@@ -463,6 +463,29 @@ const DashboardPage = () => {
                             <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
 
                             {/* Show who priced the order */}
+                            {order.business_invoice_type && (
+                                <div style={{
+                                    backgroundColor: order.business_invoice_type === 'official' ? '#fef2f2' : '#f0fdf4',
+                                    border: `1px solid ${order.business_invoice_type === 'official' ? '#dc2626' : '#16a34a'}`,
+                                    padding: '0.5rem',
+                                    marginTop: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    borderRadius: '4px'
+                                }}>
+                                    <div style={{
+                                        color: order.business_invoice_type === 'official' ? '#dc2626' : '#16a34a',
+                                        fontWeight: 'bold'
+                                    }}>
+                                        📋 نوع فاکتور: {order.business_invoice_type_display}
+                                    </div>
+                                    {order.is_official_invoice && (
+                                        <div style={{ fontSize: '0.8rem', color: '#dc2626' }}>
+                                            دارای مالیات و اعتبار حسابداری
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {order.priced_by_name && (
                                 <div style={{
                                     backgroundColor: '#e0f2fe',
@@ -507,21 +530,6 @@ const DashboardPage = () => {
                                         </div>
                                     )}
                                 </div>
-                            )}
-
-                            <p style={{ marginTop: '0.5rem' }}>
-                                <strong>جمع:</strong> {order.quoted_total ? `${order.quoted_total.toLocaleString('fa-IR')} ریال` : 'در انتظار قیمت‌گذاری'}
-                            </p>
-
-                            {order.customer_comment && (
-                                <p><strong>توضیحات:</strong> {order.customer_comment.substring(0, 50)}...</p>
-                            )}
-
-                            {/* Show completion date for completed orders */}
-                            {order.status === 'completed' && order.completion_date && (
-                                <p style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                                    <strong>تاریخ تکمیل:</strong> {new Date(order.completion_date).toLocaleDateString('fa-IR')}
-                                </p>
                             )}
 
                             {/* Show payment upload status */}
@@ -569,6 +577,23 @@ const DashboardPage = () => {
                                     </div>
                                 </div>
                             )}
+
+                            <p style={{ marginTop: '0.5rem' }}>
+                                <strong>جمع:</strong> {order.quoted_total ? `${order.quoted_total.toLocaleString('fa-IR')} ریال` : 'در انتظار قیمت‌گذاری'}
+                            </p>
+
+                            {order.customer_comment && (
+                                <p><strong>توضیحات:</strong> {order.customer_comment.substring(0, 50)}...</p>
+                            )}
+
+                            {/* Show completion date for completed orders */}
+                            {order.status === 'completed' && order.completion_date && (
+                                <p style={{ color: '#16a34a', fontWeight: 'bold' }}>
+                                    <strong>تاریخ تکمیل:</strong> {new Date(order.completion_date).toLocaleDateString('fa-IR')}
+                                </p>
+                            )}
+
+
                         </div>
 
                         <div className="order-card-footer">
