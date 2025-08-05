@@ -132,14 +132,6 @@ class CustomerSerializer(serializers.ModelSerializer):
 
         return data
 
-    def create(self, validated_data):
-        password = validated_data.pop('password')
-        customer = Customer.objects.create_user(
-            password=password,
-            **validated_data
-        )
-        return customer
-
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
         for attr, value in validated_data.items():

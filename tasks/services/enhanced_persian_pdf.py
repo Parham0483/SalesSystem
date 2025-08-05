@@ -1,4 +1,4 @@
-# tasks/services/enhanced_persian_pdf.py - Corrected version
+# tasks/services/enhanced_persian_pdf.py - Fixed font handling version
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -19,41 +19,87 @@ class EnhancedPersianInvoicePDFGenerator:
         self.invoice = invoice
         self.order = invoice.order
         self.customer = self.order.customer
-        self.persian_font = 'Vazir'
+        self.persian_font = 'Helvetica'  # Default fallback
 
-        # Register Persian font
+        # Register Persian font with better error handling
+        self.setup_font()
+
+    def setup_font(self):
+        """Setup Persian font with fallback"""
         try:
-            font_path = os.path.join(settings.BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
-            if os.path.exists(font_path):
-                pdfmetrics.registerFont(TTFont('Vazir', font_path))
+            # Try multiple possible paths
+            possible_paths = [
+                os.path.join(settings.BASE_DIR, 'static', 'fonts', 'Vazir.ttf'),
+                os.path.join(settings.BASE_DIR, 'staticfiles', 'fonts', 'Vazir.ttf'),
+                os.path.join(settings.STATIC_ROOT or '', 'fonts', 'Vazir.ttf') if hasattr(settings,
+                                                                                          'STATIC_ROOT') else None,
+            ]
+
+            font_registered = False
+            for font_path in possible_paths:
+                if font_path and os.path.exists(font_path):
+                    try:
+                        # Register the font family
+                        pdfmetrics.registerFont(TTFont('Vazir', font_path))
+
+                        # Register font family with variants
+                        from reportlab.pdfbase import pdfutils
+                        from reportlab.lib.fonts import addMapping
+
+                        # Add font mappings for different styles
+                        addMapping('Vazir', 0, 0, 'Vazir')  # normal
+                        addMapping('Vazir', 0, 1, 'Vazir')  # italic (use same font)
+                        addMapping('Vazir', 1, 0, 'Vazir')  # bold (use same font)
+                        addMapping('Vazir', 1, 1, 'Vazir')  # bold italic (use same font)
+
+                        self.persian_font = 'Vazir'
+                        font_registered = True
+                        print(f"✅ Font registered successfully from: {font_path}")
+                        break
+                    except Exception as e:
+                        print(f"❌ Failed to register font from {font_path}: {e}")
+                        continue
+
+            if not font_registered:
+                print("❌ Persian font not found, using Helvetica fallback")
+                self.persian_font = 'Helvetica'
+
         except Exception as e:
-            print(f"Font registration error: {e}")
+            print(f"❌ Font setup error: {e}")
             self.persian_font = 'Helvetica'
 
     def reshape_persian_text(self, text):
-        """Reshape Persian/Arabic text for proper display"""
+        """Reshape Persian/Arabic text for proper display with error handling"""
         if not text:
             return ""
         try:
-            reshaped = arabic_reshaper.reshape(str(text))
-            return get_display(reshaped)
-        except:
+            # Only reshape if we have Persian/Arabic characters
+            if any('\u0600' <= char <= '\u06FF' or '\u0750' <= char <= '\u077F' for char in str(text)):
+                reshaped = arabic_reshaper.reshape(str(text))
+                return get_display(reshaped)
+            else:
+                return str(text)
+        except Exception as e:
+            print(f"❌ Text reshaping error: {e}")
             return str(text)
 
     def format_persian_number(self, number):
         """Convert English numbers to Persian"""
         if not number:
             return ""
-        persian_digits = '۰۱۲۳۴۵۶۷۸۹'
-        english_digits = '0123456789'
+        try:
+            persian_digits = '۰۱۲۳۴۵۶۷۸۹'
+            english_digits = '0123456789'
 
-        number_str = str(number)
-        for i, digit in enumerate(english_digits):
-            number_str = number_str.replace(digit, persian_digits[i])
-        return number_str
+            number_str = str(number)
+            for i, digit in enumerate(english_digits):
+                number_str = number_str.replace(digit, persian_digits[i])
+            return number_str
+        except:
+            return str(number)
 
     def create_paragraph_style(self, name, **kwargs):
-        """Create paragraph style with safe defaults"""
+        """Create paragraph style with safe defaults and font fallback"""
         defaults = {
             'fontName': self.persian_font,
             'fontSize': 11,
@@ -63,17 +109,22 @@ class EnhancedPersianInvoicePDFGenerator:
             'spaceAfter': 6,
         }
         defaults.update(kwargs)
+
+        # Handle font fallback for special cases
+        if self.persian_font == 'Helvetica' and 'backColor' in defaults:
+            # For Helvetica, we need to be more careful with styling
+            defaults.pop('backColor', None)
+
         return ParagraphStyle(name, **defaults)
 
     def add_letterhead(self, elements):
         """Add company letterhead with logo and official information"""
         try:
-            # Company Logo and Header
+            # Simple header without complex styling for now
             header_data = [
                 [
-                    # Logo placeholder - you would add actual logo here
                     "LOGO",
-                    self.reshape_persian_text(f"{settings.BUSINESS_NAME}\n{settings.BUSINESS_NAME_EN}")
+                    f"{settings.BUSINESS_NAME_EN}\n{self.reshape_persian_text(settings.BUSINESS_NAME)}"
                 ]
             ]
 
@@ -92,24 +143,24 @@ class EnhancedPersianInvoicePDFGenerator:
 
             elements.append(header_table)
 
-            # Services banner
-            services_style = self.create_paragraph_style(
-                'Services',
-                fontSize=12,
-                alignment=1,
-                textColor=colors.white,
-                backColor=colors.orange,
-                spaceAfter=10
-            )
-
-            services_text = f"{settings.BUSINESS_SERVICES} - {settings.BUSINESS_SUBTITLE}"
-            elements.append(Paragraph(self.reshape_persian_text(services_text), services_style))
+            # Services banner - simplified
+            services_data = [[f"{settings.BUSINESS_SERVICES} - {settings.BUSINESS_SUBTITLE}"]]
+            services_table = Table(services_data, colWidths=[16 * cm])
+            services_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (0, 0), 12),
+                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                ('BACKGROUND', (0, 0), (0, 0), colors.orange),
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+                ('PADDING', (0, 0), (-1, -1), 6),
+            ]))
+            elements.append(services_table)
 
             # Contact Information
             contact_data = [
                 [
                     self.reshape_persian_text(f"آدرس: {settings.BUSINESS_ADDRESS}"),
-                    self.reshape_persian_text(f"Address: {settings.BUSINESS_ADDRESS_EN}")
+                    f"Address: {settings.BUSINESS_ADDRESS_EN}"
                 ],
                 [
                     self.reshape_persian_text(f"تلفن: {settings.BUSINESS_PHONE}"),
@@ -140,23 +191,35 @@ class EnhancedPersianInvoicePDFGenerator:
 
         except Exception as e:
             print(f"❌ Letterhead error: {str(e)}")
+            # Add simple fallback letterhead
+            fallback_data = [["GOLMOHAMMADI TRADING CO."]]
+            fallback_table = Table(fallback_data, colWidths=[16 * cm])
+            fallback_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (0, 0), 18),
+                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                ('PADDING', (0, 0), (-1, -1), 10),
+            ]))
+            elements.append(fallback_table)
+            elements.append(Spacer(1, 20))
 
     def add_invoice_header(self, elements, is_official):
-        """Add invoice header"""
+        """Add invoice header with error handling"""
         try:
             # Invoice title
             invoice_type = "صورتحساب فروش کالا و خدمات" if is_official else "فاکتور فروش"
 
-            title_style = self.create_paragraph_style(
-                'InvoiceTitle',
-                fontSize=16,
-                alignment=1,
-                textColor=colors.darkred if is_official else colors.darkblue,
-                spaceBefore=10,
-                spaceAfter=15
-            )
-
-            elements.append(Paragraph(self.reshape_persian_text(invoice_type), title_style))
+            # Use table instead of Paragraph for better control
+            title_data = [[self.reshape_persian_text(invoice_type)]]
+            title_table = Table(title_data, colWidths=[16 * cm])
+            title_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, 0), self.persian_font),
+                ('FONTSIZE', (0, 0), (0, 0), 16),
+                ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                ('TEXTCOLOR', (0, 0), (0, 0), colors.darkred if is_official else colors.darkblue),
+                ('PADDING', (0, 0), (-1, -1), 10),
+            ]))
+            elements.append(title_table)
 
             # Invoice info table
             invoice_number = str(self.invoice.invoice_number)
@@ -192,19 +255,17 @@ class EnhancedPersianInvoicePDFGenerator:
         """Add customer information based on invoice type"""
         try:
             if is_official:
-                # Official invoice requires detailed customer info
-                customer_title_style = self.create_paragraph_style(
-                    'CustomerTitle',
-                    fontSize=12,
-                    alignment=1,
-                    backColor=colors.lightgrey,
-                    spaceAfter=10
-                )
-
-                elements.append(Paragraph(
-                    self.reshape_persian_text("مشخصات فروشنده"),
-                    customer_title_style
-                ))
+                # Seller information section
+                seller_title_data = [[self.reshape_persian_text("مشخصات فروشنده")]]
+                seller_title_table = Table(seller_title_data, colWidths=[16 * cm])
+                seller_title_table.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (0, 0), self.persian_font),
+                    ('FONTSIZE', (0, 0), (0, 0), 12),
+                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgrey),
+                    ('PADDING', (0, 0), (-1, -1), 8),
+                ]))
+                elements.append(seller_title_table)
 
                 # Seller information for official invoice
                 seller_data = [
@@ -242,11 +303,17 @@ class EnhancedPersianInvoicePDFGenerator:
                 elements.append(seller_table)
                 elements.append(Spacer(1, 10))
 
-                # Buyer information
-                elements.append(Paragraph(
-                    self.reshape_persian_text("مشخصات خریدار"),
-                    customer_title_style
-                ))
+                # Buyer information section
+                buyer_title_data = [[self.reshape_persian_text("مشخصات خریدار")]]
+                buyer_title_table = Table(buyer_title_data, colWidths=[16 * cm])
+                buyer_title_table.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (0, 0), self.persian_font),
+                    ('FONTSIZE', (0, 0), (0, 0), 12),
+                    ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+                    ('BACKGROUND', (0, 0), (0, 0), colors.lightgrey),
+                    ('PADDING', (0, 0), (-1, -1), 8),
+                ]))
+                elements.append(buyer_title_table)
 
                 buyer_data = [
                     [
@@ -315,18 +382,19 @@ class EnhancedPersianInvoicePDFGenerator:
                     "جمع مالیات و عوارض", "جمع کل مبلغ کالا"
                 ]
 
-                col_widths = [1 * cm, 1.5 * cm, 3 * cm, 1.5 * cm, 1 * cm, 2 * cm, 2 * cm, 1.5 * cm, 2 * cm, 2 * cm, 2 * cm]
+                col_widths = [1 * cm, 1.5 * cm, 3 * cm, 1.5 * cm, 1 * cm, 2 * cm, 2 * cm, 1.5 * cm, 2 * cm, 2 * cm,
+                              2 * cm]
 
                 # Table data
                 table_data = [[self.reshape_persian_text(h) for h in headers]]
 
                 # Add items
                 for i, item in enumerate(self.order.items.all(), 1):
-                    # Use the correct field names from OrderItem model
                     unit_price = int(item.quoted_unit_price or 0)
                     quantity = int(item.final_quantity or 0)
                     total_price = unit_price * quantity
-                    tax_amount = int(total_price * settings.DEFAULT_TAX_RATE) if settings.INCLUDE_TAX_IN_OFFICIAL_INVOICES else 0
+                    tax_amount = int(
+                        total_price * settings.DEFAULT_TAX_RATE) if settings.INCLUDE_TAX_IN_OFFICIAL_INVOICES else 0
                     final_amount = total_price + tax_amount
 
                     row = [
@@ -345,8 +413,10 @@ class EnhancedPersianInvoicePDFGenerator:
                     table_data.append(row)
 
                 # Add totals row
-                total_amount = sum(int((item.quoted_unit_price or 0) * (item.final_quantity or 0)) for item in self.order.items.all())
-                total_tax = int(total_amount * settings.DEFAULT_TAX_RATE) if settings.INCLUDE_TAX_IN_OFFICIAL_INVOICES else 0
+                total_amount = sum(
+                    int((item.quoted_unit_price or 0) * (item.final_quantity or 0)) for item in self.order.items.all())
+                total_tax = int(
+                    total_amount * settings.DEFAULT_TAX_RATE) if settings.INCLUDE_TAX_IN_OFFICIAL_INVOICES else 0
                 grand_total = total_amount + total_tax
 
                 totals_row = [
@@ -367,7 +437,6 @@ class EnhancedPersianInvoicePDFGenerator:
                 table_data = [[self.reshape_persian_text(h) for h in headers]]
 
                 for i, item in enumerate(self.order.items.all(), 1):
-                    # Use the correct field names from OrderItem model
                     unit_price = int(item.quoted_unit_price or 0)
                     quantity = int(item.final_quantity or 0)
                     total_price = unit_price * quantity

@@ -188,7 +188,8 @@ const DashboardPage = () => {
         e.stopPropagation();
         try {
             // Use orders endpoint instead of invoices endpoint
-            const response = await API.get(`/orders/${order.id}/download-invoice/`, {
+            const response = await API.get(`/orders/${order.id}/download-invoice/`
+                , {
                 responseType: 'blob'
             });
 

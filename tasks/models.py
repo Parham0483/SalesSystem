@@ -2,11 +2,12 @@ from datetime import timedelta
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
-from .services.simple_persian_pdf import EnhancedPersianInvoicePDFGenerator
+from .services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
 
 from django.conf import settings
 import os
@@ -47,6 +48,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
+    last_order_date = models.DateTimeField(null=True, blank=True)
     last_login = models.DateTimeField(null=True, blank=True)
     google_id = models.CharField(
         max_length=100,
@@ -73,7 +75,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     complete_address = models.TextField(blank=True, null=True)
     city = models.CharField(max_length=100,blank=True,null=True)
     province = models.CharField(max_length=100,blank=True,null=True,)
-    customer_type = models.CharField(
+    business_type = models.CharField(  # Changed from customer_type
         max_length=20,
         choices=[
             ('individual', 'شخص حقیقی'),
@@ -83,10 +85,100 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         help_text="نوع مشتری"
     )
 
+    # Registration and tax information
+    registration_number = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name="شماره ثبت شرکت"
+    )
+    tax_number = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        verbose_name="شماره مالیاتی"
+    )
+
+    is_verified = models.BooleanField(default=False, verbose_name="تایید شده")
+    preferred_invoice_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('unofficial', 'غیررسمی'),
+            ('official', 'رسمی'),
+        ],
+        default='unofficial',
+        verbose_name="نوع فاکتور ترجیحی"
+    )
+
     objects = CustomerManager()
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name']
+
+    def clean(self):
+        """Custom validation for official invoice requirements"""
+        super().clean()
+
+        # If customer has orders with official invoices, ensure required fields
+        if hasattr(self, 'order_set'):  # Changed from 'orders' to 'order_set'
+            has_official_orders = self.order_set.filter(business_invoice_type='official').exists()
+            if has_official_orders:
+                missing_fields = []
+
+                if not self.national_id:
+                    missing_fields.append('شناسه ملی')
+                if not self.complete_address:
+                    missing_fields.append('آدرس کامل')
+                if not self.postal_code:
+                    missing_fields.append('کد پستی')
+
+                if missing_fields:
+                    raise ValidationError(
+                        f"برای فاکتور رسمی این فیلدها الزامی است: {', '.join(missing_fields)}"
+                    )
+
+    def validate_for_official_invoice(self):
+        """Validate customer data for official invoice generation"""
+        missing_fields = []
+
+        if not self.national_id:
+            missing_fields.append('national_id')
+        if not self.complete_address:
+            missing_fields.append('complete_address')
+        if not self.postal_code:
+            missing_fields.append('postal_code')
+        if not self.name:
+            missing_fields.append('name')
+
+        if missing_fields:
+            return False, missing_fields
+        return True, []
+
+    def get_display_name(self):
+        """Get customer display name"""
+        if self.company_name:
+            return f"{self.company_name} ({self.name})"
+        return self.name or self.phone or self.email
+
+    def get_full_address(self):
+        """Get formatted full address"""
+        parts = []
+        if self.complete_address:
+            parts.append(self.complete_address)
+        if self.city:
+            parts.append(self.city)
+        if self.province:
+            parts.append(self.province)
+        if self.postal_code:
+            parts.append(f"کد پستی: {self.postal_code}")
+        return "، ".join(parts)
+
+    def update_last_order_date(self):
+        """Update last order date"""
+        from django.utils import timezone
+        self.last_order_date = timezone.now()
+        self.save(update_fields=['last_order_date'])
+
 
     def __str__(self):
         return f"{self.name} ({self.email})"
@@ -777,17 +869,27 @@ class Invoice(models.Model):
             self.calculate_payable_amount()
             self.save()
 
-    def generate_pdf(self):
+    def generate_enhanced_pdf(self):
+
         generator = EnhancedPersianInvoicePDFGenerator(self)
         pdf_buffer = generator.generate_pdf()
 
-        filename = f"invoice_{self.invoice_number}.pdf"
+        # Save PDF file
+        from django.core.files.base import ContentFile
+        invoice_type = "official" if self.order.business_invoice_type == 'official' else "unofficial"
+        filename = f"invoice_{self.invoice_number}_{invoice_type}.pdf"
+
         self.pdf_file.save(filename, ContentFile(pdf_buffer.getvalue()))
         return self.pdf_file
 
-    def download_pdf_response(self):
+    def download_enhanced_pdf_response(self):
+
         generator = EnhancedPersianInvoicePDFGenerator(self)
         return generator.get_http_response()
+
+    def validate_for_pdf_generation(self):
+        from .views.invoices import PDFUtilityView
+        return PDFUtilityView.validate_invoice_for_pdf(self)
 
     def save(self, *args, **kwargs):
         if self.total_amount:

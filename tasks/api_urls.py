@@ -9,7 +9,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from tasks.views.customers import CustomerViewSet, CustomerInfoViewSet
 from tasks.views.orders import OrderViewSet, OrderItemViewSet, view_payment_receipt, download_payment_receipt
-from tasks.views.invoices import InvoiceViewSet
+from tasks.views.invoices import InvoiceViewSet, BulkPDFGenerationView, CustomerInfoUpdateView
 from tasks.views.dealers import DealerViewSet
 from tasks.views.auth import get_csrf_token, customer_register, customer_login, customer_logout
 from tasks.views.products import ShipmentAnnouncementViewSet, ProductCategoryViewSet, ProductViewSet
@@ -82,4 +82,6 @@ urlpatterns = [
 
     # API endpoints from the router
     path('', include(router.urls)),
+    path('api/bulk-pdf-generation/', BulkPDFGenerationView.as_view(), name='bulk-pdf-generation'),
+    path('api/customer-info-update/', CustomerInfoUpdateView.as_view(), name='customer-info-update'),
 ]

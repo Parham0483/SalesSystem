@@ -27,7 +27,7 @@ from ..serializers.dealers import (
 )
 from ..models import Order, OrderItem, Customer, OrderLog
 from ..services.notification_service import NotificationService
-from ..services.simple_persian_pdf import EnhancedPersianInvoicePDFGenerator
+from ..services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -1123,9 +1123,18 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
 
         if order.status != 'completed':
-            return Response({
-                'error': 'فقط برای سفارشات تکمیل شده امکان دانلود فاکتور وجود دارد'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': '...'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # ADD THIS VALIDATION BLOCK
+        if order.is_official_invoice:
+            is_valid, missing_fields = order.customer.validate_for_official_invoice()
+            if not is_valid:
+                logger.error(
+                    f"Cannot generate official invoice for order {order.id}. Missing customer fields: {missing_fields}")
+                return Response({
+                    'error': 'اطلاعات مشتری برای صدور فاکتور رسمی کامل نیست',
+                    'missing_fields': missing_fields
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             # Get or create invoice
@@ -1145,7 +1154,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 invoice.save()
 
             # Generate PDF using enhanced generator
-            return invoice.download_pdf_response()
+            return invoice.download_enhanced_pdf_response()
 
         except Exception as e:
             logger.error(f"Error generating invoice PDF for order {order.id}: {str(e)}")
