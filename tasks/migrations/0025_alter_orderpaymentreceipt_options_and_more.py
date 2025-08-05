@@ -47,6 +47,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='orderpaymentreceipt',
             name='receipt_file',
-            field=models.FileField(help_text='Payment receipt file (image or PDF)', upload_to=tasks.models.OrderPaymentReceipt.receipt_upload_path),
+            field=models.FileField(help_text='Payment receipt file (images or PDF)', upload_to=tasks.models.OrderPaymentReceipt.receipt_upload_path),
         ),
     ]

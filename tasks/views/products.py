@@ -36,7 +36,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Product.objects.filter(is_active=True).order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
-        """Admin creates a new product with image upload support"""
+        """Admin creates a new product with images upload support"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -62,7 +62,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
-        """Admin updates product with image upload support"""
+        """Admin updates product with images upload support"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -427,8 +427,8 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             # Extract and validate images
             images = request.FILES.getlist('images')
 
-            # Validate image files
-            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            # Validate images files
+            allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
             max_size = 5 * 1024 * 1024  # 5MB
 
             for image in images:
@@ -484,11 +484,11 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
 
             # Handle images if provided
             if images:
-                # Set first image as main image
+                # Set first images as main images
                 announcement.image = images[0]
                 announcement.save()
 
-                # Handle additional images (if more than 1 image uploaded)
+                # Handle additional images (if more than 1 images uploaded)
                 from ..models import ShipmentAnnouncementImage
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
@@ -525,8 +525,8 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             images = request.FILES.getlist('images')
 
             if images:
-                # Validate image files
-                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                # Validate images files
+                allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
                 max_size = 5 * 1024 * 1024  # 5MB
 
                 for image in images:
@@ -580,12 +580,12 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             # Save the updated instance
             instance.save()
 
-            # Handle image updates if new images provided
+            # Handle images updates if new images provided
             if images:
                 # Clear existing additional images
                 instance.images.all().delete()
 
-                # Set first image as main image
+                # Set first images as main images
                 instance.image = images[0]
                 instance.save()
 
@@ -792,14 +792,14 @@ class ProductImageViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='set-primary')
     def set_primary(self, request, pk=None):
-        """Set this image as primary for the product"""
+        """Set this images as primary for the product"""
         image = self.get_object()
         product = image.product
 
         # Remove primary status from other images
         ProductImage.objects.filter(product=product).update(is_primary=False)
 
-        # Set this image as primary
+        # Set this images as primary
         image.is_primary = True
         image.save()
 

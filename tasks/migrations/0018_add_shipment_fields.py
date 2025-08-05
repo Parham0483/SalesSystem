@@ -43,7 +43,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='shipmentannouncement',
-            name='image',
+            name='images',
             field=models.ImageField(blank=True, help_text='Main photo of packaging/container', null=True, upload_to='shipments/'),
         ),
         migrations.AlterField(

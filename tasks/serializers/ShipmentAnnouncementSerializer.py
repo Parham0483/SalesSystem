@@ -5,5 +5,5 @@ from tasks.models import ShipmentAnnouncementImage, ShipmentAnnouncement, Produc
 class ShipmentAnnouncementImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShipmentAnnouncementImage
-        fields = ['id', 'image', 'alt_text', 'order']
+        fields = ['id', 'images', 'alt_text', 'order']
 

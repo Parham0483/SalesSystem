@@ -37,7 +37,7 @@ Thumbs.db
 
 # Media and static files (we'll handle these separately)
 media/
-staticfiles/
+statics/
 
 # Logs
 *.log

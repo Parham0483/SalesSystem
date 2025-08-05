@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
             name='ShipmentAnnouncementImage',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('image', models.ImageField(upload_to='shipments/images/')),
+                ('images', models.ImageField(upload_to='shipments/images/')),
                 ('alt_text', models.CharField(blank=True, max_length=200)),
                 ('order', models.IntegerField(default=0)),
                 ('announcement', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='images', to='tasks.shipmentannouncement')),

@@ -283,7 +283,7 @@ class Product(models.Model):
         help_text="Base price for reference"
     )
     stock = models.IntegerField(default=0)
-    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product image")
+    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product images")
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -360,7 +360,7 @@ class ShipmentAnnouncement(models.Model):
     title = models.CharField(max_length=200, help_text="Title of the shipment announcement")
     description = models.TextField(help_text="Describe the new shipment, packaging, container info, etc.")
 
-    # Main image field
+    # Main images field
     image = models.ImageField(
         upload_to='shipments/',
         blank=True,
@@ -429,7 +429,7 @@ class ShipmentAnnouncement(models.Model):
         if self.image:
             return self.image.url
 
-        # Fallback to first additional image if no main image
+        # Fallback to first additional images if no main images
         first_additional = self.images.first()
         if first_additional and first_additional.image:
             return first_additional.image.url
@@ -1182,7 +1182,7 @@ class OrderPaymentReceipt(models.Model):
     """Model for storing multiple payment receipts per order"""
 
     FILE_TYPE_CHOICES = [
-        ('image', 'Image'),
+        ('images', 'Image'),
         ('pdf', 'PDF'),
     ]
 
@@ -1203,7 +1203,7 @@ class OrderPaymentReceipt(models.Model):
 
     receipt_file = models.FileField(
         upload_to=receipt_upload_path,
-        help_text="Payment receipt file (image or PDF)"
+        help_text="Payment receipt file (images or PDF)"
     )
 
     file_type = models.CharField(
@@ -1279,8 +1279,8 @@ class OrderPaymentReceipt(models.Model):
                 content_type = self.receipt_file.content_type.lower()
                 if content_type == 'application/pdf':
                     self.file_type = 'pdf'
-                elif content_type.startswith('image/'):
-                    self.file_type = 'image'
+                elif content_type.startswith('images/'):
+                    self.file_type = 'images'
 
             # Fallback: determine by file extension
             if not self.file_type and self.receipt_file.name:
@@ -1288,9 +1288,9 @@ class OrderPaymentReceipt(models.Model):
                 if ext == '.pdf':
                     self.file_type = 'pdf'
                 elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
-                    self.file_type = 'image'
+                    self.file_type = 'images'
                 else:
-                    self.file_type = 'image'  # Default fallback
+                    self.file_type = 'images'  # Default fallback
 
         super().save(*args, **kwargs)
 

@@ -26,8 +26,8 @@ class Migration(migrations.Migration):
             name='OrderPaymentReceipt',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('receipt_file', models.FileField(help_text='Payment receipt image or PDF', upload_to='payment_receipts/')),
-                ('file_type', models.CharField(choices=[('image', 'Image'), ('pdf', 'PDF')], help_text='Type of uploaded file', max_length=10)),
+                ('receipt_file', models.FileField(help_text='Payment receipt images or PDF', upload_to='payment_receipts/')),
+                ('file_type', models.CharField(choices=[('images', 'Image'), ('pdf', 'PDF')], help_text='Type of uploaded file', max_length=10)),
                 ('uploaded_at', models.DateTimeField(auto_now_add=True)),
                 ('is_verified', models.BooleanField(default=False)),
                 ('admin_notes', models.TextField(blank=True, null=True)),

@@ -328,6 +328,8 @@ BUSINESS_SERVICES = "EXPORT - IMPORT"
 
 # Company Contact Information
 BUSINESS_ADDRESS = "یزد، بلوار مدرس شماره ۱۳"
+BUSINESS_PROVINCE = "یزد"
+BUSINESS_CITY = "یزد"
 BUSINESS_ADDRESS_EN = "No 13, Modares Blvd, Yazd, Iran"
 BUSINESS_PHONE = "۰۳۵-۹۱۰۰۷۷۱۱"
 BUSINESS_PHONE_EN = "035-91007711"

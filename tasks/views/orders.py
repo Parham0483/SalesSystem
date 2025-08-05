@@ -671,7 +671,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Validation constants
-            allowed_image_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            allowed_image_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
             allowed_pdf_types = ['application/pdf']
             allowed_types = allowed_image_types + allowed_pdf_types
 
@@ -708,7 +708,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     errors.extend(file_errors)
                 else:
                     # Determine file type
-                    file_type = 'pdf' if file.content_type in allowed_pdf_types else 'image'
+                    file_type = 'pdf' if file.content_type in allowed_pdf_types else 'images'
                     valid_files.append((file, file_type))
 
             # If there are validation errors, return them
@@ -1248,17 +1248,17 @@ def view_payment_receipt(request, receipt_id):
             if not content_type:
                 if receipt.file_type == 'pdf':
                     content_type = 'application/pdf'
-                elif receipt.file_type == 'image':
-                    # Try to determine image type from extension
+                elif receipt.file_type == 'images':
+                    # Try to determine images type from extension
                     ext = os.path.splitext(file_path)[1].lower()
                     content_type_map = {
-                        '.jpg': 'image/jpeg',
-                        '.jpeg': 'image/jpeg',
-                        '.png': 'image/png',
-                        '.gif': 'image/gif',
-                        '.webp': 'image/webp'
+                        '.jpg': 'images/jpeg',
+                        '.jpeg': 'images/jpeg',
+                        '.png': 'images/png',
+                        '.gif': 'images/gif',
+                        '.webp': 'images/webp'
                     }
-                    content_type = content_type_map.get(ext, 'image/jpeg')
+                    content_type = content_type_map.get(ext, 'images/jpeg')
                 else:
                     content_type = 'application/octet-stream'
 
@@ -1269,7 +1269,7 @@ def view_payment_receipt(request, receipt_id):
             filename = receipt.file_name or f"receipt_{receipt.id}"
 
             # For PDFs and images, show inline by default
-            if receipt.file_type in ['pdf', 'image']:
+            if receipt.file_type in ['pdf', 'images']:
                 response['Content-Disposition'] = f'inline; filename="{filename}"'
             else:
                 response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -1333,7 +1333,7 @@ def download_payment_receipt(request, receipt_id):
             if not content_type:
                 if receipt.file_type == 'pdf':
                     content_type = 'application/pdf'
-                elif receipt.file_type == 'image':
+                elif receipt.file_type == 'images':
                     content_type = 'application/octet-stream'  # Force download for images
                 else:
                     content_type = 'application/octet-stream'

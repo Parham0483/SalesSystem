@@ -119,7 +119,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='product',
             name='image_url',
-            field=models.URLField(blank=True, help_text='URL to product image', null=True),
+            field=models.URLField(blank=True, help_text='URL to product images', null=True),
         ),
         migrations.AlterField(
             model_name='order',

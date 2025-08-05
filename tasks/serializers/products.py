@@ -8,7 +8,7 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
-        fields = ['id', 'image', 'alt_text', 'order', 'is_primary']
+        fields = ['id', 'images', 'alt_text', 'order', 'is_primary']
 
 
 # tasks/serializers/products.py - Updated ProductSerializer and CategorySerializer
@@ -23,7 +23,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'name_fa', 'display_name', 'description',
             'slug', 'is_active', 'order', 'products_count', 'parent',
-            'image', 'created_at'
+            'images', 'created_at'
         ]
         read_only_fields = ['created_at', 'slug']
 
@@ -48,7 +48,7 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'origin', 'image', 'image_url',
+            'weight', 'origin', 'images', 'image_url',
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
@@ -57,7 +57,7 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
 
     def get_image_url(self, obj):
-        """Get the primary image URL with full domain"""
+        """Get the primary images URL with full domain"""
         request = self.context.get('request')
 
         if obj.image:
@@ -68,7 +68,7 @@ class ProductSerializer(serializers.ModelSerializer):
                 base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
                 return f"{base_url}{obj.image.url}"
 
-        # Use the model's method if no direct image
+        # Use the model's method if no direct images
         image_url = obj.get_primary_image_url()
         if image_url and request:
             return request.build_absolute_uri(image_url)
@@ -104,10 +104,10 @@ class ProductSerializer(serializers.ModelSerializer):
         return (timezone.now() - obj.created_at).days
 
     def validate_image(self, value):
-        """Custom validation for image field"""
-        # If it's a string (URL), it means no new image is being uploaded
+        """Custom validation for images field"""
+        # If it's a string (URL), it means no new images is being uploaded
         if isinstance(value, str):
-            # Return None to indicate no change to image
+            # Return None to indicate no change to images
             return None
 
         # If it's a file, validate it
@@ -118,15 +118,15 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        """Custom update method to handle image properly"""
-        # Remove image from validated_data if it's None (no new image)
-        image = validated_data.pop('image', 'no_change')
+        """Custom update method to handle images properly"""
+        # Remove images from validated_data if it's None (no new images)
+        image = validated_data.pop('images', 'no_change')
 
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # Only update image if a new one was provided
+        # Only update images if a new one was provided
         if image != 'no_change' and image is not None:
             instance.image = image
 
@@ -184,7 +184,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
         ]
 
     def get_image_url(self, obj):
-        """Get main image URL"""
+        """Get main images URL"""
         request = self.context.get('request')
         if obj.image:
             if request:
@@ -198,12 +198,12 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
         images = []
 
 
-        # Add main image first if exists
+        # Add main images first if exists
         if obj.image:
             image_url = obj.image.url
             if request:
                 image_url = request.build_absolute_uri(image_url)
-            images.append({'image': image_url})
+            images.append({'images': image_url})
 
         # Add additional images
         additional_images = obj.images.all().order_by('order')
@@ -212,7 +212,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
             image_url = img.image.url
             if request:
                 image_url = request.build_absolute_uri(image_url)
-            images.append({'image': image_url})
+            images.append({'images': image_url})
 
 
         return images

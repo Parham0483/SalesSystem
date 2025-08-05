@@ -18,8 +18,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='product',
-            name='image',
-            field=models.ImageField(blank=True, help_text='Primary product image', null=True, upload_to='products/'),
+            name='images',
+            field=models.ImageField(blank=True, help_text='Primary product images', null=True, upload_to='products/'),
         ),
         migrations.AddField(
             model_name='product',
@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(max_length=100)),
                 ('description', models.TextField(blank=True, null=True)),
                 ('slug', models.SlugField(blank=True, unique=True)),
-                ('image', models.ImageField(blank=True, null=True, upload_to='categories/')),
+                ('images', models.ImageField(blank=True, null=True, upload_to='categories/')),
                 ('is_active', models.BooleanField(default=True)),
                 ('order', models.IntegerField(default=0, help_text='Display order')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -84,7 +84,7 @@ class Migration(migrations.Migration):
             name='ProductImage',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('image', models.ImageField(upload_to='products/additional/')),
+                ('images', models.ImageField(upload_to='products/additional/')),
                 ('alt_text', models.CharField(blank=True, max_length=200)),
                 ('order', models.IntegerField(default=0)),
                 ('is_primary', models.BooleanField(default=False)),
@@ -101,7 +101,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('title', models.CharField(max_length=200)),
                 ('description', models.TextField(help_text='Describe the new shipment, packaging, container info, etc.')),
-                ('image', models.ImageField(blank=True, help_text='Photo of packaging/container', null=True, upload_to='shipments/')),
+                ('images', models.ImageField(blank=True, help_text='Photo of packaging/container', null=True, upload_to='shipments/')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('is_active', models.BooleanField(default=True)),
                 ('is_featured', models.BooleanField(default=False, help_text='Show prominently on new arrivals page')),

@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='order',
             name='payment_receipt',
-            field=models.ImageField(blank=True, help_text='Payment receipt or cheque image', null=True, upload_to='payment_receipts/'),
+            field=models.ImageField(blank=True, help_text='Payment receipt or cheque images', null=True, upload_to='payment_receipts/'),
         ),
         migrations.AddField(
             model_name='order',
