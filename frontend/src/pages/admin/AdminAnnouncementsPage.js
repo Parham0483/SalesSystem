@@ -223,7 +223,7 @@ const AdminAnnouncementsPage = () => {
 
         if (files.length) {
             // Validate file types and sizes
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'images/png', 'image/gif', 'image/webp'];
             const maxSize = 5 * 1024 * 1024; // 5MB
 
             const validFiles = [];
@@ -945,7 +945,7 @@ const AdminAnnouncementsPage = () => {
                             name="product_categories"
                             value={formData.product_categories || ''}
                             onChange={handleFormChange}
-                            placeholder="مثال: قطعات خودرو، لوازم الکترونیکی، پوشاک"
+                            placeholder="مثال: قهوه, محصولات قنادی, ادویه ..."
                         />
                     </div>
 
@@ -955,7 +955,7 @@ const AdminAnnouncementsPage = () => {
                             type="file"
                             onChange={handleFileChange}
                             multiple
-                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                            accept="images/jpeg,images/jpg,images/png,images/gif,images/webp"
                             className="file-input"
                         />
                         <p className="file-help-text">

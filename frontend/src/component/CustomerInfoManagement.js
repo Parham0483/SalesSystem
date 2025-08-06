@@ -13,13 +13,16 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
         national_id: '',
         economic_id: '',
         postal_code: '',
-        complete_address: ''
+        complete_address: '',
+        province: '',
+        city: ''
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [errors, setErrors] = useState({});
+
 
     useEffect(() => {
         loadCustomerInfo();
@@ -175,7 +178,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     value={customerInfo.name}
                                     onChange={(e) => handleInputChange('name', e.target.value)}
                                     error={errors.name}
-                                    placeholder="مثال: علی احمدی"
+                                    placeholder="نام"
                                 />
                             </div>
                             <div className="form-field">
@@ -184,7 +187,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     value={customerInfo.phone}
                                     onChange={(e) => handleInputChange('phone', e.target.value)}
                                     error={errors.phone}
-                                    placeholder="مثال: 09123456789"
+                                    placeholder="شماره تماس"
                                 />
                             </div>
                         </div>
@@ -195,7 +198,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     label="نام شرکت (اختیاری)"
                                     value={customerInfo.company_name}
                                     onChange={(e) => handleInputChange('company_name', e.target.value)}
-                                    placeholder="مثال: شرکت نمونه"
+                                    placeholder="نام شرکت"
                                 />
                             </div>
                             <div className="form-field">
@@ -204,7 +207,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     value={customerInfo.national_id}
                                     onChange={(e) => handleInputChange('national_id', e.target.value)}
                                     error={errors.national_id}
-                                    placeholder="مثال: 0123456789"
+                                    placeholder="شناسه ملی"
                                     maxLength="10"
                                 />
                             </div>
@@ -216,7 +219,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     label="شناسه اقتصادی (اختیاری)"
                                     value={customerInfo.economic_id}
                                     onChange={(e) => handleInputChange('economic_id', e.target.value)}
-                                    placeholder="مثال: 12345678901"
+                                    placeholder="شناسه اقتصادی"
                                 />
                             </div>
                             <div className="form-field">
@@ -225,8 +228,29 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                                     value={customerInfo.postal_code}
                                     onChange={(e) => handleInputChange('postal_code', e.target.value)}
                                     error={errors.postal_code}
-                                    placeholder="مثال: 1234567890"
+                                    placeholder="کد پستی"
                                     maxLength="10"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-row">
+                            <div className="form-field">
+                                <NeoBrutalistInput
+                                    label="استان"
+                                    value={customerInfo.province}
+                                    onChange={(e) => handleInputChange('province', e.target.value)}
+                                    error={errors.province}
+                                    placeholder="استان"
+                                />
+                            </div>
+                            <div className="form-field">
+                                <NeoBrutalistInput
+                                    label="شهر"
+                                    value={customerInfo.city}
+                                    onChange={(e) => handleInputChange('city', e.target.value)}
+                                    error={errors.city}
+                                    placeholder="شهر"
                                 />
                             </div>
                         </div>

@@ -75,10 +75,22 @@ class OrderCreateSerializer(serializers.Serializer):
     customer_info = CustomerInfoForOfficialInvoiceSerializer(required=False)
 
     def validate(self, data):
-        if data.get('business_invoice_type') == 'official' and not data.get('customer_info'):
+        # First, check the invoice type from the incoming data.
+        invoice_type = data.get('business_invoice_type')
+
+        # If the order is unofficial, remove customer_info to prevent validation.
+        if invoice_type == 'unofficial':
+            if 'customer_info' in data:
+                data.pop('customer_info')
+            return data
+
+        # If the order is official, proceed with the original validation.
+        if not data.get('customer_info'):
             raise serializers.ValidationError({
                 'customer_info': 'Customer information is required for an official invoice.'
             })
+
+        # Let DRF handle the nested validation for the official case now.
         return data
 
     @transaction.atomic
@@ -86,9 +98,10 @@ class OrderCreateSerializer(serializers.Serializer):
         items_data = validated_data.pop('items')
         customer_info_data = validated_data.pop('customer_info', None)
         customer = self.context['request'].user
+        invoice_type = validated_data.get('business_invoice_type')
 
         # Update customer info if provided
-        if customer_info_data:
+        if invoice_type == 'official' and customer_info_data:
             # Use the serializer to validate the incoming data
             customer_serializer = CustomerInvoiceInfoUpdateSerializer(instance=customer, data=customer_info_data,
                                                                       partial=True)

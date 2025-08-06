@@ -13,6 +13,8 @@ import logging
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
+
+from mysite import settings
 from ..models import OrderPaymentReceipt, Invoice  # Import the receipt model
 
 from ..serializers import (
@@ -28,6 +30,8 @@ from ..serializers.dealers import (
 from ..models import Order, OrderItem, Customer, OrderLog
 from ..services.notification_service import NotificationService
 from ..services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
+from ..services.unofficial_invoice_pdf import UnofficialInvoicePDFGenerator
+from ..services.pre_invoice_pdf import PreInvoicePDFGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +202,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='approve')
     def approve_order(self, request, *args, **kwargs):
-        """ENHANCED: Customer approves order with dual notification"""
+        """ENHANCED: Customer approves order with pre-invoice generation"""
         try:
             order = self.get_object()
 
@@ -212,6 +216,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error': f'Cannot approve order with status: {order.status}'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            # Approve order and create pre-invoice
             order.customer_approve()
 
             # Send dual notification (email + SMS)
@@ -224,8 +229,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             NotificationService.notify_admin_order_status_change(order, 'confirmed', request.user)
 
             return Response({
-                'message': 'Order approved successfully',
+                'message': 'Order approved successfully and pre-invoice generated',
                 'order': OrderDetailSerializer(order).data,
+                'invoice_created': order.has_pre_invoice,
+                'invoice_id': order.invoice.id if hasattr(order, 'invoice') else None,
                 'notifications': {
                     'email_sent': dual_result['email']['sent'],
                     'sms_sent': dual_result['sms']['sent'],
@@ -671,7 +678,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Validation constants
-            allowed_image_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
+            allowed_image_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
             allowed_pdf_types = ['application/pdf']
             allowed_types = allowed_image_types + allowed_pdf_types
 
@@ -708,7 +715,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     errors.extend(file_errors)
                 else:
                     # Determine file type
-                    file_type = 'pdf' if file.content_type in allowed_pdf_types else 'images'
+                    file_type = 'pdf' if file.content_type in allowed_pdf_types else 'image'
                     valid_files.append((file, file_type))
 
             # If there are validation errors, return them
@@ -874,7 +881,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='verify-payment')
     def verify_payment(self, request, *args, **kwargs):
-        """Admin verifies payment receipt and completes order"""
+        """ENHANCED: Admin verifies payment and generates final invoice"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -892,28 +899,18 @@ class OrderViewSet(viewsets.ModelViewSet):
             payment_notes = request.data.get('payment_notes', '')
 
             if payment_verified:
-                # Verify payment and complete order
-                order.payment_verified = True
-                order.payment_verified_at = timezone.now()
-                order.payment_verified_by = request.user
-                order.payment_notes = payment_notes
-                order.status = 'completed'
-                order.completion_date = timezone.now()
-                order.completed_by = request.user
-                order.save()
+                # Complete order and upgrade to final invoice
+                completed_order, invoice = order.mark_as_completed(request.user)
 
-                # Create commission if dealer assigned
-                if order.assigned_dealer and order.dealer_commission_amount > 0:
-                    from ..models import DealerCommission
-                    commission = DealerCommission.create_for_completed_order(order)
-                    if commission:
-                        logger.info(f"💰 Commission created for dealer {order.assigned_dealer.name}")
+                if payment_notes:
+                    order.payment_notes = payment_notes
+                    order.save(update_fields=['payment_notes'])
 
                 # Create log
                 OrderLog.objects.create(
                     order=order,
                     action='payment_verified',
-                    description=f"Payment verified and order completed by {request.user.name}",
+                    description=f"Payment verified and final invoice generated by {request.user.name}",
                     performed_by=request.user
                 )
 
@@ -925,6 +922,13 @@ class OrderViewSet(viewsets.ModelViewSet):
                     )
                 except Exception as e:
                     logger.warning(f"Failed to send completion notifications: {str(e)}")
+
+                return Response({
+                    'message': 'Payment verified, order completed, and final invoice generated',
+                    'order': OrderDetailSerializer(completed_order).data,
+                    'final_invoice_created': True,
+                    'invoice_id': invoice.id if invoice else None
+                })
 
             else:
                 # Reject payment - move back to confirmed status
@@ -940,15 +944,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                     performed_by=request.user
                 )
 
-            return Response({
-                'message': 'پرداخت تایید شد و سفارش تکمیل گردید' if payment_verified else 'رسید پرداخت رد شد',
-                'order': OrderDetailSerializer(order).data
-            })
+                return Response({
+                    'message': 'Payment receipt rejected',
+                    'order': OrderDetailSerializer(order).data
+                })
 
         except Exception as e:
             logger.error(f"❌ Payment verification failed: {str(e)}")
             return Response({
-                'error': f'خطا در تایید پرداخت: {str(e)}'
+                'error': f'Payment verification failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['GET'], url_path='payment-receipts')
@@ -1062,38 +1066,154 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='update-business-invoice-type')
     def update_business_invoice_type(self, request, pk=None):
-        """Allow admin to update business invoice type"""
-        if not request.user.is_staff:
-            return Response({'error': 'فقط مدیر می‌تواند نوع فاکتور را تغییر دهد'}, status=status.HTTP_403_FORBIDDEN)
-
+        """Update business invoice type (admin only)"""
         order = self.get_object()
 
+        # Check admin permissions
+        if not request.user.is_staff:
+            return Response({
+                'error': 'فقط مدیر می‌تواند نوع فاکتور را تغییر دهد'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         # Check if order can be modified
-        if order.status in ['completed', 'cancelled']:
+        if order.status == 'completed':
             return Response({
-                'error': f' امکان تغییر نوع فاکتور برای سفارشات{order.status} وجود ندارد '
+                'error': 'نمی‌توان نوع فاکتور سفارش تکمیل شده را تغییر داد'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        business_invoice_type = request.data.get('business_invoice_type')
-        if business_invoice_type not in ['official', 'unofficial']:
+        new_type = request.data.get('business_invoice_type')
+        if new_type not in ['official', 'unofficial']:
             return Response({
-                'error': 'نوع فاکتور نامعتبر است. باید "official" یا "unofficial" باشد"'
+                'error': 'نوع فاکتور نامعتبر است'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        old_type = order.get_business_invoice_type_display()
-        order.business_invoice_type = business_invoice_type
-        order.save()
+        try:
+            # If changing to official, validate customer info
+            if new_type == 'official':
+                is_valid, missing_fields = order.customer.validate_for_official_invoice()
+                if not is_valid:
+                    return Response({
+                        'error': 'اطلاعات مشتری برای فاکتور رسمی کامل نیست',
+                        'missing_fields': missing_fields,
+                        'message': 'لطفاً ابتدا اطلاعات مشتری را تکمیل کنید'
+                    }, status=status.HTTP_400_BAD_REQUEST)
 
-        logger.info(
-            f"📋 Order #{order.id} business invoice type: {old_type} → {order.get_business_invoice_type_display()} (by {request.user.name})")
+            # Update the invoice type
+            order.business_invoice_type = new_type
+            order.save()
 
-        return Response({
-            'message': f'نوع فاکتور با موفقیت به {order.get_business_invoice_type_display()} تغییر یافت',
-            'business_invoice_type': business_invoice_type,
-            'business_invoice_type_display': order.get_business_invoice_type_display()
-        })
+            # Log the change
+            OrderLog.objects.create(
+                order=order,
+                action='invoice_type_changed',
+                description=f"Invoice type changed to {new_type} by {request.user.name}",
+                performed_by=request.user
+            )
 
-# ADD THIS NEW ACTION
+            return Response({
+                'message': 'نوع فاکتور با موفقیت تغییر یافت',
+                'business_invoice_type': new_type,
+                'business_invoice_type_display': 'فاکتور رسمی' if new_type == 'official' else 'فاکتور غیررسمی'
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Failed to update invoice type for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'خطا در تغییر نوع فاکتور: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='invoice-info')
+    @action(detail=True, methods=['GET'], url_path='invoice-info')
+    def get_invoice_info(self, request, pk=None):
+        """Get invoice information and readiness status"""
+        order = self.get_object()
+
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # Basic invoice info
+            invoice_info = {
+                'order_id': order.id,
+                'business_invoice_type': order.business_invoice_type,
+                'business_invoice_type_display': 'فاکتور رسمی' if order.business_invoice_type == 'official' else 'فاکتور غیررسمی',
+                'status': order.status,
+                'quoted_total': order.quoted_total,
+                'has_invoice': hasattr(order, 'invoice'),
+            }
+
+            # Add invoice details if exists
+            if hasattr(order, 'invoice'):
+                invoice = order.invoice
+                invoice_info.update({
+                    'invoice_number': invoice.invoice_number,
+                    'invoice_issued_at': invoice.issued_at,
+                    'invoice_total_amount': invoice.total_amount,
+                    'invoice_payable_amount': invoice.payable_amount,
+                })
+
+            # Check readiness for different invoice types
+            if order.business_invoice_type == 'official':
+                is_ready, missing_fields = order.customer.validate_for_official_invoice()
+                invoice_info.update({
+                    'ready_for_generation': is_ready,
+                    'missing_fields': missing_fields,
+                    'customer_info_complete': is_ready,
+                })
+
+                # Add tax calculation
+                if order.quoted_total:
+                    tax_amount = order.quoted_total * settings.DEFAULT_TAX_RATE
+                    invoice_info.update({
+                        'tax_rate': settings.DEFAULT_TAX_RATE,
+                        'tax_amount': tax_amount,
+                        'total_with_tax': order.quoted_total + tax_amount,
+                    })
+            else:
+                # Unofficial invoice is always ready
+                invoice_info.update({
+                    'ready_for_generation': True,
+                    'missing_fields': [],
+                    'customer_info_complete': True,
+                })
+
+            # Available PDF types based on status
+            available_pdfs = []
+
+            if order.status == 'waiting_customer_approval':
+                available_pdfs.append({
+                    'type': 'pre_invoice',
+                    'name': 'پیش فاکتور',
+                    'description': 'معتبر تا ۴۸ ساعت'
+                })
+
+            if order.status in ['confirmed', 'payment_uploaded', 'completed']:
+                if order.business_invoice_type == 'official':
+                    available_pdfs.append({
+                        'type': 'final_official',
+                        'name': 'فاکتور رسمی',
+                        'description': 'شامل مالیات ۹٪'
+                    })
+                else:
+                    available_pdfs.append({
+                        'type': 'final_unofficial',
+                        'name': 'فاکتور غیررسمی',
+                        'description': 'بدون مالیات'
+                    })
+
+            invoice_info['available_pdfs'] = available_pdfs
+
+            return Response(invoice_info, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Failed to get invoice info for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'خطا در دریافت اطلاعات فاکتور: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=['get'])
     def filter_by_business_type(self, request):
         """Filter orders by business invoice type"""
@@ -1117,80 +1237,296 @@ class OrderViewSet(viewsets.ModelViewSet):
             'results': serializer.data
         })
 
-    @action(detail=True, methods=['get'], url_path='download-invoice')
-    def download_invoice(self, request, pk=None):
-        """Download invoice PDF"""
+    @action(detail=True, methods=['GET'], url_path='download-pre-invoice')
+    def download_pre_invoice(self, request, pk=None):
+        """Download pre-invoice PDF (available after confirmation)"""
         order = self.get_object()
 
-        if order.status != 'completed':
-            return Response({'error': '...'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
 
-            # ADD THIS VALIDATION BLOCK
-        if order.is_official_invoice:
-            is_valid, missing_fields = order.customer.validate_for_official_invoice()
-            if not is_valid:
-                logger.error(
-                    f"Cannot generate official invoice for order {order.id}. Missing customer fields: {missing_fields}")
-                return Response({
-                    'error': 'اطلاعات مشتری برای صدور فاکتور رسمی کامل نیست',
-                    'missing_fields': missing_fields
-                }, status=status.HTTP_400_BAD_REQUEST)
+        # Check if pre-invoice can be downloaded
+        if not order.can_download_pre_invoice:
+            return Response({
+                'error': 'Pre-invoice is not available for this order',
+                'details': {
+                    'status': order.status,
+                    'has_invoice': hasattr(order, 'invoice'),
+                    'invoice_type': order.invoice.invoice_type if hasattr(order, 'invoice') else None
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Get or create invoice
-            invoice, created = Invoice.objects.get_or_create(
-                order=order,
-                defaults={
-                    'invoice_type': 'final_invoice',
-                    'total_amount': order.quoted_total,
-                    'issued_at': timezone.now(),
-                    'invoice_number': order.generate_invoice_number() if not hasattr(order,
-                                                                                     'invoice') else order.invoice.invoice_number
-                }
-            )
-
-            if created:
-                invoice.calculate_payable_amount()
-                invoice.save()
-
-            # Generate PDF using enhanced generator
-            return invoice.download_enhanced_pdf_response()
+            # Generate pre-invoice PDF
+            generator = PreInvoicePDFGenerator(order)
+            return generator.get_http_response()
 
         except Exception as e:
-            logger.error(f"Error generating invoice PDF for order {order.id}: {str(e)}")
+            logger.error(f"Pre-invoice PDF generation failed for order {order.id}: {str(e)}")
             return Response({
-                'error': 'خطا در تولید فاکتور'
+                'error': f'Error generating pre-invoice: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=['get'], url_path='preview-invoice')
-    def preview_invoice(self, request, pk=None):
-        """Preview invoice without downloading"""
+    @action(detail=True, methods=['GET'], url_path='download-final-invoice')
+    def download_final_invoice(self, request, pk=None):
+        """Download final invoice PDF (available after payment verification)"""
         order = self.get_object()
 
-        try:
-            # Create temporary invoice for preview
-            temp_invoice = Invoice(
-                order=order,
-                invoice_type='preview',
-                total_amount=order.quoted_total or 0,
-                issued_at=timezone.now(),
-                invoice_number=f"PREVIEW_{order.id}"
-            )
-            temp_invoice.calculate_payable_amount()
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
 
-            # Generate PDF
-            generator = EnhancedPersianInvoicePDFGenerator(temp_invoice)
+        # Check if final invoice can be downloaded
+        if not order.can_download_final_invoice:
+            return Response({
+                'error': 'Final invoice is not available for this order',
+                'details': {
+                    'status': order.status,
+                    'has_invoice': hasattr(order, 'invoice'),
+                    'invoice_type': order.invoice.invoice_type if hasattr(order, 'invoice') else None,
+                    'payment_verified': order.payment_verified
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Determine which generator to use based on business_invoice_type
+            if order.business_invoice_type == 'official':
+                # Check if customer has complete info for official invoice
+                is_valid, missing_fields = order.customer.validate_for_official_invoice()
+                if not is_valid:
+                    return Response({
+                        'error': 'Customer information is incomplete for official invoice',
+                        'missing_fields': missing_fields
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Use enhanced generator for official invoice
+                invoice = order.invoice
+                generator = EnhancedPersianInvoicePDFGenerator(invoice)
+
+            else:
+                # Use unofficial generator for unofficial invoice
+                invoice = order.invoice
+                generator = UnofficialInvoicePDFGenerator(order, invoice)
+
+            return generator.get_http_response()
+
+        except Exception as e:
+            logger.error(f"Final invoice PDF generation failed for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'Error generating final invoice: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='invoice-status')
+    def get_invoice_status(self, request, pk=None):
+        """Get comprehensive invoice status for an order"""
+        order = self.get_object()
+
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            invoice_status = {
+                'order_id': order.id,
+                'order_status': order.status,
+                'business_invoice_type': order.business_invoice_type,
+                'business_invoice_type_display': order.get_business_invoice_type_display(),
+                'quoted_total': float(order.quoted_total) if order.quoted_total else 0,
+
+                # Invoice existence
+                'has_invoice': hasattr(order, 'invoice'),
+                'invoice_type': order.invoice.invoice_type if hasattr(order, 'invoice') else None,
+
+                # Pre-invoice availability
+                'can_download_pre_invoice': order.can_download_pre_invoice,
+                'pre_invoice_available': order.has_pre_invoice,
+
+                # Final invoice availability
+                'can_download_final_invoice': order.can_download_final_invoice,
+                'final_invoice_available': order.has_final_invoice,
+
+                # Payment status
+                'payment_verified': order.payment_verified,
+                'payment_verified_at': order.payment_verified_at,
+                'has_payment_receipts': order.has_payment_receipts,
+                'total_receipts_count': order.total_receipts_count if hasattr(order, 'total_receipts_count') else 0,
+            }
+
+            # Add invoice details if exists
+            if hasattr(order, 'invoice'):
+                invoice = order.invoice
+                invoice_status.update({
+                    'invoice_id': invoice.id,
+                    'invoice_number': invoice.invoice_number,
+                    'invoice_issued_at': invoice.issued_at,
+                    'invoice_total_amount': float(invoice.total_amount),
+                    'invoice_payable_amount': float(invoice.payable_amount),
+                    'invoice_tax_amount': float(invoice.tax_amount),
+                    'is_finalized': invoice.is_finalized,
+                    'is_paid': invoice.is_paid,
+                })
+
+            # Check customer readiness for official invoice
+            if order.business_invoice_type == 'official':
+                is_ready, missing_fields = order.customer.validate_for_official_invoice()
+                invoice_status.update({
+                    'customer_ready_for_official': is_ready,
+                    'missing_customer_fields': missing_fields,
+                })
+
+                # Add tax information
+                if order.quoted_total:
+                    tax_amount = order.get_tax_amount()
+                    total_with_tax = order.get_total_with_tax()
+                    invoice_status.update({
+                        'tax_rate': float(settings.DEFAULT_TAX_RATE * 100),  # As percentage
+                        'tax_amount': float(tax_amount),
+                        'total_with_tax': float(total_with_tax),
+                    })
+
+            return Response(invoice_status, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Failed to get invoice status for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'Error getting invoice status: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='preview-pre-invoice')
+    def preview_pre_invoice(self, request, pk=None):
+        """Preview pre-invoice PDF in browser"""
+        order = self.get_object()
+
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if order is in correct status
+        if order.status != 'waiting_customer_approval':
+            return Response({
+                'error': 'پیش فاکتور فقط برای سفارشات در انتظار تایید قابل مشاهده است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Generate pre-invoice PDF for preview
+            generator = PreInvoicePDFGenerator(order)
             buffer = generator.generate_pdf()
 
             response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-            response['Content-Disposition'] = f'inline; filename="preview_invoice_{order.id}.pdf"'
+            response['Content-Disposition'] = f'inline; filename="pre_invoice_{order.id}.pdf"'
             return response
 
         except Exception as e:
-            logger.error(f"Error previewing invoice for order {order.id}: {str(e)}")
+            logger.error(f"Pre-invoice PDF preview failed for order {order.id}: {str(e)}")
             return Response({
-                'error': 'خطا در نمایش پیش‌نمایش فاکتور'
+                'error': f'خطا در نمایش پیش فاکتور: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='download-invoice')
+    def download_invoice(self, request, pk=None):
+        """Download final invoice PDF (official or unofficial)"""
+        order = self.get_object()
+
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if order has been confirmed
+        if order.status not in ['confirmed', 'payment_uploaded', 'completed']:
+            return Response({
+                'error': 'فاکتور نهایی فقط برای سفارشات تایید شده قابل دانلود است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Determine which generator to use based on business_invoice_type
+            if order.business_invoice_type == 'official':
+                # Check if customer has complete info for official invoice
+                is_valid, missing_fields = order.customer.validate_for_official_invoice()
+                if not is_valid:
+                    return Response({
+                        'error': 'اطلاعات مشتری برای فاکتور رسمی کامل نیست',
+                        'missing_fields': missing_fields
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Use enhanced generator for official invoice
+                invoice = getattr(order, 'invoice', None)
+                generator = EnhancedPersianInvoicePDFGenerator(invoice or order)
+
+            else:
+                # Use unofficial generator for unofficial invoice
+                invoice = getattr(order, 'invoice', None)
+                generator = UnofficialInvoicePDFGenerator(order, invoice)
+
+            return generator.get_http_response()
+
+        except Exception as e:
+            logger.error(f"Invoice PDF generation failed for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'خطا در تولید فاکتور: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['GET'], url_path='preview-invoice')
+    def preview_invoice(self, request, pk=None):
+        """Preview final invoice PDF in browser"""
+        order = self.get_object()
+
+        # Check permissions
+        if not request.user.is_staff and order.customer != request.user:
+            return Response({
+                'error': 'دسترسی غیرمجاز'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Check if order has been confirmed
+        if order.status not in ['confirmed', 'payment_uploaded', 'completed']:
+            return Response({
+                'error': 'فاکتور نهایی فقط برای سفارشات تایید شده قابل مشاهده است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Determine which generator to use based on business_invoice_type
+            if order.business_invoice_type == 'official':
+                # Check if customer has complete info for official invoice
+                is_valid, missing_fields = order.customer.validate_for_official_invoice()
+                if not is_valid:
+                    return Response({
+                        'error': 'اطلاعات مشتری برای فاکتور رسمی کامل نیست',
+                        'missing_fields': missing_fields
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Use enhanced generator for official invoice
+                invoice = getattr(order, 'invoice', None)
+                generator = EnhancedPersianInvoicePDFGenerator(invoice or order)
+                buffer = generator.generate_pdf()
+                filename = f"invoice_{order.id}_official.pdf"
+
+            else:
+                # Use unofficial generator for unofficial invoice
+                invoice = getattr(order, 'invoice', None)
+                generator = UnofficialInvoicePDFGenerator(order, invoice)
+                buffer = generator.generate_pdf()
+                filename = f"invoice_{order.id}_unofficial.pdf"
+
+            response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+            return response
+
+        except Exception as e:
+            logger.error(f"Invoice PDF preview failed for order {order.id}: {str(e)}")
+            return Response({
+                'error': f'خطا در نمایش فاکتور: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class OrderItemViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]

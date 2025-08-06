@@ -7,10 +7,12 @@ from django.db import models
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
-from .services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
+
 
 from django.conf import settings
 import os
+
+from logger import logger
 
 
 class CustomerManager(BaseUserManager):
@@ -141,18 +143,55 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         """Validate customer data for official invoice generation"""
         missing_fields = []
 
-        if not self.national_id:
-            missing_fields.append('national_id')
-        if not self.complete_address:
-            missing_fields.append('complete_address')
-        if not self.postal_code:
-            missing_fields.append('postal_code')
-        if not self.name:
-            missing_fields.append('name')
+        # Required fields for official invoice
+        required_fields = {
+            'national_id': 'شناسه ملی',
+            'complete_address': 'آدرس کامل',
+            'postal_code': 'کد پستی',
+            'name': 'نام کامل',
+            'phone': 'شماره تماس'
+        }
 
-        if missing_fields:
-            return False, missing_fields
-        return True, []
+        for field, label in required_fields.items():
+            if not getattr(self, field, None) or str(getattr(self, field, '')).strip() == '':
+                missing_fields.append(label)
+
+        # Additional validations
+        if self.postal_code and (len(self.postal_code) != 10 or not self.postal_code.isdigit()):
+            missing_fields.append('کد پستی معتبر (۱۰ رقم)')
+
+        if self.national_id and len(self.national_id) < 8:
+            missing_fields.append('شناسه ملی معتبر (حداقل ۸ رقم)')
+
+        if self.phone and not self.phone.startswith('09'):
+            missing_fields.append('شماره تماس معتبر')
+
+        return len(missing_fields) == 0, missing_fields
+
+    def is_ready_for_official_invoice(self):
+        """Check if customer is ready for official invoice generation"""
+        is_ready, _ = self.validate_for_official_invoice()
+        return is_ready
+
+    def get_invoice_address(self):
+        """Get formatted address for invoice"""
+        address_parts = []
+
+        if self.complete_address:
+            address_parts.append(self.complete_address)
+
+        if self.city and self.province:
+            address_parts.append(f"{self.city}, {self.province}")
+        elif self.city:
+            address_parts.append(self.city)
+        elif self.province:
+            address_parts.append(self.province)
+
+        if self.postal_code:
+            address_parts.append(f"کد پستی: {self.postal_code}")
+
+        return " - ".join(address_parts) if address_parts else ""
+
 
     def get_display_name(self):
         """Get customer display name"""
@@ -429,7 +468,6 @@ class ShipmentAnnouncement(models.Model):
         if self.image:
             return self.image.url
 
-        # Fallback to first additional images if no main images
         first_additional = self.images.first()
         if first_additional and first_additional.image:
             return first_additional.image.url
@@ -614,7 +652,7 @@ class Order(models.Model):
         self.status = 'confirmed'
         self.customer_response_date = timezone.now()
         self.save()
-        self.create_final_invoice()
+        self.create_pre_invoice()
 
     def customer_reject(self, reason=None):
         self.status = 'rejected'
@@ -648,8 +686,155 @@ class Order(models.Model):
 
         return self, invoice
 
-    def create_final_invoice(self):
+    def create_pre_invoice(self):
+        """Create pre-invoice when order is confirmed by customer"""
         if self.status == 'confirmed' and not hasattr(self, 'invoice'):
+            try:
+                invoice = Invoice.objects.create(
+                    order=self,
+                    invoice_type='pre_invoice',
+                    invoice_number=self.generate_invoice_number(),
+                    total_amount=self.quoted_total,
+                    issued_at=timezone.now()
+                )
+
+                # Calculate amounts based on business invoice type
+                if self.business_invoice_type == 'official':
+                    invoice.tax_rate = settings.DEFAULT_TAX_RATE * 100  # Convert to percentage
+                    invoice.calculate_payable_amount()
+                else:
+                    invoice.payable_amount = invoice.total_amount
+
+                invoice.save()
+
+                logger.info(f"📋 Pre-invoice created for Order #{self.id}")
+                return invoice
+
+            except Exception as e:
+                logger.error(f"❌ Error creating pre-invoice for Order #{self.id}: {str(e)}")
+                return None
+
+    def upgrade_to_final_invoice(self, admin_user):
+        """Upgrade pre-invoice to final invoice when payment is verified"""
+        try:
+            if hasattr(self, 'invoice'):
+                invoice = self.invoice
+
+                # Update invoice to final
+                invoice.invoice_type = 'final_invoice'
+                invoice.is_finalized = True
+                invoice.is_paid = True
+                invoice.save()
+
+                logger.info(f"📋 Pre-invoice upgraded to final invoice for Order #{self.id}")
+
+                # Log the invoice upgrade
+                OrderLog.objects.create(
+                    order=self,
+                    action='final_invoice_generated',
+                    description=f"Pre-invoice upgraded to final invoice by {admin_user.name}",
+                    performed_by=admin_user
+                )
+
+                return invoice
+            else:
+                # Create final invoice if no pre-invoice exists
+                return self.create_final_invoice_direct(admin_user)
+
+        except Exception as e:
+            logger.error(f"❌ Error upgrading to final invoice for Order #{self.id}: {str(e)}")
+            return None
+
+    def create_final_invoice_direct(self, admin_user):
+        """Create final invoice directly (fallback method)"""
+        try:
+            invoice = Invoice.objects.create(
+                order=self,
+                invoice_type='final_invoice',
+                invoice_number=self.generate_invoice_number(),
+                total_amount=self.quoted_total,
+                is_finalized=True,
+                is_paid=True,
+                issued_at=timezone.now()
+            )
+
+            # Calculate amounts based on business invoice type
+            if self.business_invoice_type == 'official':
+                invoice.tax_rate = settings.DEFAULT_TAX_RATE * 100
+                invoice.calculate_payable_amount()
+            else:
+                invoice.payable_amount = invoice.total_amount
+
+            invoice.save()
+
+            logger.info(f"📋 Final invoice created directly for Order #{self.id}")
+            return invoice
+
+        except Exception as e:
+            logger.error(f"❌ Error creating final invoice for Order #{self.id}: {str(e)}")
+            return None
+
+    def mark_as_completed(self, admin_user):
+        """Complete order and upgrade invoice to final"""
+        if self.status not in ['payment_uploaded', 'confirmed']:
+            raise ValueError("Order must have payment uploaded or be confirmed before completion")
+
+        self.status = 'completed'
+        self.completion_date = timezone.now()
+        self.completed_by = admin_user
+        self.payment_verified = True
+        self.payment_verified_at = timezone.now()
+        self.payment_verified_by = admin_user
+        self.save()
+
+        # Upgrade pre-invoice to final invoice
+        invoice = self.upgrade_to_final_invoice(admin_user)
+
+        # Create dealer commission if applicable
+        if self.assigned_dealer and self.dealer_commission_amount > 0:
+            from .models import DealerCommission
+            commission = DealerCommission.create_for_completed_order(self)
+            if commission:
+                logger.info(f"💰 Commission created for dealer {self.assigned_dealer.name}")
+
+        return self, invoice
+
+    @property
+    def can_generate_pre_invoice(self):
+        """Check if pre-invoice can be generated"""
+        return self.status == 'confirmed' and self.quoted_total > 0
+
+    @property
+    def can_generate_final_invoice(self):
+        """Check if final invoice can be generated"""
+        if self.status not in ['payment_uploaded', 'completed']:
+            return False
+
+        if self.business_invoice_type == 'official':
+            is_valid, _ = self.customer.validate_for_official_invoice()
+            return is_valid
+
+        return True
+
+    @property
+    def invoice_type_display(self):
+        """Get display name for invoice type"""
+        return 'فاکتور رسمی' if self.business_invoice_type == 'official' else 'فاکتور غیررسمی'
+
+    def get_tax_amount(self):
+        """Calculate tax amount for official invoices"""
+        if self.business_invoice_type == 'official' and self.quoted_total:
+            # Convert the tax rate to Decimal before multiplying
+            tax_rate = Decimal(str(settings.DEFAULT_TAX_RATE))
+            return self.quoted_total * tax_rate
+        return Decimal('0.00')
+
+    def get_total_with_tax(self):
+        """Get total amount including tax for official invoices"""
+        return self.quoted_total + self.get_tax_amount()
+
+    def create_final_invoice(self):
+        if self.status == 'completed' and not hasattr(self, 'invoice'):
             invoice = Invoice.objects.create(
                 order=self,
                 total_amount=self.quoted_total,
@@ -674,13 +859,6 @@ class Order(models.Model):
 
         return invoice_number
 
-    # Also fix the generate_invoice_based_on_type method in Order class:
-    def generate_invoice_based_on_type(self):
-        """Generate invoice PDF based on business type"""
-        if hasattr(self, 'invoice'):
-            generator = EnhancedPersianInvoicePDFGenerator(self.invoice)
-            return generator.generate_pdf()
-        return None
 
     # Dealer management methods
     def assign_dealer(self, dealer, assigned_by, custom_commission_rate=None):
@@ -783,9 +961,32 @@ class Order(models.Model):
         ordering = ['-created_at']
 
     @property
-    def is_official_invoice(self):
-        """Check if this order requires official invoice"""
-        return self.business_invoice_type == 'official'
+    def has_pre_invoice(self):
+        """Check if order has a pre-invoice"""
+        return hasattr(self, 'invoice') and self.invoice.invoice_type == 'pre_invoice'
+
+    @property
+    def has_final_invoice(self):
+        """Check if order has a final invoice"""
+        return hasattr(self, 'invoice') and self.invoice.invoice_type == 'final_invoice'
+
+    @property
+    def can_download_pre_invoice(self):
+        """Check if pre-invoice can be downloaded"""
+        return (
+                self.status in ['confirmed', 'payment_uploaded'] and
+                self.has_pre_invoice and
+                self.quoted_total > 0
+        )
+
+    @property
+    def can_download_final_invoice(self):
+        """Check if final invoice can be downloaded"""
+        return (
+                self.status == 'completed' and
+                self.has_final_invoice and
+                self.payment_verified
+        )
 
 
 class OrderItem(models.Model):
@@ -869,27 +1070,6 @@ class Invoice(models.Model):
             self.calculate_payable_amount()
             self.save()
 
-    def generate_enhanced_pdf(self):
-
-        generator = EnhancedPersianInvoicePDFGenerator(self)
-        pdf_buffer = generator.generate_pdf()
-
-        # Save PDF file
-        from django.core.files.base import ContentFile
-        invoice_type = "official" if self.order.business_invoice_type == 'official' else "unofficial"
-        filename = f"invoice_{self.invoice_number}_{invoice_type}.pdf"
-
-        self.pdf_file.save(filename, ContentFile(pdf_buffer.getvalue()))
-        return self.pdf_file
-
-    def download_enhanced_pdf_response(self):
-
-        generator = EnhancedPersianInvoicePDFGenerator(self)
-        return generator.get_http_response()
-
-    def validate_for_pdf_generation(self):
-        from .views.invoices import PDFUtilityView
-        return PDFUtilityView.validate_invoice_for_pdf(self)
 
     def save(self, *args, **kwargs):
         if self.total_amount:
@@ -1113,6 +1293,10 @@ class OrderLog(models.Model):
         ('payment_receipts_uploaded', 'Payment Receipts Uploaded'),
         ('payment_verified', 'Payment Verified'),
         ('payment_rejected', 'Payment Rejected'),
+        ('invoice_type_changed', 'Invoice Type Changed'),
+        ('pre_invoice_generated', 'Pre-Invoice Generated'),
+        ('final_invoice_generated', 'Final Invoice Generated'),
+
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='logs')

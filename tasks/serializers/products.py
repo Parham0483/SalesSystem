@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncement
+from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncement, ShipmentAnnouncementImage
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -186,6 +186,63 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
     def get_image_url(self, obj):
         """Get main images URL"""
         request = self.context.get('request')
+        relative_url = obj.get_image_url()
+
+        if relative_url and request:
+            return request.build_absolute_uri(relative_url)
+
+        return None
+
+    def get_images(self, obj):
+        """Return a simple list of all image URLs."""
+        request = self.context.get('request')
+        image_urls = []
+
+        # Add main image first if it exists
+        if obj.image and hasattr(obj.image, 'url'):
+            url = request.build_absolute_uri(obj.image.url) if request else obj.image.url
+            image_urls.append(url)
+
+        # Add additional images
+        for img in obj.images.all().order_by('order'):
+            if hasattr(img.image, 'url'):
+                url = request.build_absolute_uri(img.image.url) if request else img.image.url
+                image_urls.append(url)
+
+        return image_urls
+
+class ProductStockUpdateSerializer(serializers.Serializer):
+    """Serializer for stock updates"""
+    stock = serializers.IntegerField(min_value=0)
+
+    def validate_stock(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Stock cannot be negative")
+        return value
+
+class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
+    """SIMPLIFIED Shipment Announcement Serializer - READ ONLY"""
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    image_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+    products_count = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ShipmentAnnouncement
+        fields = [
+            'id', 'title', 'description', 'image_url', 'images',
+            'origin_country', 'shipment_date', 'estimated_arrival', 'product_categories',
+            'created_at', 'created_by', 'created_by_name',
+            'is_active', 'is_featured', 'products_count', 'view_count'
+        ]
+        read_only_fields = [
+            'id', 'created_at', 'created_by', 'created_by_name',
+            'products_count', 'view_count', 'image_url', 'images'
+        ]
+
+    def get_image_url(self, obj):
+        """Get main image URL"""
+        request = self.context.get('request')
         if obj.image:
             if request:
                 return request.build_absolute_uri(obj.image.url)
@@ -198,12 +255,12 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
         images = []
 
 
-        # Add main images first if exists
+        # Add main image first if exists
         if obj.image:
             image_url = obj.image.url
             if request:
                 image_url = request.build_absolute_uri(image_url)
-            images.append({'images': image_url})
+            images.append({'image': image_url})
 
         # Add additional images
         additional_images = obj.images.all().order_by('order')
@@ -212,7 +269,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
             image_url = img.image.url
             if request:
                 image_url = request.build_absolute_uri(image_url)
-            images.append({'images': image_url})
+            images.append({'image': image_url})
 
 
         return images
@@ -281,5 +338,3 @@ class ProductBulkUpdateSerializer(serializers.Serializer):
 
         if action == 'update_stock' and 'new_stock' not in data and 'stock_change' not in data:
             raise serializers.ValidationError("new_stock or stock_change is required for update_stock action")
-
-        return data

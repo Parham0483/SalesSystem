@@ -185,18 +185,12 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 if (!isInfoComplete) {
                     throw new Error('لطفاً اطلاعات مورد نیاز برای فاکتور رسمی را تکمیل کنید');
                 }
-
-                // Update customer info first
-                const updateSuccess = await updateCustomerInfo();
-                if (!updateSuccess) {
-                    throw new Error('خطا در به‌روزرسانی اطلاعات مشتری');
-                }
             }
 
+            // Prepare order data
             const orderData = {
                 customer_comment: customerComment,
                 business_invoice_type: businessInvoiceType,
-                customer_info: businessInvoiceType === 'official' ? customerInfo : {},
                 items: validItems.map(item => ({
                     product_id: parseInt(item.product),
                     quantity: parseInt(item.requested_quantity),
@@ -204,7 +198,22 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 }))
             };
 
-            console.log('📤 Submitting order:', orderData);
+            // ADD CUSTOMER INFO FOR OFFICIAL INVOICES
+            if (businessInvoiceType === 'official') {
+                orderData.customer_info = {
+                    name: customerInfo.name,
+                    phone: customerInfo.phone,
+                    company_name: customerInfo.company_name || '',
+                    national_id: customerInfo.national_id,
+                    economic_id: customerInfo.economic_id || '',
+                    postal_code: customerInfo.postal_code,
+                    complete_address: customerInfo.complete_address,
+                    province: customerInfo.province || '',
+                    city: customerInfo.city || ''
+                };
+            }
+
+            console.log('📤 Sending order data:', orderData);
 
             const response = await API.post('orders/', orderData);
 

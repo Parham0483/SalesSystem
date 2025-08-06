@@ -28,6 +28,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',  # Added explicitly
     'corsheaders',
     'tasks',
+    'reportlab',
+    'arabic_reshaper',
 ]
 
 MIDDLEWARE = [
@@ -350,3 +352,8 @@ INVOICE_LOGO_PATH = os.path.join(BASE_DIR, 'static', 'images', 'company_logo.png
 # Tax Settings
 DEFAULT_TAX_RATE = 0.09
 INCLUDE_TAX_IN_OFFICIAL_INVOICES = True
+
+
+INVOICE_FONT_PATH = os.path.join(BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
+INVOICE_LOGO_PATH = os.path.join(BASE_DIR, 'static', 'images', 'company_logo.png')
+LETTERHEAD_PATH = os.path.join(BASE_DIR, 'static', 'images', 'letterhead.jpg')

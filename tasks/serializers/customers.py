@@ -181,7 +181,7 @@ class CustomerInvoiceInfoSerializer(serializers.ModelSerializer):
         model = Customer
         fields = [
             'name', 'phone', 'company_name', 'email',
-            'national_id', 'economic_id', 'postal_code', 'complete_address'
+            'national_id', 'economic_id', 'postal_code', 'complete_address', 'city' , 'province'
         ]
 
     def validate_national_id(self, value):
@@ -210,6 +210,8 @@ class CustomerInvoiceInfoUpdateSerializer(serializers.Serializer):
     economic_id = serializers.CharField(max_length=20, required=False, allow_blank=True)
     postal_code = serializers.CharField(max_length=10, required=False, allow_blank=True)
     complete_address = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    province = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
     def validate(self, data):
         """Custom validation based on invoice type"""

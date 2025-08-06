@@ -394,8 +394,6 @@ class ProductViewSet(viewsets.ModelViewSet):
         })
 
 
-# Replace your ShipmentAnnouncementViewSet with this CLEAN version (no logs)
-
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
     """Clean ViewSet for shipment announcements"""
     authentication_classes = [JWTAuthentication]
@@ -427,8 +425,8 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             # Extract and validate images
             images = request.FILES.getlist('images')
 
-            # Validate images files
-            allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
+            # Validate image files
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
             max_size = 5 * 1024 * 1024  # 5MB
 
             for image in images:
@@ -484,11 +482,11 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
 
             # Handle images if provided
             if images:
-                # Set first images as main images
+                # Set first image as main image
                 announcement.image = images[0]
                 announcement.save()
 
-                # Handle additional images (if more than 1 images uploaded)
+                # Handle additional images (if more than 1 image uploaded)
                 from ..models import ShipmentAnnouncementImage
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
@@ -525,8 +523,8 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             images = request.FILES.getlist('images')
 
             if images:
-                # Validate images files
-                allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
+                # Validate image files
+                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
                 max_size = 5 * 1024 * 1024  # 5MB
 
                 for image in images:
@@ -580,12 +578,12 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             # Save the updated instance
             instance.save()
 
-            # Handle images updates if new images provided
+            # Handle image updates if new images provided
             if images:
                 # Clear existing additional images
                 instance.images.all().delete()
 
-                # Set first images as main images
+                # Set first image as main image
                 instance.image = images[0]
                 instance.save()
 
