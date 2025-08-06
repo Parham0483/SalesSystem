@@ -24,6 +24,7 @@ import AdminDealersPage from "./pages/admin/AdminDealersPage";
 import Profile from "./component/ProfilePage";
 import CompleteProfilePage from "./pages/Main/CompleteProfilePage";
 import GoogleAuthProvider from "./component/GoogleAuth/GoogleOAuthProvider";
+import LandingPage from "./pages/Main/LandingPage";
 
 
 const API_URL = process.env.REACT_APP_API_URL;
@@ -73,7 +74,8 @@ function App() {
         <Router>
             <Routes>
                 {/* PUBLIC ROUTES */}
-                <Route path="/" element={<MainPage />} />
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/main" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/complete-profile" element={<CompleteProfilePage />} />
