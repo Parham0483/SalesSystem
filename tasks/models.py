@@ -12,7 +12,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 import os
 
-from logger import logger
+import logging
+logger = logging.getLogger(__name__)
 
 
 class CustomerManager(BaseUserManager):
