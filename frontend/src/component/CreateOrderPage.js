@@ -24,7 +24,9 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         national_id: '',
         economic_id: '',
         postal_code: '',
-        complete_address: ''
+        complete_address: '',
+        province: '',
+        city: ''
     });
     const [customerInfoLoaded, setCustomerInfoLoaded] = useState(false);
     const [showCustomerForm, setShowCustomerForm] = useState(false);
@@ -76,7 +78,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     };
 
     const checkCustomerInfoCompleteness = () => {
-        const required = ['name', 'phone', 'complete_address', 'national_id', 'postal_code'];
+        const required = ['name', 'phone', 'complete_address', 'national_id', 'postal_code', 'province', 'city'];
         const errors = {};
 
         required.forEach(field => {
@@ -86,7 +88,9 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                     phone: 'شماره تماس',
                     complete_address: 'آدرس کامل',
                     national_id: 'کد ملی',
-                    postal_code: 'کد پستی'
+                    postal_code: 'کد پستی',
+                    province: 'استان',
+                    city: 'شهر'
                 };
                 errors[field] = `${labels[field]} الزامی است`;
             }
@@ -194,8 +198,8 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 business_invoice_type: businessInvoiceType,
                 customer_info: businessInvoiceType === 'official' ? customerInfo : {},
                 items: validItems.map(item => ({
-                    product: parseInt(item.product),
-                    requested_quantity: parseInt(item.requested_quantity),
+                    product_id: parseInt(item.product),
+                    quantity: parseInt(item.requested_quantity),
                     customer_notes: item.customer_notes || ''
                 }))
             };
@@ -365,6 +369,27 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                                         error={customerInfoErrors.postal_code}
                                         placeholder="کد پستی"
                                         maxLength="10"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="neo-form-row">
+                                <div className="neo-form-field">
+                                    <NeoBrutalistInput
+                                        label="استان *"
+                                        value={customerInfo.province}
+                                        onChange={(e) => handleCustomerInfoChange('province', e.target.value)}
+                                        error={customerInfoErrors.province}
+                                        placeholder="استان"
+                                    />
+                                </div>
+                                <div className="neo-form-field">
+                                    <NeoBrutalistInput
+                                        label="شهر *"
+                                        value={customerInfo.city}
+                                        onChange={(e) => handleCustomerInfoChange('city', e.target.value)}
+                                        error={customerInfoErrors.city}
+                                        placeholder="شهر"
                                     />
                                 </div>
                             </div>

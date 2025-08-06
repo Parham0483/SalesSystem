@@ -7,17 +7,18 @@ from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
 class OrderItemCreateSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
-    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
-    custom_price = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, allow_null=True)
+    quantity = serializers.IntegerField(source='requested_quantity', min_value=1)
+    customer_notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate_product_id(self, value):
         try:
             product = Product.objects.get(id=value)
             if not product.is_active:
-                raise serializers.ValidationError("این محصول غیرفعال است")
+                raise serializers.ValidationError("This product is inactive.")
             return value
         except Product.DoesNotExist:
-            raise serializers.ValidationError("محصول یافت نشد")
+            raise serializers.ValidationError("Product not found.")
+
 
 
 class CustomerInfoForOfficialInvoiceSerializer(serializers.Serializer):
@@ -67,102 +68,60 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.Serializer):
     items = OrderItemCreateSerializer(many=True, min_length=1)
     business_invoice_type = serializers.ChoiceField(
-        choices=[('unofficial', 'unofficial'), ('official', 'official')],
+        choices=Order.BUSINESS_INVOICE_TYPE_CHOICES,
         default='unofficial'
     )
-    notes = serializers.CharField(max_length=500, required=False, allow_blank=True)
-
-    # Customer info for official invoices
+    customer_comment = serializers.CharField(required=False, allow_blank=True)
     customer_info = CustomerInfoForOfficialInvoiceSerializer(required=False)
 
     def validate(self, data):
-        """Cross-field validation"""
-        invoice_type = data.get('business_invoice_type', 'unofficial')
-        customer_info = data.get('customer_info')
-
-        # For official invoices, customer_info is required
-        if invoice_type == 'official':
-            if not customer_info:
-                raise serializers.ValidationError({
-                    'customer_info': 'برای فاکتور رسمی اطلاعات کامل مشتری الزامی است'
-                })
-
+        if data.get('business_invoice_type') == 'official' and not data.get('customer_info'):
+            raise serializers.ValidationError({
+                'customer_info': 'Customer information is required for an official invoice.'
+            })
         return data
-
-    def validate_items(self, items):
-        """Validate order items"""
-        if not items:
-            raise serializers.ValidationError("حداقل یک محصول انتخاب کنید")
-
-        # Check if all products exist and are active
-        product_ids = [item['product_id'] for item in items]
-        existing_products = Product.objects.filter(
-            id__in=product_ids,
-            is_active=True
-        ).values_list('id', flat=True)
-
-        missing_products = set(product_ids) - set(existing_products)
-        if missing_products:
-            raise serializers.ValidationError(
-                f"محصولات با شناسه‌های {missing_products} یافت نشدند یا غیرفعال هستند"
-            )
-
-        return items
 
     @transaction.atomic
     def create(self, validated_data):
-        """Create order with proper customer handling"""
         items_data = validated_data.pop('items')
-        customer_info = validated_data.pop('customer_info', None)
+        customer_info_data = validated_data.pop('customer_info', None)
         customer = self.context['request'].user
 
-        # Update customer info if provided (for official invoices)
-        if customer_info:
-            # Update customer with official invoice required fields
-            for field, value in customer_info.items():
-                if value:  # Only update non-empty values
-                    setattr(customer, field, value)
+        # Update customer info if provided
+        if customer_info_data:
+            # Use the serializer to validate the incoming data
+            customer_serializer = CustomerInvoiceInfoUpdateSerializer(instance=customer, data=customer_info_data,
+                                                                      partial=True)
+            customer_serializer.is_valid(raise_exception=True)
 
-            # Validate customer for official invoice
+            # --- FIX: Manually update the customer instead of calling .save() on the serializer ---
+            for field, value in customer_serializer.validated_data.items():
+                setattr(customer, field, value)
+            customer.save()
+            # --- END FIX ---
+
+        # Validate customer for official invoice AFTER potential update
+        if validated_data.get('business_invoice_type') == 'official':
             is_valid, missing_fields = customer.validate_for_official_invoice()
             if not is_valid:
                 raise serializers.ValidationError({
-                    'customer_info': f"فیلدهای الزامی کامل نیست: {', '.join(missing_fields)}"
+                    'customer_info': f"Required fields are incomplete: {', '.join(missing_fields)}"
                 })
 
-            customer.save()
+        # Create the Order instance
+        order = Order.objects.create(customer=customer, **validated_data)
 
-        # Create order
-        order = Order.objects.create(
-            customer=customer,
-            **validated_data
-        )
-
-        # Create order items
+        # Create OrderItem instances
         for item_data in items_data:
-            product = Product.objects.get(id=item_data['product_id'])
-
-            # Use custom price if provided, otherwise use product price
-            unit_price = item_data.get('custom_price') or product.price
-            quantity = item_data['quantity']
-            total_price = unit_price * quantity
-
             OrderItem.objects.create(
                 order=order,
-                product=product,
-                quantity=quantity,
-                unit_price=unit_price,
-                total_price=total_price
+                product_id=item_data['product_id'],
+                requested_quantity=item_data['requested_quantity'],
+                customer_notes=item_data.get('customer_notes', '')
             )
 
-        # Calculate order total
-        order.calculate_total()
-
-        # Update customer's last order date
         customer.update_last_order_date()
-
         return order
-
 
 class OrderSerializer(serializers.ModelSerializer):
     """Full order serializer for read operations"""

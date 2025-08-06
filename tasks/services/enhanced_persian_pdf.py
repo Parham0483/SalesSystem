@@ -70,39 +70,82 @@ class EnhancedPersianInvoicePDFGenerator:
         }
 
     def _para(self, text, style='table_cell'):
-        # --- FIX: Reshaping is now ONLY done here to prevent double-processing ---
         reshaped_text = get_display(arabic_reshaper.reshape(str(text)))
         return Paragraph(reshaped_text, self.styles[style])
 
+    def draw_background(self, canvas, doc):
+        letterhead_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'letterhead.jpg')
+        if os.path.exists(letterhead_path):
+            canvas.drawImage(
+                letterhead_path, 0, 0, width=self.page_width, height=self.page_height,
+                preserveAspectRatio=True, mask='auto'
+            )
+        else:
+            print("⚠️ Letterhead image not found at 'static/images/letterhead.jpg'.")
 
+    def add_footer(self, elements):
+        """Adds the explanations and signature boxes as flowable elements."""
+        explanations_text = f"توضیحات: {getattr(self.invoice, 'notes', '') or ''}"
+        explanations_table = Table([[self._para(explanations_text, 'default')]], colWidths=[self.content_width],
+                                   rowHeights=[15 * mm])
+        explanations_table.setStyle(
+            TableStyle([('GRID', (0, 0), (-1, -1), 1, colors.black), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+
+        payment_text = self._para("شرایط و نحوه فروش:     [  ] نقدی     [  ] غیر نقدی", 'default')
+        signatures_table = Table(
+            [[self._para("مهر و امضای خریدار"), self._para("مهر و امضای فروشنده"), payment_text]],
+            colWidths=[self.content_width * 0.3, self.content_width * 0.3, self.content_width * 0.4],
+            rowHeights=[20 * mm]
+        )
+        signatures_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 1, colors.black), ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+        ]))
+
+        elements.append(Spacer(1, 5 * mm))  # Add some space before the footer
+        elements.append(explanations_table)
+        elements.append(Spacer(1, 2 * mm))
+        elements.append(signatures_table)
+
+    def draw_footer(self, canvas, doc):
+        explanations_text = f"توضیحات: {getattr(self.invoice, 'notes', '') or ''}"
+        explanations_table = Table([[self._para(explanations_text, 'default')]], colWidths=[self.content_width], rowHeights=[15 * mm])
+        explanations_table.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 1, colors.black), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+
+        payment_text = self._para("شرایط و نحوه فروش:     [  ] نقدی     [  ] غیر نقدی", 'default')
+        signatures_table = Table(
+            [[self._para("مهر و امضای خریدار"), self._para("مهر و امضای فروشنده"), payment_text]],
+            colWidths=[self.content_width * 0.3, self.content_width * 0.3, self.content_width * 0.4], rowHeights=[20 * mm]
+        )
+        signatures_table.setStyle(TableStyle([
+            ('GRID', (0, 0), (-1, -1), 1, colors.black), ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+        ]))
+
+        explanations_table.wrapOn(canvas, self.content_width, 20 * mm)
+        explanations_table.drawOn(canvas, self.margin, 45 * mm)
+
+        signatures_table.wrapOn(canvas, self.content_width, 25 * mm)
+        signatures_table.drawOn(canvas, self.margin, 20 * mm)
+
+    def draw_static_content(self, canvas, doc):
+        self.draw_background(canvas, doc)
+        self.draw_footer(canvas, doc)
 
     def add_header_section(self, elements):
-        logo_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'company_logo.png')
-
-        # --- FIX: Do not reshape raw text here. Let _para() handle it. ---
         title = "صورتحساب فروش کالا و خدمات"
         date_str = jdatetime.date.fromgregorian(date=self.invoice.issued_at.date()).strftime('%Y/%m/%d')
         serial_info_text = f"شماره سریال: {self.invoice.invoice_number}\nتاریخ: {date_str}"
-        serial_info = self._para(serial_info_text, 'default')
 
-        if os.path.exists(logo_path):
-            logo = Image(logo_path, width=25 * mm, height=25 * mm, kind='proportional')
-            header_data = [[serial_info, self._para(title, 'title'), logo]]
-            col_widths = [self.content_width * 0.3, self.content_width * 0.4, self.content_width * 0.3]
-        else:
-            print("⚠️ Logo not found. Generating text-only header.")
-            header_data = [[serial_info, self._para(title, 'title')]]
-            col_widths = [self.content_width * 0.5, self.content_width * 0.5]
+        header_data = [[self._para(serial_info_text, 'default'), self._para(title, 'title')]]
+        col_widths = [self.content_width * 0.5, self.content_width * 0.5]
 
         header_table = Table(header_data, colWidths=col_widths)
         header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (0, 0), 'RIGHT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, 0), 'RIGHT'),
         ]))
         elements.append(header_table)
 
     def add_parties_info(self, elements):
-        # --- FIX: Simplified layout for better rendering reliability ---
         def create_party_table(title, party_data):
             table_content = [
                 [self._para(title, style='table_header')],
@@ -118,8 +161,7 @@ class EnhancedPersianInvoicePDFGenerator:
             party_table.setStyle(TableStyle([
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
                 ('BACKGROUND', (0, 0), (0, 0), colors.darkslategray),
-                ('ALIGN', (0, 1), (0, -1), 'RIGHT'),
-                ('RIGHTPADDING', (0, 1), (0, -1), 5),
+                ('ALIGN', (0, 1), (0, -1), 'RIGHT'), ('RIGHTPADDING', (0, 1), (0, -1), 5),
             ]))
             return party_table
 
@@ -129,13 +171,11 @@ class EnhancedPersianInvoicePDFGenerator:
             "economic_id": settings.BUSINESS_ECONOMIC_ID, "national_id": settings.BUSINESS_NATIONAL_ID,
             "phone": settings.BUSINESS_PHONE
         }
-
         customer_info = {
             "name": self.customer.name, "province": getattr(self.customer, 'province', ''),
-            "city": getattr(self.customer, 'city', ''),
-            "address": getattr(self.customer, 'address', ''), "postal_code": self.customer.postal_code,
-            "economic_id": self.customer.economic_id, "national_id": self.customer.national_id,
-            "phone": self.customer.phone
+            "city": getattr(self.customer, 'city', ''), "address": getattr(self.customer, 'address', ''),
+            "postal_code": self.customer.postal_code, "economic_id": self.customer.economic_id,
+            "national_id": self.customer.national_id, "phone": self.customer.phone
         }
 
         elements.append(Spacer(1, 4 * mm))
@@ -145,7 +185,6 @@ class EnhancedPersianInvoicePDFGenerator:
         elements.append(Spacer(1, 4 * mm))
 
     def add_items_table(self, elements):
-        # This function remains largely the same as the previous corrected version
         headers = [
             "جمع کل بعلاوه مالیات (ریال)", "مالیات (ریال)", "جمع پس از تخفیف (ریال)",
             "تخفیف (ریال)", "مبلغ کل (ریال)", "مبلغ واحد (ریال)",
@@ -170,11 +209,9 @@ class EnhancedPersianInvoicePDFGenerator:
             total_after_discount = total_price - discount
             tax_amount = int(total_after_discount * settings.DEFAULT_TAX_RATE)
             final_amount = total_after_discount + tax_amount
-
             grand_total_final += final_amount
             grand_total_tax += tax_amount
             grand_total_after_discount += total_after_discount
-
             row = [
                 self._para(f"{final_amount:,}"), self._para(f"{tax_amount:,}"), self._para(f"{total_after_discount:,}"),
                 self._para(f"{discount:,}"), self._para(f"{total_price:,}"), self._para(f"{unit_price:,}"),
@@ -184,8 +221,7 @@ class EnhancedPersianInvoicePDFGenerator:
             table_data.append(row)
 
         totals_row = [
-            self._para(f"{grand_total_final:,}"), self._para(f"{grand_total_tax:,}"),
-            self._para(f"{grand_total_after_discount:,}"),
+            self._para(f"{grand_total_final:,}"), self._para(f"{grand_total_tax:,}"), self._para(f"{grand_total_after_discount:,}"),
             "", "", "", "", "", self._para("جمع کل"), "", ""
         ]
         table_data.append(totals_row)
@@ -200,42 +236,27 @@ class EnhancedPersianInvoicePDFGenerator:
         ]))
         elements.append(items_table)
 
-    def add_footer(self, elements):
-        explanations_text = f"توضیحات: {getattr(self.invoice, 'notes', '') or ''}"
-        explanations_table = Table([[self._para(explanations_text, 'default')]], colWidths=[self.content_width],
-                                   rowHeights=[20 * mm])
-        explanations_table.setStyle(
-            TableStyle([('GRID', (0, 0), (-1, -1), 1, colors.black), ('VALIGN', (0, 0), (-1, -1), 'TOP')]))
-
-        payment_text = self._para("شرایط و نحوه فروش:     [  ] نقدی     [  ] غیر نقدی", 'default')
-        signatures_table = Table(
-            [[self._para("مهر و امضای خریدار"), self._para("مهر و امضای فروشنده"), payment_text]],
-            colWidths=[self.content_width * 0.3, self.content_width * 0.3, self.content_width * 0.4],
-            rowHeights=[25 * mm]
-        )
-        signatures_table.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
-        ]))
-
-        elements.append(Spacer(1, 2 * mm))
-        elements.append(explanations_table)
-        elements.append(Spacer(1, 2 * mm))
-        elements.append(signatures_table)
-
     def generate_pdf(self, *args, **kwargs):
         buffer = BytesIO()
         doc = SimpleDocTemplate(
-            buffer, pagesize=A4, rightMargin=self.margin, leftMargin=self.margin,
-            topMargin=self.margin, bottomMargin=self.margin
+            buffer,
+            pagesize=A4,
+            # --- Final margins to define the "writable area" ---
+            topMargin=45 * mm,    # Increased to leave space for letterhead header
+            bottomMargin=60 * mm, # Increased to leave space for letterhead footer
+            rightMargin=self.margin,
+            leftMargin=self.margin,
         )
+
+        # Assemble all parts of the invoice as a single list of content
         elements = []
         self.add_header_section(elements)
         self.add_parties_info(elements)
         self.add_items_table(elements)
-        self.add_footer(elements)
-        doc.build(elements)
+        self.add_footer(elements) # Add the footer as a standard element
+
+        # The 'onFirstPage' hook now only draws the background
+        doc.build(elements, onFirstPage=self.draw_background, onLaterPages=self.draw_background)
         return buffer
 
     def get_http_response(self):
