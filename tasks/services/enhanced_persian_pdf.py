@@ -185,17 +185,28 @@ class EnhancedPersianInvoicePDFGenerator:
         elements.append(Spacer(1, 4 * mm))
 
     def add_items_table(self, elements):
+        """Add items table with product-specific tax rates"""
         headers = [
-            "جمع کل بعلاوه مالیات (ریال)", "مالیات (ریال)", "جمع پس از تخفیف (ریال)",
-            "تخفیف (ریال)", "مبلغ کل (ریال)", "مبلغ واحد (ریال)",
-            "واحد", "تعداد", "شرح کالا یا خدمات", "کد کالا", "ردیف"
+            "جمع کل بعلاوه مالیات (ریال)", "مالیات (ریال)", "نرخ مالیات (%)",
+            "جمع پس از تخفیف (ریال)", "تخفیف (ریال)", "مبلغ کل (ریال)",
+            "مبلغ واحد (ریال)", "واحد", "تعداد", "شرح کالا یا خدمات", "کد کالا", "ردیف"
         ]
+
         col_widths = [
-            self.content_width * 0.12, self.content_width * 0.09, self.content_width * 0.11,
-            self.content_width * 0.08, self.content_width * 0.10, self.content_width * 0.10,
-            self.content_width * 0.06, self.content_width * 0.06, self.content_width * 0.18,
-            self.content_width * 0.06, self.content_width * 0.04
+            self.content_width * 0.12,  # جمع کل بعلاوه مالیات
+            self.content_width * 0.09,  # مالیات
+            self.content_width * 0.07,  # نرخ مالیات
+            self.content_width * 0.10,  # جمع پس از تخفیف
+            self.content_width * 0.07,  # تخفیف
+            self.content_width * 0.09,  # مبلغ کل
+            self.content_width * 0.09,  # مبلغ واحد
+            self.content_width * 0.06,  # واحد
+            self.content_width * 0.06,  # تعداد
+            self.content_width * 0.15,  # شرح کالا
+            self.content_width * 0.06,  # کد کالا
+            self.content_width * 0.04  # ردیف
         ]
+
         table_data = [[self._para(h, 'table_header') for h in headers]]
 
         items = list(self.order.items.all())
@@ -207,22 +218,49 @@ class EnhancedPersianInvoicePDFGenerator:
             total_price = unit_price * quantity
             discount = 0
             total_after_discount = total_price - discount
-            tax_amount = int(total_after_discount * settings.DEFAULT_TAX_RATE)
+
+            # CRITICAL CHANGE: Use product-specific tax rate instead of global DEFAULT_TAX_RATE
+            product_tax_rate = float(item.product.tax_rate)  # Get from product, not settings
+            tax_amount = int(total_after_discount * (product_tax_rate / 100))
             final_amount = total_after_discount + tax_amount
+
             grand_total_final += final_amount
             grand_total_tax += tax_amount
             grand_total_after_discount += total_after_discount
+
             row = [
-                self._para(f"{final_amount:,}"), self._para(f"{tax_amount:,}"), self._para(f"{total_after_discount:,}"),
-                self._para(f"{discount:,}"), self._para(f"{total_price:,}"), self._para(f"{unit_price:,}"),
-                self._para("عدد"), self._para(str(quantity)), self._para(item.product.name),
-                self._para(str(getattr(item.product, 'sku', ''))), self._para(str(i))
+                self._para(f"{final_amount:,}"),  # جمع کل بعلاوه مالیات
+                self._para(f"{tax_amount:,}"),  # مالیات
+                self._para(f"{product_tax_rate:.1f}%"),  # نرخ مالیات (SHOW INDIVIDUAL RATE)
+                self._para(f"{total_after_discount:,}"),  # جمع پس از تخفیف
+                self._para(f"{discount:,}"),  # تخفیف
+                self._para(f"{total_price:,}"),  # مبلغ کل
+                self._para(f"{unit_price:,}"),  # مبلغ واحد
+                self._para("عدد"),  # واحد
+                self._para(str(quantity)),  # تعداد
+                self._para(item.product.name),  # شرح کالا
+                self._para(str(getattr(item.product, 'sku', ''))),  # کد کالا
+                self._para(str(i))  # ردیف
             ]
             table_data.append(row)
 
+        # Calculate weighted average tax rate for totals row
+        avg_tax_rate = (grand_total_tax / grand_total_after_discount * 100) if grand_total_after_discount > 0 else 0
+
+        # Add totals row
         totals_row = [
-            self._para(f"{grand_total_final:,}"), self._para(f"{grand_total_tax:,}"), self._para(f"{grand_total_after_discount:,}"),
-            "", "", "", "", "", self._para("جمع کل"), "", ""
+            self._para(f"{grand_total_final:,}"),  # جمع کل بعلاوه مالیات
+            self._para(f"{grand_total_tax:,}"),  # مالیات
+            self._para(f"{avg_tax_rate:.1f}%"),  # نرخ مالیات میانگین
+            self._para(f"{grand_total_after_discount:,}"),  # جمع پس از تخفیف
+            "",  # تخفیف
+            "",  # مبلغ کل
+            "",  # مبلغ واحد
+            "",  # واحد
+            "",  # تعداد
+            self._para("جمع کل"),  # شرح کالا
+            "",  # کد کالا
+            ""  # ردیف
         ]
         table_data.append(totals_row)
 
@@ -232,7 +270,7 @@ class EnhancedPersianInvoicePDFGenerator:
             ('BACKGROUND', (0, 0), (-1, 0), colors.darkslategray),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-            ('SPAN', (3, -1), (7, -1)),
+            ('SPAN', (3, -1), (8, -1)),
         ]))
         elements.append(items_table)
 

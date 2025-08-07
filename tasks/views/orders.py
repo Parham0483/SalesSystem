@@ -108,7 +108,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 # 2. Send customer SMS notification (SINGLE CALL)
                 try:
                     if order.customer.phone:
-                        invoice_type_persian = "رسمی" if order.business_invoice_type == 'official' else "غیررسمی"
+                        invoice_type_persian = "رسمی" if order.business_invoice_type == 'official' else "بدون مالیات"
                         customer_sms = f"""سلام {order.customer.name}
                 سفارش #{order.id} با موفقیت ثبت شد.
                 نوع فاکتور: {invoice_type_persian}
@@ -1113,7 +1113,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({
                 'message': 'نوع فاکتور با موفقیت تغییر یافت',
                 'business_invoice_type': new_type,
-                'business_invoice_type_display': 'فاکتور رسمی' if new_type == 'official' else 'فاکتور غیررسمی'
+                'business_invoice_type_display': 'فاکتور رسمی' if new_type == 'official' else 'فاکتور شخصی '
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1139,7 +1139,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             invoice_info = {
                 'order_id': order.id,
                 'business_invoice_type': order.business_invoice_type,
-                'business_invoice_type_display': 'فاکتور رسمی' if order.business_invoice_type == 'official' else 'فاکتور غیررسمی',
+                'business_invoice_type_display': 'فاکتور رسمی' if order.business_invoice_type == 'official' else 'فاکتور شخصی',
                 'status': order.status,
                 'quoted_total': order.quoted_total,
                 'has_invoice': hasattr(order, 'invoice'),
@@ -1200,7 +1200,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 else:
                     available_pdfs.append({
                         'type': 'final_unofficial',
-                        'name': 'فاکتور غیررسمی',
+                        'name': 'فاکتور شخصی',
                         'description': 'بدون مالیات'
                     })
 

@@ -17,7 +17,7 @@ import jdatetime
 
 
 class UnofficialInvoicePDFGenerator:
-    """Generator for unofficial invoices (غیررسمی)"""
+    """Generator for unofficial invoices """
 
     def __init__(self, order, invoice=None):
         self.order = order
@@ -119,7 +119,7 @@ class UnofficialInvoicePDFGenerator:
 
         date_str = invoice_date.strftime('%Y/%m/%d')
 
-        title = "فاکتور فروش غیررسمی"
+        title = "فاکتور فروش شخصی"
 
         # Invoice number (use invoice number if available, otherwise order number)
         if self.invoice and self.invoice.invoice_number:
@@ -249,7 +249,7 @@ class UnofficialInvoicePDFGenerator:
         """Add footer note about unofficial invoice"""
         elements.append(Spacer(1, 8 * mm))
 
-        note_text = "توجه: این فاکتور غیررسمی بوده و شامل مالیات بر ارزش افزوده نمی‌باشد"
+        note_text = "توجه: این فاکتور شخصی بوده و شامل مالیات بر ارزش افزوده نمی‌باشد"
         note_table = Table([[self._para(note_text, 'default')]],
                            colWidths=[self.content_width])
         note_table.setStyle(TableStyle([

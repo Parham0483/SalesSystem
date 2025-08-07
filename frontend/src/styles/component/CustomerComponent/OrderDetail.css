@@ -196,7 +196,7 @@
 
 .neo-table-header {
     display: grid;
-    grid-template-columns: 2fr 1fr 2fr 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1.5fr 1.5fr 1fr 1fr 1fr 2fr;
     gap: 0.75rem;
     padding: 1rem;
     background-color: #000;
@@ -205,7 +205,7 @@
     font-weight: bold;
     font-size: 0.9rem;
     text-align: right;
-    min-width: 800px;
+    min-width: 900px;
 }
 
 .neo-header-cell {
@@ -219,14 +219,14 @@
 
 .neo-table-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 2fr 1fr 1fr 1fr;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr 1fr 1fr 1fr 2fr;
     gap: 0.75rem;
     padding: 1rem;
     border: 2px solid #000;
     border-top: none;
     background-color: #fff;
     transition: background-color 0.2s ease;
-    min-width: 800px;
+    min-width: 900px;
 }
 
 .neo-table-row:nth-child(even) {

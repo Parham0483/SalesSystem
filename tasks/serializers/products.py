@@ -8,10 +8,8 @@ class ProductImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductImage
-        fields = ['id', 'images', 'alt_text', 'order', 'is_primary']
+        fields = ['id', 'image', 'alt_text', 'order', 'is_primary']  # FIXED: 'images' -> 'image'
 
-
-# tasks/serializers/products.py - Updated ProductSerializer and CategorySerializer
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     """Serializer for product categories with Persian support"""
@@ -23,7 +21,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'name_fa', 'display_name', 'description',
             'slug', 'is_active', 'order', 'products_count', 'parent',
-            'images', 'created_at'
+            'image', 'created_at'  # FIXED: 'images' -> 'image'
         ]
         read_only_fields = ['created_at', 'slug']
 
@@ -44,6 +42,11 @@ class ProductSerializer(serializers.ModelSerializer):
     category_details = serializers.SerializerMethodField()
     days_since_created = serializers.SerializerMethodField()
 
+    # TAX-RELATED FIELDS:
+    tax_rate = serializers.DecimalField(max_digits=5, decimal_places=2, default=9.00)
+    price_with_tax = serializers.SerializerMethodField()
+    tax_amount = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = [
@@ -52,12 +55,13 @@ class ProductSerializer(serializers.ModelSerializer):
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
-            'stock_status', 'is_out_of_stock', 'days_since_created'
+            'stock_status', 'is_out_of_stock', 'days_since_created',
+            'tax_rate' , 'price_with_tax', 'tax_amount'
         ]
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
 
     def get_image_url(self, obj):
-        """Get the primary images URL with full domain"""
+        """Get the primary image URL with full domain"""
         request = self.context.get('request')
 
         if obj.image:
@@ -68,7 +72,7 @@ class ProductSerializer(serializers.ModelSerializer):
                 base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
                 return f"{base_url}{obj.image.url}"
 
-        # Use the model's method if no direct images
+        # Use the model's method if no direct image
         image_url = obj.get_primary_image_url()
         if image_url and request:
             return request.build_absolute_uri(image_url)
@@ -104,10 +108,10 @@ class ProductSerializer(serializers.ModelSerializer):
         return (timezone.now() - obj.created_at).days
 
     def validate_image(self, value):
-        """Custom validation for images field"""
-        # If it's a string (URL), it means no new images is being uploaded
+        """Custom validation for image field"""
+        # If it's a string (URL), it means no new image is being uploaded
         if isinstance(value, str):
-            # Return None to indicate no change to images
+            # Return None to indicate no change to image
             return None
 
         # If it's a file, validate it
@@ -118,15 +122,15 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        """Custom update method to handle images properly"""
-        # Remove images from validated_data if it's None (no new images)
-        image = validated_data.pop('images', 'no_change')
+        """Custom update method to handle image properly"""
+        # Remove image from validated_data if it's None (no new image)
+        image = validated_data.pop('image', 'no_change')  # FIXED: 'images' -> 'image'
 
         # Update other fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        # Only update images if a new one was provided
+        # Only update image if a new one was provided
         if image != 'no_change' and image is not None:
             instance.image = image
 
@@ -160,68 +164,25 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Selected category is not active")
         return value
 
+    def get_price_with_tax(self, obj):
+        """Get product price including tax"""
+        return float(obj.get_price_with_tax())
 
-# Add debugging to your ShipmentAnnouncementSerializer
+    def get_tax_amount(self, obj):
+        """Get tax amount for base price"""
+        return float(obj.get_tax_amount_for_price(obj.base_price))
 
-class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
-    """SIMPLIFIED Shipment Announcement Serializer - READ ONLY"""
-    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
-    image_url = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
-    products_count = serializers.ReadOnlyField()
-
-    class Meta:
-        model = ShipmentAnnouncement
-        fields = [
-            'id', 'title', 'description', 'image_url', 'images',
-            'origin_country', 'shipment_date', 'estimated_arrival', 'product_categories',
-            'created_at', 'created_by', 'created_by_name',
-            'is_active', 'is_featured', 'products_count', 'view_count'
-        ]
-        read_only_fields = [
-            'id', 'created_at', 'created_by', 'created_by_name',
-            'products_count', 'view_count', 'image_url', 'images'
-        ]
-
-    def get_image_url(self, obj):
-        """Get main images URL"""
-        request = self.context.get('request')
-        relative_url = obj.get_image_url()
-
-        if relative_url and request:
-            return request.build_absolute_uri(relative_url)
-
-        return None
-
-    def get_images(self, obj):
-        """Return a simple list of all image URLs."""
-        request = self.context.get('request')
-        image_urls = []
-
-        # Add main image first if it exists
-        if obj.image and hasattr(obj.image, 'url'):
-            url = request.build_absolute_uri(obj.image.url) if request else obj.image.url
-            image_urls.append(url)
-
-        # Add additional images
-        for img in obj.images.all().order_by('order'):
-            if hasattr(img.image, 'url'):
-                url = request.build_absolute_uri(img.image.url) if request else img.image.url
-                image_urls.append(url)
-
-        return image_urls
-
-class ProductStockUpdateSerializer(serializers.Serializer):
-    """Serializer for stock updates"""
-    stock = serializers.IntegerField(min_value=0)
-
-    def validate_stock(self, value):
+    def validate_tax_rate(self, value):
+        """Validate tax rate"""
         if value < 0:
-            raise serializers.ValidationError("Stock cannot be negative")
+            raise serializers.ValidationError("Tax rate cannot be negative")
+        if value > 100:
+            raise serializers.ValidationError("Tax rate cannot exceed 100%")
         return value
 
+
 class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
-    """SIMPLIFIED Shipment Announcement Serializer - READ ONLY"""
+    """FIXED Shipment Announcement Serializer"""
     created_by_name = serializers.CharField(source='created_by.name', read_only=True)
     image_url = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
@@ -254,7 +215,6 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         images = []
 
-
         # Add main image first if exists
         if obj.image:
             image_url = obj.image.url
@@ -262,8 +222,8 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
                 image_url = request.build_absolute_uri(image_url)
             images.append({'image': image_url})
 
-        # Add additional images
-        additional_images = obj.images.all().order_by('order')
+        # FIXED: Use the correct related name 'additional_images'
+        additional_images = obj.additional_images.all().order_by('order')
 
         for img in additional_images:
             image_url = img.image.url
@@ -271,13 +231,13 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
                 image_url = request.build_absolute_uri(image_url)
             images.append({'image': image_url})
 
-
         return images
 
     def to_representation(self, instance):
         """Add debugging to see what's being returned"""
         data = super().to_representation(instance)
         return data
+
 
 class ProductStockUpdateSerializer(serializers.Serializer):
     """Serializer for stock updates"""
@@ -338,3 +298,5 @@ class ProductBulkUpdateSerializer(serializers.Serializer):
 
         if action == 'update_stock' and 'new_stock' not in data and 'stock_change' not in data:
             raise serializers.ValidationError("new_stock or stock_change is required for update_stock action")
+
+        return data

@@ -26,6 +26,11 @@ const AdminProductsPage = () => {
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [selectedImage, setSelectedImage] = useState('');
 
+    const formatPrice = (price) => {
+        if (!price || price === 0) return 'تماس بگیرید';
+        return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
     // Form State
     const [productFormData, setProductFormData] = useState({
         name: '',
@@ -33,6 +38,7 @@ const AdminProductsPage = () => {
         category: null,
         origin: '',
         base_price: 0,
+        tax_price: 10.00,
         stock: 0,
         is_active: true,
         is_featured: false,
@@ -229,6 +235,7 @@ const AdminProductsPage = () => {
                 category: null,
                 origin: '',
                 base_price: 0,
+                tax_rate: 10.00,
                 stock: 0,
                 is_active: true,
                 is_featured: false,
@@ -720,6 +727,20 @@ const AdminProductsPage = () => {
                                     </span>
                                 </div>
                                 <div className="detail-row">
+                                    <span className="detail-label">نرخ مالیات:</span>
+                                    <span className="detail-value tax-rate">
+                                        {product.tax_rate ? `${parseFloat(product.tax_rate).toFixed(1)}%` : '0%'}
+                                    </span>
+                                </div>
+                                {product.tax_rate && product.tax_rate > 0 && (
+                                    <div className="detail-row">
+                                        <span className="detail-label">قیمت با مالیات:</span>
+                                        <span className="detail-value price-with-tax">
+                                            {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="detail-row">
                                     <span className="detail-label">موجودی:</span>
                                     <span className="detail-value price">
                                         {product.stock.toLocaleString()}
@@ -856,6 +877,40 @@ const AdminProductsPage = () => {
                                 required
                             />
                         </div>
+                    </div>
+
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label>نرخ مالیات (%)</label>
+                            <NeoBrutalistInput
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                name="tax_rate"
+                                value={productFormData.tax_rate || 0}
+                                onChange={handleFormChange}
+                                placeholder="9.00"
+                            />
+                            <small className="form-help-text">
+                                نرخ مالیات این محصول به درصد (مثال: 10.00 برای 10٪)
+                            </small>
+                        </div>
+
+                        {productFormData.base_price > 0 && productFormData.tax_rate > 0 && (
+                            <div className="form-group">
+                                <label>پیش‌نمایش قیمت با مالیات</label>
+                                <div className="price-preview">
+                                    <span className="preview-base">قیمت پایه: {formatPrice(productFormData.base_price)}</span>
+                                    <span className="preview-tax">
+                                        مالیات ({productFormData.tax_rate}%): {formatPrice(productFormData.base_price * productFormData.tax_rate / 100)}
+                                    </span>
+                                    <span className="preview-total">
+                    قیمت نهایی:                  {formatPrice(productFormData.base_price * (1 + productFormData.tax_rate / 100))}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-row">

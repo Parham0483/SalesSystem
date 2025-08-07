@@ -393,6 +393,47 @@ class ProductViewSet(viewsets.ModelViewSet):
             'categories_breakdown': categories_breakdown
         })
 
+    @action(detail=True, methods=['POST'], url_path='update-tax-rate')
+    def update_tax_rate(self, request, pk=None):
+        """Update product tax rate (admin only)"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        product = self.get_object()
+        new_tax_rate = request.data.get('tax_rate')
+
+        if new_tax_rate is None:
+            return Response({
+                'error': 'Tax rate is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            new_tax_rate = float(new_tax_rate)
+            if new_tax_rate < 0 or new_tax_rate > 100:
+                return Response({
+                    'error': 'Tax rate must be between 0 and 100'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            old_tax_rate = product.tax_rate
+            product.tax_rate = new_tax_rate
+            product.save()
+
+            return Response({
+                'message': 'Tax rate updated successfully',
+                'product_id': product.id,
+                'product_name': product.name,
+                'old_tax_rate': float(old_tax_rate),
+                'new_tax_rate': new_tax_rate,
+                'price_with_tax': product.get_price_with_tax()
+            })
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid tax rate value'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
     """Clean ViewSet for shipment announcements"""

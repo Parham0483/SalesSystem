@@ -8,7 +8,6 @@ from django.utils import timezone
 from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
 
-
 from django.conf import settings
 import os
 
@@ -71,14 +70,14 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         help_text="Commission percentage"
     )
 
-    #For invoice generation
+    # For invoice generation
     national_id = models.CharField(max_length=20, blank=True, null=True)
     economic_id = models.CharField(max_length=20, blank=True, null=True)
     postal_code = models.CharField(max_length=10, blank=True, null=True)
     complete_address = models.TextField(blank=True, null=True)
-    city = models.CharField(max_length=100,blank=True,null=True)
-    province = models.CharField(max_length=100,blank=True,null=True,)
-    business_type = models.CharField(  # Changed from customer_type
+    city = models.CharField(max_length=100, blank=True, null=True)
+    province = models.CharField(max_length=100, blank=True, null=True)
+    business_type = models.CharField(
         max_length=20,
         choices=[
             ('individual', 'شخص حقیقی'),
@@ -106,7 +105,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
     preferred_invoice_type = models.CharField(
         max_length=20,
         choices=[
-            ('unofficial', 'غیررسمی'),
+            ('unofficial', 'بدون مالیات'),
             ('official', 'رسمی'),
         ],
         default='unofficial',
@@ -122,8 +121,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         """Custom validation for official invoice requirements"""
         super().clean()
 
-        # If customer has orders with official invoices, ensure required fields
-        if hasattr(self, 'order_set'):  # Changed from 'orders' to 'order_set'
+        if hasattr(self, 'order_set'):
             has_official_orders = self.order_set.filter(business_invoice_type='official').exists()
             if has_official_orders:
                 missing_fields = []
@@ -144,7 +142,6 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         """Validate customer data for official invoice generation"""
         missing_fields = []
 
-        # Required fields for official invoice
         required_fields = {
             'national_id': 'شناسه ملی',
             'complete_address': 'آدرس کامل',
@@ -157,7 +154,6 @@ class Customer(AbstractBaseUser, PermissionsMixin):
             if not getattr(self, field, None) or str(getattr(self, field, '')).strip() == '':
                 missing_fields.append(label)
 
-        # Additional validations
         if self.postal_code and (len(self.postal_code) != 10 or not self.postal_code.isdigit()):
             missing_fields.append('کد پستی معتبر (۱۰ رقم)')
 
@@ -193,7 +189,6 @@ class Customer(AbstractBaseUser, PermissionsMixin):
 
         return " - ".join(address_parts) if address_parts else ""
 
-
     def get_display_name(self):
         """Get customer display name"""
         if self.company_name:
@@ -219,7 +214,6 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         self.last_order_date = timezone.now()
         self.save(update_fields=['last_order_date'])
 
-
     def __str__(self):
         return f"{self.name} ({self.email})"
 
@@ -231,23 +225,18 @@ class Customer(AbstractBaseUser, PermissionsMixin):
 
     def save(self, *args, **kwargs):
         if self.is_dealer and not self.dealer_code:
-            # First save to get the ID
             super().save(*args, **kwargs)
 
-            # Now generate dealer_code with the actual ID
             import random
             timestamp = timezone.now().strftime('%Y%m%d')
             random_suffix = random.randint(100, 999)
 
-            # Create unique dealer code: DLR + ID + timestamp + random
             self.dealer_code = f"DLR{self.id:04d}{timestamp}{random_suffix}"
 
-            # Check for uniqueness (just in case)
             while Customer.objects.filter(dealer_code=self.dealer_code).exists():
                 random_suffix = random.randint(100, 999)
                 self.dealer_code = f"DLR{self.id:04d}{timestamp}{random_suffix}"
 
-            # Save again with the dealer_code
             super().save(update_fields=['dealer_code'])
         else:
             super().save(*args, **kwargs)
@@ -262,6 +251,7 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         db_table = 'customers'
         verbose_name = 'Customer'
         verbose_name_plural = 'Customers'
+
 
 class ProductCategory(models.Model):
     name = models.CharField(max_length=100, help_text="English name")
@@ -323,13 +313,21 @@ class Product(models.Model):
         help_text="Base price for reference"
     )
     stock = models.IntegerField(default=0)
-    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product images")
+    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product image")
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     origin = models.CharField(max_length=100, blank=True, null=True, help_text="Country/place of origin")
-    sku = models.CharField(max_length=50, null=True ,blank=True, help_text="Stock Keeping Unit")
+    sku = models.CharField(max_length=50, null=True, blank=True, help_text="Stock Keeping Unit")
+
+    tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10.00,
+        help_text="Tax rate for this product as percentage",
+        verbose_name="Tax Rate (%)"
+    )
 
     category = models.ForeignKey(
         ProductCategory,
@@ -340,8 +338,6 @@ class Product(models.Model):
         help_text="Product category"
     )
     weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True, help_text="Weight in kg")
-
-    is_featured = models.BooleanField(default=False, help_text="Featured product")
 
     # SEO and metadata
     meta_title = models.CharField(max_length=200, blank=True)
@@ -391,16 +387,25 @@ class Product(models.Model):
             stock__lte=0
         ).order_by('name')
 
+    def get_tax_amount_for_price(self, price):
+        """Calculate tax amount for given price"""
+        if not price:
+            return 0
+        return price * (self.tax_rate / 100)
+
+    def get_price_with_tax(self, base_price=None):
+        """Get price including tax"""
+        price = base_price or self.base_price
+        return price + self.get_tax_amount_for_price(price)
+
     class Meta:
         db_table = 'products'
-
 
 
 class ShipmentAnnouncement(models.Model):
     title = models.CharField(max_length=200, help_text="Title of the shipment announcement")
     description = models.TextField(help_text="Describe the new shipment, packaging, container info, etc.")
 
-    # Main images field
     image = models.ImageField(
         upload_to='shipments/',
         blank=True,
@@ -408,7 +413,6 @@ class ShipmentAnnouncement(models.Model):
         help_text="Main photo of packaging/container"
     )
 
-    # Shipment details
     origin_country = models.CharField(
         max_length=100,
         blank=True,
@@ -432,14 +436,12 @@ class ShipmentAnnouncement(models.Model):
         help_text="Categories of products in this shipment"
     )
 
-    # Relationships
     related_products = models.ManyToManyField(
         'Product',
         blank=True,
         help_text="Products in this shipment"
     )
 
-    # Meta fields
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         'Customer',
@@ -448,14 +450,12 @@ class ShipmentAnnouncement(models.Model):
         help_text="Admin who created this announcement"
     )
 
-    # Status fields
     is_active = models.BooleanField(default=True, help_text="Is this announcement active?")
     is_featured = models.BooleanField(
         default=False,
         help_text="Show prominently on new arrivals page"
     )
 
-    # View tracking
     view_count = models.PositiveIntegerField(default=0, help_text="Number of times viewed")
 
     def __str__(self):
@@ -469,7 +469,7 @@ class ShipmentAnnouncement(models.Model):
         if self.image:
             return self.image.url
 
-        first_additional = self.images.first()
+        first_additional = self.additional_images.first()
         if first_additional and first_additional.image:
             return first_additional.image.url
 
@@ -492,7 +492,7 @@ class ShipmentAnnouncementImage(models.Model):
     announcement = models.ForeignKey(
         ShipmentAnnouncement,
         on_delete=models.CASCADE,
-        related_name='images'
+        related_name='additional_images'
     )
     image = models.ImageField(upload_to='shipments/images/')
     alt_text = models.CharField(max_length=200, blank=True)
@@ -507,6 +507,7 @@ class ShipmentAnnouncementImage(models.Model):
         verbose_name = 'Shipment Announcement Image'
         verbose_name_plural = 'Shipment Announcement Images'
 
+
 STATUS_CHOICES = [
     ('pending_pricing', 'Pending Pricing'),
     ('waiting_customer_approval', 'Waiting Customer Approval'),
@@ -517,7 +518,6 @@ STATUS_CHOICES = [
     ('rejected', 'Rejected'),
     ('cancelled', 'Cancelled'),
 ]
-
 
 
 class Order(models.Model):
@@ -532,7 +532,7 @@ class Order(models.Model):
 
     BUSINESS_INVOICE_TYPE_CHOICES = [
         ('official', 'فاکتور رسمی'),
-        ('unofficial', 'فاکتور غیررسمی'),
+        ('unofficial', 'فاکتور شخصی'),
     ]
 
     # Dealer assignment
@@ -593,7 +593,7 @@ class Order(models.Model):
         help_text="Business type of invoice - Official (with tax) or Unofficial (without tax)"
     )
 
-    #Payment Fields
+    # Payment Fields
     payment_receipt = models.ImageField(
         upload_to='payment_receipts/',
         blank=True,
@@ -662,31 +662,6 @@ class Order(models.Model):
             self.customer_rejection_reason = reason
         self.save()
 
-    def mark_as_completed(self, admin_user):
-        if self.status != 'confirmed':
-            raise ValueError("Order must be confirmed before completion")
-
-        self.status = 'completed'
-        self.completion_date = timezone.now()
-        self.completed_by = admin_user
-        self.save()
-
-        invoice, created = Invoice.objects.get_or_create(
-            order=self,
-            defaults={
-                'invoice_type': 'final_invoice',
-                'total_amount': self.quoted_total,
-                'is_finalized': True,
-                'invoice_number': self.generate_invoice_number() if not hasattr(self,
-                                                                                'invoice') else self.invoice.invoice_number
-            }
-        )
-
-        if created or not invoice.pdf_file:
-            invoice.generate_pdf()
-
-        return self, invoice
-
     def create_pre_invoice(self):
         """Create pre-invoice when order is confirmed by customer"""
         if self.status == 'confirmed' and not hasattr(self, 'invoice'):
@@ -699,9 +674,8 @@ class Order(models.Model):
                     issued_at=timezone.now()
                 )
 
-                # Calculate amounts based on business invoice type
                 if self.business_invoice_type == 'official':
-                    invoice.tax_rate = settings.DEFAULT_TAX_RATE * 100  # Convert to percentage
+                    invoice.tax_rate = settings.DEFAULT_TAX_RATE * 100
                     invoice.calculate_payable_amount()
                 else:
                     invoice.payable_amount = invoice.total_amount
@@ -721,7 +695,6 @@ class Order(models.Model):
             if hasattr(self, 'invoice'):
                 invoice = self.invoice
 
-                # Update invoice to final
                 invoice.invoice_type = 'final_invoice'
                 invoice.is_finalized = True
                 invoice.is_paid = True
@@ -729,7 +702,6 @@ class Order(models.Model):
 
                 logger.info(f"📋 Pre-invoice upgraded to final invoice for Order #{self.id}")
 
-                # Log the invoice upgrade
                 OrderLog.objects.create(
                     order=self,
                     action='final_invoice_generated',
@@ -739,7 +711,6 @@ class Order(models.Model):
 
                 return invoice
             else:
-                # Create final invoice if no pre-invoice exists
                 return self.create_final_invoice_direct(admin_user)
 
         except Exception as e:
@@ -759,7 +730,6 @@ class Order(models.Model):
                 issued_at=timezone.now()
             )
 
-            # Calculate amounts based on business invoice type
             if self.business_invoice_type == 'official':
                 invoice.tax_rate = settings.DEFAULT_TAX_RATE * 100
                 invoice.calculate_payable_amount()
@@ -788,61 +758,14 @@ class Order(models.Model):
         self.payment_verified_by = admin_user
         self.save()
 
-        # Upgrade pre-invoice to final invoice
         invoice = self.upgrade_to_final_invoice(admin_user)
 
-        # Create dealer commission if applicable
         if self.assigned_dealer and self.dealer_commission_amount > 0:
-            from .models import DealerCommission
             commission = DealerCommission.create_for_completed_order(self)
             if commission:
                 logger.info(f"💰 Commission created for dealer {self.assigned_dealer.name}")
 
         return self, invoice
-
-    @property
-    def can_generate_pre_invoice(self):
-        """Check if pre-invoice can be generated"""
-        return self.status == 'confirmed' and self.quoted_total > 0
-
-    @property
-    def can_generate_final_invoice(self):
-        """Check if final invoice can be generated"""
-        if self.status not in ['payment_uploaded', 'completed']:
-            return False
-
-        if self.business_invoice_type == 'official':
-            is_valid, _ = self.customer.validate_for_official_invoice()
-            return is_valid
-
-        return True
-
-    @property
-    def invoice_type_display(self):
-        """Get display name for invoice type"""
-        return 'فاکتور رسمی' if self.business_invoice_type == 'official' else 'فاکتور غیررسمی'
-
-    def get_tax_amount(self):
-        """Calculate tax amount for official invoices"""
-        if self.business_invoice_type == 'official' and self.quoted_total:
-            # Convert the tax rate to Decimal before multiplying
-            tax_rate = Decimal(str(settings.DEFAULT_TAX_RATE))
-            return self.quoted_total * tax_rate
-        return Decimal('0.00')
-
-    def get_total_with_tax(self):
-        """Get total amount including tax for official invoices"""
-        return self.quoted_total + self.get_tax_amount()
-
-    def create_final_invoice(self):
-        if self.status == 'completed' and not hasattr(self, 'invoice'):
-            invoice = Invoice.objects.create(
-                order=self,
-                total_amount=self.quoted_total,
-                is_finalized=True,
-                invoice_number=self.generate_invoice_number()
-            )
-            return invoice
 
     def generate_invoice_number(self):
         """Generate unique invoice number"""
@@ -850,18 +773,14 @@ class Order(models.Model):
         timestamp = timezone.now().strftime('%Y%m%d')
         random_suffix = random.randint(1000, 9999)
 
-        # Create unique invoice number: INV + timestamp + random + order_id
         invoice_number = f"INV{timestamp}{random_suffix}{self.id:04d}"
 
-        # Check for uniqueness (just in case)
         while Invoice.objects.filter(invoice_number=invoice_number).exists():
             random_suffix = random.randint(1000, 9999)
             invoice_number = f"INV{timestamp}{random_suffix}{self.id:04d}"
 
         return invoice_number
 
-
-    # Dealer management methods
     def assign_dealer(self, dealer, assigned_by, custom_commission_rate=None):
         if not dealer.is_dealer:
             raise ValueError("User is not a dealer")
@@ -957,9 +876,38 @@ class Order(models.Model):
         """Get total count of payment receipts"""
         return self.payment_receipts.count()
 
-    class Meta:
-        db_table = 'orders'
-        ordering = ['-created_at']
+    @property
+    def can_generate_pre_invoice(self):
+        """Check if pre-invoice can be generated"""
+        return self.status == 'confirmed' and self.quoted_total > 0
+
+    @property
+    def can_generate_final_invoice(self):
+        """Check if final invoice can be generated"""
+        if self.status not in ['payment_uploaded', 'completed']:
+            return False
+
+        if self.business_invoice_type == 'official':
+            is_valid, _ = self.customer.validate_for_official_invoice()
+            return is_valid
+
+        return True
+
+    @property
+    def invoice_type_display(self):
+        """Get display name for invoice type"""
+        return 'فاکتور رسمی' if self.business_invoice_type == 'official' else 'فاکتور شخصی'
+
+    def get_tax_amount(self):
+        """Calculate tax amount for official invoices"""
+        if self.business_invoice_type == 'official' and self.quoted_total:
+            tax_rate = Decimal(str(settings.DEFAULT_TAX_RATE))
+            return self.quoted_total * tax_rate
+        return Decimal('0.00')
+
+    def get_total_with_tax(self):
+        """Get total amount including tax for official invoices"""
+        return self.quoted_total + self.get_tax_amount()
 
     @property
     def has_pre_invoice(self):
@@ -989,6 +937,62 @@ class Order(models.Model):
                 self.payment_verified
         )
 
+    def get_tax_breakdown(self):
+        """Get detailed tax breakdown for order with different tax rates per product"""
+        tax_breakdown = {}
+        total_before_tax = 0
+        total_tax = 0
+
+        for item in self.items.all():
+            if item.quoted_unit_price and item.final_quantity:
+                subtotal = item.quoted_unit_price * item.final_quantity
+                tax_rate = float(item.product.tax_rate)
+                tax_amount = subtotal * (tax_rate / 100)
+
+                total_before_tax += float(subtotal)
+                total_tax += float(tax_amount)
+
+                # Group by tax rate
+                if tax_rate not in tax_breakdown:
+                    tax_breakdown[tax_rate] = {
+                        'rate': tax_rate,
+                        'subtotal': 0,
+                        'tax_amount': 0,
+                        'items': []
+                    }
+
+                tax_breakdown[tax_rate]['subtotal'] += float(subtotal)
+                tax_breakdown[tax_rate]['tax_amount'] += float(tax_amount)
+                tax_breakdown[tax_rate]['items'].append({
+                    'product_name': item.product.name,
+                    'product_sku': item.product.sku,
+                    'quantity': item.final_quantity,
+                    'unit_price': float(item.quoted_unit_price),
+                    'subtotal': float(subtotal),
+                    'tax_rate': tax_rate,
+                    'tax_amount': float(tax_amount),
+                    'total_with_tax': float(subtotal + tax_amount)
+                })
+
+        return {
+            'breakdown_by_rate': tax_breakdown,
+            'total_before_tax': total_before_tax,
+            'total_tax': total_tax,
+            'total_with_tax': total_before_tax + total_tax,
+            'has_mixed_rates': len(tax_breakdown) > 1
+        }
+
+    def get_order_total_with_tax(self):
+        """Get order total including all product-specific taxes"""
+        return self.get_tax_breakdown()['total_with_tax']
+
+    def get_order_total_tax(self):
+        """Get total tax amount for the entire order"""
+        return self.get_tax_breakdown()['total_tax']
+
+    class Meta:
+        db_table = 'orders'
+        ordering = ['-created_at']
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name='items', on_delete=models.CASCADE)
@@ -1071,7 +1075,6 @@ class Invoice(models.Model):
             self.calculate_payable_amount()
             self.save()
 
-
     def save(self, *args, **kwargs):
         if self.total_amount:
             self.calculate_payable_amount()
@@ -1149,18 +1152,13 @@ class EmailNotification(models.Model):
         ('order_rejected', 'Order Rejected'),
         ('order_completed', 'Order Completed'),
         ('dealer_assigned', 'Dealer Assigned'),
-
-        #Dealer assignment types
-        ('dealer_assigned', 'Dealer Assigned'),
         ('dealer_removed', 'Dealer Removed'),
-
-        # Announcementtypes
         ('new_arrival_customer', 'New Arrival - Customer'),
         ('new_arrival_dealer', 'New Arrival - Dealer'),
         ('announcement_updated', 'Announcement Updated'),
     ]
 
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications', null=True, blank=True)
     email_type = models.CharField(max_length=20, choices=EMAIL_TYPES)
     recipient_email = models.EmailField()
     subject = models.CharField(max_length=200)
@@ -1297,7 +1295,6 @@ class OrderLog(models.Model):
         ('invoice_type_changed', 'Invoice Type Changed'),
         ('pre_invoice_generated', 'Pre-Invoice Generated'),
         ('final_invoice_generated', 'Final Invoice Generated'),
-
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='logs')
@@ -1367,7 +1364,7 @@ class OrderPaymentReceipt(models.Model):
     """Model for storing multiple payment receipts per order"""
 
     FILE_TYPE_CHOICES = [
-        ('images', 'Image'),
+        ('image', 'Image'),
         ('pdf', 'PDF'),
     ]
 
@@ -1388,7 +1385,7 @@ class OrderPaymentReceipt(models.Model):
 
     receipt_file = models.FileField(
         upload_to=receipt_upload_path,
-        help_text="Payment receipt file (images or PDF)"
+        help_text="Payment receipt file (image or PDF)"
     )
 
     file_type = models.CharField(
@@ -1464,8 +1461,8 @@ class OrderPaymentReceipt(models.Model):
                 content_type = self.receipt_file.content_type.lower()
                 if content_type == 'application/pdf':
                     self.file_type = 'pdf'
-                elif content_type.startswith('images/'):
-                    self.file_type = 'images'
+                elif content_type.startswith('image/'):
+                    self.file_type = 'image'
 
             # Fallback: determine by file extension
             if not self.file_type and self.receipt_file.name:
@@ -1473,9 +1470,9 @@ class OrderPaymentReceipt(models.Model):
                 if ext == '.pdf':
                     self.file_type = 'pdf'
                 elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
-                    self.file_type = 'images'
+                    self.file_type = 'image'
                 else:
-                    self.file_type = 'images'  # Default fallback
+                    self.file_type = 'image'  # Default fallback
 
         super().save(*args, **kwargs)
 

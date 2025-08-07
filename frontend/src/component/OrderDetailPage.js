@@ -34,7 +34,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
     };
 
     const handleInvoiceTypeChange = async (newType) => {
-        if (!window.confirm(`آیا می‌خواهید نوع فاکتور را به "${newType === 'official' ? 'رسمی' : 'غیررسمی'}" تغییر دهید؟`)) {
+        if (!window.confirm(`آیا می‌خواهید نوع فاکتور را به "${newType === 'official' ? 'رسمی' : 'بدون مالیات'}" تغییر دهید؟`)) {
             return;
         }
 
@@ -194,26 +194,44 @@ const InvoiceManager = ({ order, onUpdate }) => {
                 </div>
 
                 <div className="neo-info-item">
-                    <span className="neo-info-label">مبلغ کل</span>
+                    <span className="neo-info-label">مبلغ کل (بدون مالیات)</span>
                     <span className="neo-info-value">
                         {invoiceStatus.quoted_total.toLocaleString('fa-IR')} ریال
                     </span>
                 </div>
 
-                {order.business_invoice_type === 'official' && invoiceStatus.tax_amount && (
+
+                {order.business_invoice_type === 'official' && invoiceStatus.tax_breakdown && (
                     <>
+                        {/* Show total tax */}
                         <div className="neo-info-item">
-                            <span className="neo-info-label">مالیات ({invoiceStatus.tax_rate}%)</span>
+                            <span className="neo-info-label">مجموع مالیات</span>
                             <span className="neo-info-value neo-tax-badge">
-                                {invoiceStatus.tax_amount.toLocaleString('fa-IR')} ریال
-                            </span>
+                    {invoiceStatus.total_tax_amount.toLocaleString('fa-IR')} ریال
+                </span>
                         </div>
+
+                        {/* Show final total */}
                         <div className="neo-info-item">
                             <span className="neo-info-label">مبلغ نهایی (با مالیات)</span>
                             <span className="neo-info-value neo-total-with-tax">
-                                {invoiceStatus.total_with_tax.toLocaleString('fa-IR')} ریال
-                            </span>
+                    {invoiceStatus.total_with_tax.toLocaleString('fa-IR')} ریال
+                </span>
                         </div>
+
+                        {/* Show tax breakdown by rate if multiple rates exist */}
+                        {invoiceStatus.tax_breakdown.has_mixed_rates && (
+                            <div className="neo-info-item full-width">
+                                <span className="neo-info-label">تفکیک مالیات:</span>
+                                <div className="tax-breakdown-details">
+                                    {Object.values(invoiceStatus.tax_breakdown.breakdown_by_rate).map((rateInfo, index) => (
+                                        <div key={index} className="tax-rate-info">
+                                            <span>مالیات {rateInfo.rate}%: {rateInfo.tax_amount.toLocaleString('fa-IR')} ریال</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
 
@@ -317,7 +335,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
                                         onChange={() => handleInvoiceTypeChange('unofficial')}
                                         disabled={loading}
                                     />
-                                    <span className="neo-radio-text">غیررسمی</span>
+                                    <span className="neo-radio-text">بدون مالیات</span>
                                 </label>
                                 <label className="neo-radio-label">
                                     <input
@@ -955,6 +973,19 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         );
     }
 
+    const calculateItemTax = (unitPrice, quantity, taxRate) => {
+        if (!unitPrice || !quantity || !taxRate) return 0;
+        const subtotal = unitPrice * quantity;
+        return subtotal * (taxRate / 100);
+    };
+
+    const calculateItemTotal = (unitPrice, quantity, taxRate) => {
+        if (!unitPrice || !quantity) return 0;
+        const subtotal = unitPrice * quantity;
+        const tax = taxRate ? subtotal * (taxRate / 100) : 0;
+        return subtotal + tax;
+    };
+
     return (
         <div className="neo-order-detail" dir="rtl">
             {/* Header */}
@@ -1000,7 +1031,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="neo-info-item">
                         <span className="neo-info-label">نوع فاکتور</span>
                         <span className={`neo-info-value ${isOfficialInvoice() ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
-                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور غیررسمی')}
+                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور شخصی ')}
                             {isOfficialInvoice() && (
                                 <span className="neo-tax-badge">دارای مالیات</span>
                             )}
@@ -1252,44 +1283,53 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <div className="neo-header-cell">یادداشت مشتری</div>
                         <div className="neo-header-cell">قیمت واحد</div>
                         <div className="neo-header-cell">تعداد نهایی</div>
+                        {order.business_invoice_type === 'official' && (
+                            <>
+                                <div className="neo-header-cell">نرخ مالیات</div>
+                                <div className="neo-header-cell">مبلغ مالیات</div>
+                            </>
+                        )}
                         <div className="neo-header-cell">مبلغ کل</div>
                     </div>
+
                     {order.items?.map((item, index) => (
                         <div key={index} className="neo-table-row">
-                            <div
-                                className="neo-table-cell"
-                                title={item.product_name}
-                                data-pending={!item.product_name}
-                            >
+                            <div className="neo-table-cell" title={item.product_name} data-pending={!item.product_name}>
                                 {item.product_name || 'نامشخص'}
                             </div>
                             <div className="neo-table-cell">
                                 {formatQuantity(item.requested_quantity)}
                             </div>
-                            <div
-                                className="neo-table-cell"
-                                title={item.customer_notes}
-                                data-pending={!item.customer_notes}
-                            >
+                            <div className="neo-table-cell" title={item.customer_notes} data-pending={!item.customer_notes}>
                                 {truncateText(item.customer_notes) || '-'}
                             </div>
-                            <div
-                                className="neo-table-cell"
-                                data-pending={!item.quoted_unit_price}
-                            >
+                            <div className="neo-table-cell" data-pending={!item.quoted_unit_price}>
                                 {formatPrice(item.quoted_unit_price)}
                             </div>
-                            <div
-                                className="neo-table-cell"
-                                data-pending={!item.final_quantity}
-                            >
+                            <div className="neo-table-cell" data-pending={!item.final_quantity}>
                                 {formatQuantity(item.final_quantity)}
                             </div>
-                            <div
-                                className="neo-table-cell"
-                                data-pending={!item.quoted_unit_price || !item.final_quantity}
-                            >
-                                {calculateTotal(item.quoted_unit_price, item.final_quantity)}
+
+                            {/* ADD: Tax information for official invoices */}
+                            {order.business_invoice_type === 'official' && (
+                                <>
+                                    <div className="neo-table-cell">
+                                        {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
+                                    </div>
+                                    <div className="neo-table-cell">
+                                        {item.quoted_unit_price && item.final_quantity && item.product_tax_rate ?
+                                            formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
+                                            'در انتظار'
+                                        }
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="neo-table-cell" data-pending={!item.quoted_unit_price || !item.final_quantity}>
+                                {order.business_invoice_type === 'official' && item.product_tax_rate ?
+                                    formatPrice(calculateItemTotal(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
+                                    calculateTotal(item.quoted_unit_price, item.final_quantity)
+                                }
                             </div>
                         </div>
                     ))}

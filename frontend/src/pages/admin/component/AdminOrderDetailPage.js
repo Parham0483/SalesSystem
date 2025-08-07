@@ -394,17 +394,37 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const calculateOrderTotal = () => {
-        const total = items.reduce((sum, item) => {
+        const subtotal = items.reduce((sum, item) => {
             if (item.quoted_unit_price && item.final_quantity) {
                 return sum + (parseFloat(item.quoted_unit_price) * parseInt(item.final_quantity));
             }
             return sum;
         }, 0);
 
-        if (total > 0) {
-            return new Intl.NumberFormat('fa-IR').format(total);
+        if (subtotal === 0) return 'محاسبه نشده';
+
+        if (order.business_invoice_type === 'official') {
+            const totalTax = items.reduce((sum, item) => {
+                if (item.quoted_unit_price && item.final_quantity && item.product_tax_rate) {
+                    const itemSubtotal = parseFloat(item.quoted_unit_price) * parseInt(item.final_quantity);
+                    const itemTax = itemSubtotal * (parseFloat(item.product_tax_rate) / 100);
+                    return sum + itemTax;
+                }
+                return sum;
+            }, 0);
+
+            const totalWithTax = subtotal + totalTax;
+
+            return (
+                <div className="total-breakdown">
+                    <div>مجموع: {new Intl.NumberFormat('fa-IR').format(subtotal)} ریال</div>
+                    <div>مالیات: {new Intl.NumberFormat('fa-IR').format(totalTax)} ریال</div>
+                    <div className="total-final">کل با مالیات: {new Intl.NumberFormat('fa-IR').format(totalWithTax)} ریال</div>
+                </div>
+            );
         }
-        return 'محاسبه نشده';
+
+        return new Intl.NumberFormat('fa-IR').format(subtotal);
     };
 
     if (loading) {
@@ -702,6 +722,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 <div className="admin-header-cell">نظر مشتری</div>
                                 <div className="admin-header-cell">قیمت واحد (ریال)</div>
                                 <div className="admin-header-cell">تعداد نهایی</div>
+                                {order.business_invoice_type === 'official' && (
+                                    <div className="admin-header-cell">نرخ مالیات (%)</div>
+                                )}
                                 <div className="admin-header-cell">نظر مدیر</div>
                                 <div className="admin-header-cell">جمع کل</div>
                             </div>
@@ -738,6 +761,16 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             disabled={order.status !== 'pending_pricing'}
                                         />
                                     </div>
+
+                                    {/* ADD: Tax rate display for official invoices */}
+                                    {order.business_invoice_type === 'official' && (
+                                        <div className="admin-table-cell">
+                                            <span className="tax-rate-display">
+                                                {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div className="admin-table-cell admin-input-cell">
                                         <NeoBrutalistInput
                                             type="text"

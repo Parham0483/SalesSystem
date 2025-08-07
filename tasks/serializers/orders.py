@@ -219,14 +219,52 @@ class OrderItemAdminUpdateSerializer(serializers.ModelSerializer):
     final_quantity = serializers.IntegerField(required=False, allow_null=True)
     admin_notes = serializers.CharField(allow_blank=True, required=False)
 
+    #TAX-RELATED FIELDS:
+    product_tax_rate = serializers.DecimalField(source='product.tax_rate', read_only=True, max_digits=5,
+                                                decimal_places=2)
+    unit_tax_amount = serializers.SerializerMethodField()
+    total_tax_amount = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    total_with_tax = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderItem
         fields = [
             'id', 'product', 'product_name', 'requested_quantity',
-            'quoted_unit_price', 'final_quantity', 'customer_notes', 'admin_notes'
+            'quoted_unit_price', 'final_quantity', 'customer_notes', 'admin_notes',
+            'product_tax_rate', 'unit_tax_amount','total_tax_amount',
+            'subtotal', 'total_with_tax'
         ]
         read_only_fields = ['product', 'requested_quantity', 'customer_notes', 'product_name']
 
+    def get_unit_tax_amount(self, obj):
+        """Calculate tax amount per unit"""
+        if obj.quoted_unit_price and obj.product.tax_rate:
+            return float(obj.quoted_unit_price * (obj.product.tax_rate / 100))
+        return 0.0
+
+    def get_total_tax_amount(self, obj):
+        """Calculate total tax amount for this item"""
+        if obj.quoted_unit_price and obj.final_quantity and obj.product.tax_rate:
+            subtotal = obj.quoted_unit_price * obj.final_quantity
+            return float(subtotal * (obj.product.tax_rate / 100))
+        return 0.0
+
+    def get_subtotal(self, obj):
+        """Calculate subtotal without tax"""
+        if obj.quoted_unit_price and obj.final_quantity:
+            return float(obj.quoted_unit_price * obj.final_quantity)
+        return 0.0
+
+    def get_total_with_tax(self, obj):
+        """Calculate total including tax for this item"""
+        if obj.quoted_unit_price and obj.final_quantity:
+            subtotal = obj.quoted_unit_price * obj.final_quantity
+            if obj.product.tax_rate:
+                tax_amount = subtotal * (obj.product.tax_rate / 100)
+                return float(subtotal + tax_amount)
+            return float(subtotal)
+        return 0.0
 
 class OrderAdminUpdateSerializer(serializers.ModelSerializer):
     items = OrderItemAdminUpdateSerializer(many=True)

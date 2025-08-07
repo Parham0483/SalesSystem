@@ -13,8 +13,8 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    // Business invoice type state
-    const [businessInvoiceType, setBusinessInvoiceType] = useState('unofficial');
+    // Business invoice type state - default to unofficial
+    const [needsOfficialInvoice, setNeedsOfficialInvoice] = useState(false);
 
     // Customer info states
     const [customerInfo, setCustomerInfo] = useState({
@@ -29,7 +29,6 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         city: ''
     });
     const [customerInfoLoaded, setCustomerInfoLoaded] = useState(false);
-    const [showCustomerForm, setShowCustomerForm] = useState(false);
     const [customerInfoErrors, setCustomerInfoErrors] = useState({});
     const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
 
@@ -38,18 +37,16 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         loadCustomerInfo();
     }, []);
 
-    // Show customer form when official invoice is selected
+    // Show customer form when official invoice is requested
     useEffect(() => {
-        if (businessInvoiceType === 'official') {
-            setShowCustomerForm(true);
+        if (needsOfficialInvoice) {
             if (customerInfoLoaded) {
                 checkCustomerInfoCompleteness();
             }
         } else {
-            setShowCustomerForm(false);
             setCustomerInfoErrors({});
         }
-    }, [businessInvoiceType, customerInfo, customerInfoLoaded]);
+    }, [needsOfficialInvoice, customerInfo, customerInfoLoaded]);
 
     const fetchProducts = async () => {
         try {
@@ -129,7 +126,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const updateCustomerInfo = async () => {
         try {
             const response = await API.post('/customers/update-invoice-info/', {
-                invoice_type: businessInvoiceType,
+                invoice_type: needsOfficialInvoice ? 'official' : 'unofficial',
                 customer_info: customerInfo
             });
 
@@ -180,7 +177,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             }
 
             // Check customer info for official invoices
-            if (businessInvoiceType === 'official') {
+            if (needsOfficialInvoice) {
                 const isInfoComplete = checkCustomerInfoCompleteness();
                 if (!isInfoComplete) {
                     throw new Error('لطفاً اطلاعات مورد نیاز برای فاکتور رسمی را تکمیل کنید');
@@ -190,7 +187,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             // Prepare order data
             const orderData = {
                 customer_comment: customerComment,
-                business_invoice_type: businessInvoiceType,
+                business_invoice_type: needsOfficialInvoice ? 'official' : 'unofficial',
                 items: validItems.map(item => ({
                     product_id: parseInt(item.product),
                     quantity: parseInt(item.requested_quantity),
@@ -199,7 +196,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             };
 
             // ADD CUSTOMER INFO FOR OFFICIAL INVOICES
-            if (businessInvoiceType === 'official') {
+            if (needsOfficialInvoice) {
                 orderData.customer_info = {
                     name: customerInfo.name,
                     phone: customerInfo.phone,
@@ -221,7 +218,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 console.log('✅ Order created successfully:', response.data);
 
                 // Show success message
-                alert(`سفارش با موفقیت ثبت شد!\nشماره سفارش: ${response.data.id}\nنوع فاکتور: ${businessInvoiceType === 'official' ? 'رسمی' : 'غیررسمی'}`);
+                alert(`سفارش با موفقیت ثبت شد!\nشماره سفارش: ${response.data.id}`);
 
                 if (onOrderCreated) {
                     onOrderCreated();
@@ -269,37 +266,21 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             )}
 
             <div className="neo-order-form">
-                {/*Invoice Type Selection - Both Options */}
+                {/* Invoice Type Selection - Single Checkbox */}
                 <NeoBrutalistCard className="neo-invoice-type-section">
-                    <h3>نوع فاکتور مورد نیاز</h3>
+                    <h3>نوع فاکتور</h3>
                     <div className="neo-invoice-type-selection">
-                        <div className="neo-radio-group">
-                            <label className="neo-radio-label">
+
+                        <div className="neo-checkbox-group">
+                            <label className="neo-checkbox-label">
                                 <input
-                                    type="radio"
-                                    name="business_invoice_type"
-                                    value="unofficial"
-                                    checked={businessInvoiceType === 'unofficial'}
-                                    onChange={(e) => setBusinessInvoiceType(e.target.value)}
-                                    className="neo-radio-input"
+                                    type="checkbox"
+                                    checked={needsOfficialInvoice}
+                                    onChange={(e) => setNeedsOfficialInvoice(e.target.checked)}
+                                    className="neo-checkbox-input"
                                 />
-                                <span className="neo-radio-text">
-                                    <strong>فاکتور غیررسمی</strong>
-                                    <br />
-                                    <small>بدون مالیات - برای خریدهای شخصی</small>
-                                </span>
-                            </label>
-                            <label className="neo-radio-label">
-                                <input
-                                    type="radio"
-                                    name="business_invoice_type"
-                                    value="official"
-                                    checked={businessInvoiceType === 'official'}
-                                    onChange={(e) => setBusinessInvoiceType(e.target.value)}
-                                    className="neo-radio-input"
-                                />
-                                <span className="neo-radio-text">
-                                    <strong>فاکتور رسمی</strong>
+                                <span className="neo-checkbox-text">
+                                    <strong>نیاز به فاکتور رسمی دارم</strong>
                                     <br />
                                     <small>با مالیات - برای ثبت در حسابداری شرکت</small>
                                 </span>
@@ -309,7 +290,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 </NeoBrutalistCard>
 
                 {/* Customer Information Form (for official invoices) */}
-                {showCustomerForm && (
+                {needsOfficialInvoice && (
                     <NeoBrutalistCard className="neo-customer-form-section">
                         <div className="neo-customer-form-header">
                             <h3>اطلاعات مورد نیاز برای فاکتور رسمی</h3>

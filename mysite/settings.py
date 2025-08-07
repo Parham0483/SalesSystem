@@ -323,7 +323,7 @@ BUSINESS_PHONE = config('BUSINESS_PHONE', default='')
 BUSINESS_POSTAL_CODE = config('BUSINESS_POSTAL_CODE', default='')
 
 # Company Information for Invoices
-BUSINESS_NAME = "شرکت تولیدی بازرگانی گلمحمدی کیان تجارت پویا کویر"
+BUSINESS_NAME = "کیان تجارت پویا کویر"
 BUSINESS_NAME_EN = "GOLMOHAMMADI TRADING CO."
 BUSINESS_SUBTITLE = "KIYAN TEJARAT POOYA KAVIR COMPANY"
 BUSINESS_SERVICES = "EXPORT - IMPORT"
@@ -350,7 +350,7 @@ INVOICE_FONT_PATH = os.path.join(BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
 INVOICE_LOGO_PATH = os.path.join(BASE_DIR, 'static', 'images', 'company_logo.png')
 
 # Tax Settings
-DEFAULT_TAX_RATE = 0.09
+DEFAULT_TAX_RATE = 0.1
 INCLUDE_TAX_IN_OFFICIAL_INVOICES = True
 
 
