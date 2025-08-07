@@ -16,6 +16,16 @@ django.log
 
 # Temporary files
 temp_app.js
-package.json
-package-lock.json
-EOF
+
+# Node and frontend
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/.next/
+*.cache/
+*.backup
+*.save
+
+# Python cache
+__pycache__/
+*.py[cod]
