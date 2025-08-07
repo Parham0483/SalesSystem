@@ -149,11 +149,11 @@ class UnofficialInvoicePDFGenerator:
             buyer_name = f"{self.customer.company_name} ({self.customer.name})"
 
         parties_data = [
-            [self._para("نام فروشنده:", 'default'), self._para(seller_name, 'default')],
-            [self._para("نام خریدار:", 'default'), self._para(buyer_name, 'default')],
+            [self._para(seller_name, 'default'),self._para("نام فروشنده:", 'default'),],
+            [self._para(buyer_name, 'default'), self._para("نام خریدار:", 'default')]
         ]
 
-        parties_table = Table(parties_data, colWidths=[self.content_width * 0.2, self.content_width * 0.8])
+        parties_table = Table(parties_data, colWidths=[self.content_width * 0.8, self.content_width * 0.2])
         parties_table.setStyle(TableStyle([
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),

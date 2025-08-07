@@ -277,11 +277,11 @@ const DashboardPage = () => {
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
-                        text="خروج"
-                        color="red-400"
+                        text="پروفایل"
+                        color="purple-400"
                         textColor="white"
-                        onClick={handleLogout}
-                        className="logout-btn"
+                        onClick={() => setShowProfileModal(true)}
+                        className="profile-btn"
                     />
                     <NeoBrutalistButton
                         text="محموله‌های جدید"
@@ -304,12 +304,13 @@ const DashboardPage = () => {
                         onClick={() => setShowCreateOrder(true)}
                         className="create-order-btn"
                     />
+
                     <NeoBrutalistButton
-                        text="پروفایل"
-                        color="purple-400"
+                        text="خروج"
+                        color="red-400"
                         textColor="white"
-                        onClick={() => setShowProfileModal(true)}
-                        className="profile-btn"
+                        onClick={handleLogout}
+                        className="logout-btn"
                     />
                 </div>
             </div>

@@ -1,3 +1,4 @@
+
 Django>=5.2.0
 djangorestframework
 djangorestframework-simplejwt
@@ -16,3 +17,4 @@ arabic-reshaper
 google-auth
 google-auth-oauthlib
 google-auth-httplib2
+jdatetime

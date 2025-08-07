@@ -21,7 +21,7 @@ const Modal = ({ isOpen, onClose, children, title }) => {
             <div className="modal-container" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2 className="modal-title">{title}</h2>
-                    <button className="modal-close-btn" onClick={onClose}>✕</button>
+                    <button className="modal-close-btn-reciept" onClick={onClose}>✕</button>
                 </div>
                 <div className="modal-content">
                     {children}
