@@ -183,7 +183,7 @@
 
 .admin-table-header {
     display: grid;
-    grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr 2fr 1.5fr;
+    grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr 2fr 1.5fr 2fr;
     gap: 0.5rem;
     padding: 1rem;
     background-color: #000;
@@ -206,7 +206,7 @@
 
 .admin-table-row {
     display: grid;
-    grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr 2fr 1.5fr;
+    grid-template-columns: 2fr 1fr 2fr 1.5fr 1fr 2fr 1.5fr 2fr;
     gap: 0.5rem;
     padding: 1rem;
     border: 2px solid #000;

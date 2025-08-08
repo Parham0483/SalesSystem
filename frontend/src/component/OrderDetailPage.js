@@ -1271,18 +1271,23 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Order Items Table */}
             <NeoBrutalistCard className="neo-items-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اقلام سفارش</h2>
                 </div>
-                <div className="neo-items-table" ref={tableRef}>
+                <div
+                    className="neo-items-table"
+                    ref={tableRef}
+                    data-invoice-type={order.business_invoice_type || 'unofficial'}
+                >
+                    {/* FIXED: Conditional headers based on invoice type */}
                     <div className="neo-table-header">
                         <div className="neo-header-cell">نام محصول</div>
                         <div className="neo-header-cell">تعداد درخواستی</div>
                         <div className="neo-header-cell">یادداشت مشتری</div>
                         <div className="neo-header-cell">قیمت واحد</div>
                         <div className="neo-header-cell">تعداد نهایی</div>
+                        {/* FIXED: Only render tax columns for official invoices */}
                         {order.business_invoice_type === 'official' && (
                             <>
                                 <div className="neo-header-cell">نرخ مالیات</div>
@@ -1292,6 +1297,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <div className="neo-header-cell">مبلغ کل</div>
                     </div>
 
+                    {/* FIXED: Conditional row cells based on invoice type */}
                     {order.items?.map((item, index) => (
                         <div key={index} className="neo-table-row">
                             <div className="neo-table-cell" title={item.product_name} data-pending={!item.product_name}>
@@ -1310,7 +1316,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 {formatQuantity(item.final_quantity)}
                             </div>
 
-                            {/* ADD: Tax information for official invoices */}
                             {order.business_invoice_type === 'official' && (
                                 <>
                                     <div className="neo-table-cell">
