@@ -379,6 +379,11 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         return statusMap[status] || status;
     };
 
+    const formatPrice = (price) => {
+        if (!price || price === 0) return 'در انتظار';
+        return `${new Intl.NumberFormat('fa-IR').format(price)} ریال`;
+    };
+
     const formatQuantity = (quantity) => {
         if (!quantity || quantity === 0) return '';
         return new Intl.NumberFormat('fa-IR').format(quantity);
@@ -389,9 +394,24 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             return 'در انتظار';
         }
         const total = parseFloat(unitPrice) * parseInt(quantity);
-        const formattedTotal = new Intl.NumberFormat('fa-IR').format(total);
-        return `${formattedTotal} ریال`;
+        return formatPrice(total).replace(' ریال', '');
     };
+
+    // ADDED: Helper to calculate tax for one item
+    const calculateItemTax = (unitPrice, quantity, taxRate) => {
+        if (!unitPrice || !quantity || !taxRate) return 0;
+        const subtotal = parseFloat(unitPrice) * parseInt(quantity);
+        return subtotal * (parseFloat(taxRate) / 100);
+    };
+
+    // ADDED: Helper to calculate total with tax for one item
+    const calculateItemTotalWithTax = (unitPrice, quantity, taxRate) => {
+        if (!unitPrice || !quantity) return 0;
+        const subtotal = parseFloat(unitPrice) * parseInt(quantity);
+        const tax = taxRate ? calculateItemTax(unitPrice, quantity, taxRate) : 0;
+        return subtotal + tax;
+    };
+
 
     const calculateOrderTotal = () => {
         const subtotal = items.reduce((sum, item) => {
@@ -405,12 +425,8 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
         if (order.business_invoice_type === 'official') {
             const totalTax = items.reduce((sum, item) => {
-                if (item.quoted_unit_price && item.final_quantity && item.product_tax_rate) {
-                    const itemSubtotal = parseFloat(item.quoted_unit_price) * parseInt(item.final_quantity);
-                    const itemTax = itemSubtotal * (parseFloat(item.product_tax_rate) / 100);
-                    return sum + itemTax;
-                }
-                return sum;
+                const itemTax = calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate);
+                return sum + itemTax;
             }, 0);
 
             const totalWithTax = subtotal + totalTax;
@@ -715,15 +731,24 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     {/* Items Table */}
                     <div className="admin-items-section">
                         <h3 className="admin-section-title">محصولات</h3>
-                        <div className="admin-items-table" ref={tableRef}>
+                        {/* MODIFIED: Added data-invoice-type attribute to connect with conditional CSS */}
+                        <div
+                            className="admin-items-table"
+                            ref={tableRef}
+                            data-invoice-type={order.business_invoice_type || 'unofficial'}
+                        >
                             <div className="admin-table-header">
                                 <div className="admin-header-cell">نام محصول</div>
                                 <div className="admin-header-cell">تعداد درخواستی</div>
                                 <div className="admin-header-cell">نظر مشتری</div>
                                 <div className="admin-header-cell">قیمت واحد (ریال)</div>
                                 <div className="admin-header-cell">تعداد نهایی</div>
-                                {order.business_invoice_type === 'official' && (
-                                    <div className="admin-header-cell">نرخ مالیات (%)</div>
+                                {/* MODIFIED: Render tax columns only for official invoices */}
+                                {isOfficialInvoice() && (
+                                    <>
+                                        <div className="admin-header-cell">نرخ مالیات (%)</div>
+                                        <div className="admin-header-cell">مبلغ مالیات (ریال)</div>
+                                    </>
                                 )}
                                 <div className="admin-header-cell">نظر مدیر</div>
                                 <div className="admin-header-cell">جمع کل</div>
@@ -762,13 +787,18 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         />
                                     </div>
 
-                                    {/* ADD: Tax rate display for official invoices */}
-                                    {order.business_invoice_type === 'official' && (
-                                        <div className="admin-table-cell">
-                                            <span className="tax-rate-display">
-                                                {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
-                                            </span>
-                                        </div>
+                                    {/* MODIFIED: Render tax cells only for official invoices */}
+                                    {isOfficialInvoice() && (
+                                        <>
+                                            <div className="admin-table-cell">
+                                                <span className="tax-rate-display">
+                                                    {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
+                                                </span>
+                                            </div>
+                                            <div className="admin-table-cell">
+                                                {formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate))}
+                                            </div>
+                                        </>
                                     )}
 
                                     <div className="admin-table-cell admin-input-cell">
@@ -781,7 +811,11 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         />
                                     </div>
                                     <div className="admin-table-cell admin-total-cell">
-                                        {calculateTotal(item.quoted_unit_price, item.final_quantity)}
+                                        {/* MODIFIED: Calculate total based on invoice type */}
+                                        {isOfficialInvoice()
+                                            ? formatPrice(calculateItemTotalWithTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate))
+                                            : formatPrice(calculateTotal(item.quoted_unit_price, item.final_quantity))
+                                        }
                                     </div>
                                 </div>
                             ))}
