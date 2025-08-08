@@ -332,7 +332,7 @@ const ProductsPage = () => {
                                 <p className="product-description">
                                     {product.description.length > 100 ? `${product.description.substring(0, 100)}...` : product.description}
                                 </p>
-                                <div className="product-details">
+                                <div className="product-details-cus">
                                     <div className="product-price"><span className="price-label">قیمت پایه:</span><span className="price-value">{formatPrice(product.base_price)}</span></div>
                                     <div className="product-availability"><span className="availability-label">وضعیت:</span><span className={`availability-status ${stockStatus.status}`} title={stockStatus.description}>{stockStatus.text}</span></div>
                                     {product.origin && ( <div className="product-origin"><span className="origin-label">🌍 مبدأ:</span><span className="origin-value">{product.origin}</span></div> )}

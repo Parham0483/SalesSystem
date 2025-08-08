@@ -157,6 +157,49 @@ const AdminProductsPage = () => {
         }
     };
 
+    const getCategoryDisplayName = (product) => {
+        if (!product.category) return null;
+
+        // If category is an object with display_name
+        if (typeof product.category === 'object' && product.category.display_name) {
+            return product.category.display_name;
+        }
+
+        // If category is an object with name
+        if (typeof product.category === 'object' && product.category.name) {
+            return product.category.name;
+        }
+
+        // If category is an ID, find it in your existing categories array
+        if (typeof product.category === 'number') {
+            const categoryObj = categories.find(cat => cat.id === product.category);
+            return categoryObj ? (categoryObj.display_name || categoryObj.name) : `دسته ${product.category}`;
+        }
+
+        // If category is a string
+        if (typeof product.category === 'string') {
+            return product.category;
+        }
+
+        return null;
+    };
+
+    const getCategoryClass = (product) => {
+        const categoryName = getCategoryDisplayName(product);
+        if (!categoryName) return '';
+
+        // Map your existing categories to CSS classes
+        const categoryMap = {
+            'محصولات قهوه': 'coffee',      // Coffee Related
+            'دانه‌ها': 'seeds',             // Seeds
+            'ادویه‌جات': 'spices',          // Spices
+            'آجیل': 'nuts',                // Nuts
+            'محصولات قنادی': 'confectionery' // Confectionery products
+        };
+
+        return categoryMap[categoryName] || '';
+    };
+
     useEffect(() => {
         let filtered = [...products];
 
@@ -667,123 +710,133 @@ const AdminProductsPage = () => {
                     const stockStatus = getStockStatus(product.stock);
                     return (
                         <NeoBrutalistCard
-                            key={product.id}
-                            className={`product-card ${!product.is_active ? 'inactive' : ''} ${product.is_featured ? 'featured' : ''}`}
-                        >
+                    key={product.id}
+                    className={`product-card ${!product.is_active ? 'inactive' : ''} ${product.is_featured ? 'featured' : ''}`}
+                >
                             <div className="card-header">
-                                <label className="product-select">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedProducts.includes(product.id)}
-                                        onChange={() => handleProductSelect(product.id)}
-                                    />
-                                </label>
-
+                                {/* Product image with overlays */}
                                 <div className="product-image">
                                     <img
-                                        src={product.image_url || 'https://placehold.co/120x120/e2e8f0/a0aec0?text=No+Image'}
+                                        src={product.image_url || 'https://placehold.co/400x200/e2e8f0/a0aec0?text=No+Image'}
                                         alt={product.name}
                                         onClick={() => {
                                             setSelectedImage(product.image_url);
                                             setIsImageModalOpen(true);
                                         }}
                                     />
+
+                                    {/* Checkbox overlay - top left */}
+                                    <label className="product-select-overlay">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedProducts.includes(product.id)}
+                                            onChange={() => handleProductSelect(product.id)}
+                                        />
+                                    </label>
+
+                                    {/* Status tags overlay - top right */}
+                                    <div className="product-tags-overlay">
+            <span className={`tag status-tag ${product.is_active ? 'active' : 'inactive'}`}>
+                {product.is_active ? (
+                    <><CheckCircle size={12} /> فعال</>
+                ) : (
+                    <><XCircle size={12} /> غیرفعال</>
+                )}
+            </span>
+                                        <span className={`tag stock-tag ${stockStatus.status}`}>
+                {stockStatus.label}
+            </span>
+                                    </div>
+
+                                    {/* Featured badge - bottom right */}
                                     {product.is_featured && (
                                         <div className="featured-badge">
                                             <Star size={16} />
                                         </div>
                                     )}
                                 </div>
-
-                                <div className="product-tags">
-                                    <span className={`tag status-tag ${product.is_active ? 'active' : 'inactive'}`}>
-                                        {product.is_active ? (
-                                            <><CheckCircle size={12} /> فعال</>
-                                        ) : (
-                                            <><XCircle size={12} /> غیرفعال</>
-                                        )}
-                                    </span>
-                                    <span className={`tag stock-tag ${stockStatus.status}`}>
-                                        {stockStatus.label}
-                                    </span>
-                                </div>
                             </div>
 
-                            <div className="product-info">
-                                <h3 className="product-name">{product.name}</h3>
-                                {product.category && (
-                                    <span className="product-category">{product.category}</span>
-                                )}
-                                <p className="product-description">
-                                    {product.description?.substring(0, 100)}...
-                                </p>
-                            </div>
+                    <div className="product-info">
+                        <h3 className="product-name">{product.name}</h3>
+                        {getCategoryDisplayName(product) && (
+                            <span className={`product-category-tiny ${getCategoryClass(product)}`}>
+                {getCategoryDisplayName(product)}
+            </span>
+                        )}
+                        <p className="product-description">
+                            {product.description ? (
+                                product.description.length > 150
+                                    ? `${product.description.substring(0, 150)}...`
+                                    : product.description
+                            ) : 'توضیحاتی برای این محصول ثبت نشده است.'}
+                        </p>
+                    </div>
 
-                            <div className="product-details">
-                                <div className="detail-row">
-                                    <span className="detail-label">قیمت پایه:</span>
-                                    <span className="detail-value price">
-                                        {product.base_price.toLocaleString('fa-IR')} ریال
-                                    </span>
-                                </div>
-                                <div className="detail-row">
-                                    <span className="detail-label">نرخ مالیات:</span>
-                                    <span className="detail-value tax-rate">
-                                        {product.tax_rate ? `${parseFloat(product.tax_rate).toFixed(1)}%` : '0%'}
-                                    </span>
-                                </div>
-                                {product.tax_rate && product.tax_rate > 0 && (
-                                    <div className="detail-row">
-                                        <span className="detail-label">قیمت با مالیات:</span>
-                                        <span className="detail-value price-with-tax">
-                                            {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
-                                        </span>
-                                    </div>
-                                )}
-                                <div className="detail-row">
-                                    <span className="detail-label">موجودی:</span>
-                                    <span className="detail-value price">
-                                        {product.stock.toLocaleString()}
-                                    </span>
-
-                                </div>
-                                {product.origin && (
-                                    <div className="detail-row">
-                                        <span className="detail-label">مبدا:</span>
-                                        <span className="detail-value">{product.origin}</span>
-                                    </div>
-                                )}
+                    <div className="product-details">
+                        <div className="detail-row">
+                            <span className="detail-label">قیمت پایه:</span>
+                            <span className="detail-value price">
+                {product.base_price.toLocaleString('fa-IR')} ریال
+            </span>
+                        </div>
+                        <div className="detail-row">
+                            <span className="detail-label">نرخ مالیات:</span>
+                            <span className="detail-value tax-rate">
+                {product.tax_rate ? `${parseFloat(product.tax_rate).toFixed(1)}%` : '0%'}
+            </span>
+                        </div>
+                        {product.tax_rate && product.tax_rate > 0 && (
+                            <div className="detail-row">
+                                <span className="detail-label">قیمت با مالیات:</span>
+                                <span className="detail-value price-with-tax">
+                    {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
+                </span>
                             </div>
-
-                            <div className="product-actions">
-                                <div className="toggle-actions">
-                                    <NeoBrutalistToggle
-                                        checked={product.is_active}
-                                        onChange={() => handleToggleStatus(product)}
-                                        label="فعال"
-                                    />
-                                    <NeoBrutalistToggle
-                                        checked={product.is_featured}
-                                        onChange={() => handleToggleFeatured(product)}
-                                        label="ویژه"
-                                    />
-                                </div>
-                                <div className="action-buttons">
-                                    <NeoBrutalistButton
-                                        text="ویرایش"
-                                        color="blue-400"
-                                        textColor="white"
-                                        onClick={() => handleOpenModal(product)}
-                                    />
-                                    <NeoBrutalistButton
-                                        text="حذف"
-                                        color="red-400"
-                                        textColor="white"
-                                        onClick={() => handleDeleteProduct(product.id)}
-                                    />
-                                </div>
+                        )}
+                        <div className="detail-row">
+                            <span className="detail-label">موجودی:</span>
+                            <span className="detail-value price">
+                {product.stock.toLocaleString()}
+            </span>
+                        </div>
+                        {product.origin && (
+                            <div className="detail-row">
+                                <span className="detail-label">مبدا:</span>
+                                <span className="detail-value">{product.origin}</span>
                             </div>
-                        </NeoBrutalistCard>
+                        )}
+                    </div>
+
+                    <div className="product-actions">
+                        <div className="toggle-actions">
+                            <NeoBrutalistToggle
+                                checked={product.is_active}
+                                onChange={() => handleToggleStatus(product)}
+                                label="فعال"
+                            />
+                            <NeoBrutalistToggle
+                                checked={product.is_featured}
+                                onChange={() => handleToggleFeatured(product)}
+                                label="ویژه"
+                            />
+                        </div>
+                        <div className="action-buttons-container">
+                            <NeoBrutalistButton
+                                text="ویرایش"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={() => handleOpenModal(product)}
+                            />
+                            <NeoBrutalistButton
+                                text="حذف"
+                                color="red-400"
+                                textColor="white"
+                                onClick={() => handleDeleteProduct(product.id)}
+                            />
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
                     );
                 })}
             </div>
