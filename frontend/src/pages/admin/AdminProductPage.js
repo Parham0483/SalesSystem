@@ -879,6 +879,27 @@ const AdminProductsPage = () => {
                         </div>
                     </div>
 
+
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label>مبدا</label>
+                            <NeoBrutalistInput
+                                name="origin"
+                                value={productFormData.origin || ''}
+                                onChange={handleFormChange}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>وزن (کیلوگرم)</label>
+                            <NeoBrutalistInput
+                                type="number"
+                                step="0.1"
+                                name="weight"
+                                value={productFormData.weight || 0}
+                                onChange={handleFormChange}
+                            />
+                        </div>
+                    </div>
                     <div className="form-row">
                         <div className="form-group">
                             <label>نرخ مالیات (%)</label>
@@ -911,32 +932,6 @@ const AdminProductsPage = () => {
                                 </div>
                             </div>
                         )}
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>مبدا</label>
-                            <NeoBrutalistInput
-                                name="origin"
-                                value={productFormData.origin || ''}
-                                onChange={handleFormChange}
-                            />
-                        </div>
-
-                    </div>
-
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>وزن (کیلوگرم)</label>
-                            <NeoBrutalistInput
-                                type="number"
-                                step="0.1"
-                                name="weight"
-                                value={productFormData.weight || 0}
-                                onChange={handleFormChange}
-                            />
-                        </div>
-
                     </div>
 
                     <div className="form-group">

@@ -267,13 +267,6 @@ const InvoiceManager = ({ order, onUpdate }) => {
                             >
                                 {loading ? 'در حال دانلود...' : 'دانلود پیش‌فاکتور'}
                             </button>
-                            <button
-                                className="neo-btn neo-btn-outline"
-                                onClick={() => previewInvoice('pre')}
-                                disabled={loading}
-                            >
-                                پیش‌نمایش پیش‌فاکتور
-                            </button>
                         </div>
                         <div className="neo-pre-invoice-note">
                             <span>⚠️ پیش‌فاکتور تا ۴۸ ساعت معتبر است</span>
@@ -404,7 +397,6 @@ const InvoiceManager = ({ order, onUpdate }) => {
 
                 {order.status === 'payment_uploaded' && !invoiceStatus.final_invoice_available && (
                     <div className="neo-status-message neo-info">
-                        <span className="neo-status-icon">⏳</span>
                         <span>منتظر تأیید پرداخت برای تولید فاکتور نهایی</span>
                     </div>
                 )}

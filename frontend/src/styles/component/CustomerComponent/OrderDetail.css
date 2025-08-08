@@ -63,7 +63,7 @@
     background-color: #f8f9fa;
     text-align: right;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     flex-wrap: wrap;
     gap: 1rem;
@@ -434,7 +434,7 @@
     font-size: 14px;
     font-weight: 600;
     letter-spacing: 1px;
-    text-align: right;
+    text-align: center;
 }
 
 .neo-validation-warning {
