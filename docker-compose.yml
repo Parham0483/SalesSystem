@@ -12,6 +12,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   backend:
     build: .
@@ -29,6 +31,13 @@ services:
     volumes:
       - ./media:/app/media
       - ./staticfiles:/app/staticfiles
+    networks:
+      - app-network
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py makemigrations &&
+             python manage.py migrate &&
+             gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 mysite.wsgi:application"
 
   frontend:
     build: ./frontend
@@ -38,6 +47,13 @@ services:
       - backend
     environment:
       - REACT_APP_API_URL=/api/
+      - REACT_APP_GOOGLE_CLIENT_ID=775814213572-h7009vmkdj87gpuko2puh3n22oesfnj5.apps.googleusercontent.com
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
