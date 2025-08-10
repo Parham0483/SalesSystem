@@ -7,7 +7,56 @@ import NeoBrutalistButton from '../../../component/NeoBrutalist/NeoBrutalistButt
 import NeoBrutalistInput from '../../../component/NeoBrutalist/NeoBrutalistInput';
 import '../../../styles/component/AdminComponent/AdminOrderDetail.css';
 
-// UPDATED: Admin Invoice Manager Component
+// FIXED: Enhanced price formatting function for admin
+const formatPriceFixed = (price) => {
+    // Handle null, undefined, and zero values properly
+    if (price === null || price === undefined || isNaN(price)) {
+        return 'در انتظار';
+    }
+
+    const numericPrice = parseFloat(price);
+    if (numericPrice === 0) {
+        return 'در انتظار';
+    }
+
+    try {
+        return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
+    } catch (error) {
+        console.error('❌ Admin price formatting error:', error, 'for price:', price);
+        return `${numericPrice} ریال`;
+    }
+};
+
+// FIXED: Enhanced quantity formatting function for admin
+const formatQuantityFixed = (quantity) => {
+    // Handle null, undefined, and zero values properly
+    if (quantity === null || quantity === undefined || isNaN(quantity)) {
+        return '';
+    }
+
+    const numericQuantity = parseInt(quantity);
+    if (numericQuantity === 0) {
+        return '';
+    }
+
+    try {
+        return new Intl.NumberFormat('fa-IR').format(numericQuantity);
+    } catch (error) {
+        console.error('❌ Admin quantity formatting error:', error, 'for quantity:', quantity);
+        return numericQuantity.toString();
+    }
+};
+
+// FIXED: Enhanced total calculation function for admin
+const calculateTotalFixed = (unitPrice, quantity) => {
+    if (!unitPrice || !quantity || unitPrice === 0 || quantity === 0) {
+        return 'در انتظار';
+    }
+    const total = parseFloat(unitPrice) * parseInt(quantity);
+    return formatPriceFixed(total).replace(' ریال', '');
+};
+
+// FIXED: Admin Invoice Manager Component
 const AdminInvoiceManager = ({ order, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [invoiceStatus, setInvoiceStatus] = useState(null);
@@ -24,8 +73,17 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
         try {
             const response = await API.get(`/orders/${order.id}/invoice-status/`);
             setInvoiceStatus(response.data);
+            console.log('✅ Admin invoice status fetched:', response.data);
         } catch (error) {
             console.error('❌ Error fetching admin invoice status:', error);
+            // FIXED: Set a basic status to prevent crashes
+            setInvoiceStatus({
+                business_invoice_type_display: order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی',
+                quoted_total: order.quoted_total || 0,
+                can_download_final_invoice: order.status === 'completed',
+                final_invoice_available: order.status === 'completed',
+                total_with_tax: null
+            });
         } finally {
             setLoadingStatus(false);
         }
@@ -100,7 +158,10 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
                 <div className="neo-info-item">
                     <span className="neo-info-label">مبلغ کل</span>
                     <span className="neo-info-value neo-payable-amount">
-                        {order.business_invoice_type === 'official' ? formatPriceFixed(invoiceStatus.total_with_tax) : formatPriceFixed(invoiceStatus.quoted_total)}
+                        {order.business_invoice_type === 'official' && invoiceStatus.total_with_tax ?
+                            formatPriceFixed(invoiceStatus.total_with_tax) :
+                            formatPriceFixed(invoiceStatus.quoted_total)
+                        }
                     </span>
                 </div>
                 {order.status === 'completed' && (
@@ -132,7 +193,6 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
         </NeoBrutalistCard>
     );
 };
-
 
 const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
     const [newInvoiceType, setNewInvoiceType] = useState(order.business_invoice_type);
@@ -250,55 +310,6 @@ const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
     );
 };
 
-// FIXED: Enhanced price formatting function
-const formatPriceFixed = (price) => {
-    // Handle null, undefined, and zero values properly
-    if (price === null || price === undefined || isNaN(price)) {
-        return 'در انتظار';
-    }
-
-    const numericPrice = parseFloat(price);
-    if (numericPrice === 0) {
-        return 'در انتظار';
-    }
-
-    try {
-        return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
-    } catch (error) {
-        console.error('❌ Admin price formatting error:', error, 'for price:', price);
-        return `${numericPrice} ریال`;
-    }
-};
-
-// FIXED: Enhanced quantity formatting function
-const formatQuantityFixed = (quantity) => {
-    // Handle null, undefined, and zero values properly
-    if (quantity === null || quantity === undefined || isNaN(quantity)) {
-        return '';
-    }
-
-    const numericQuantity = parseInt(quantity);
-    if (numericQuantity === 0) {
-        return '';
-    }
-
-    try {
-        return new Intl.NumberFormat('fa-IR').format(numericQuantity);
-    } catch (error) {
-        console.error('❌ Admin quantity formatting error:', error, 'for quantity:', quantity);
-        return numericQuantity.toString();
-    }
-};
-
-// FIXED: Enhanced total calculation function for admin
-const calculateTotalFixed = (unitPrice, quantity) => {
-    if (!unitPrice || !quantity || unitPrice === 0 || quantity === 0) {
-        return 'در انتظار';
-    }
-    const total = parseFloat(unitPrice) * parseInt(quantity);
-    return formatPriceFixed(total).replace(' ریال', '');
-};
-
 const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [order, setOrder] = useState(null);
     const [items, setItems] = useState([]);
@@ -309,6 +320,12 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [completing, setCompleting] = useState(false);
     const [customerInfo, setCustomerInfo] = useState(null);
     const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
+
+    // ADDED: Payment receipts state
+    const [paymentReceipts, setPaymentReceipts] = useState([]);
+    const [loadingReceipts, setLoadingReceipts] = useState(false);
+    const [receiptsError, setReceiptsError] = useState('');
+
     const tableRef = useRef(null);
 
     useEffect(() => {
@@ -329,6 +346,13 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     }, [order?.customer]);
 
+    // ADDED: Fetch payment receipts when order has them
+    useEffect(() => {
+        if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts || order.payment_receipts?.length > 0)) {
+            fetchPaymentReceipts();
+        }
+    }, [order]);
+
     const fetchOrder = async () => {
         setLoading(true);
         try {
@@ -341,6 +365,22 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setError('خطا در بارگیری سفارش');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ADDED: Function to fetch payment receipts for admin
+    const fetchPaymentReceipts = async () => {
+        setLoadingReceipts(true);
+        setReceiptsError('');
+        try {
+            const response = await API.get(`/orders/${orderId}/payment-receipts/`);
+            setPaymentReceipts(response.data.receipts || []);
+            console.log('✅ Admin payment receipts fetched:', response.data);
+        } catch (err) {
+            console.error('❌ Admin error fetching payment receipts:', err);
+            setReceiptsError('خطا در بارگیری رسیدهای پرداخت');
+        } finally {
+            setLoadingReceipts(false);
         }
     };
 
@@ -374,8 +414,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             company_name: info.company_name || '',
             national_id: info.national_id || '',
             economic_id: info.economic_id || '',
-            postal_code: info.postal_code || '',
-            complete_address: info.complete_address || ''
+            postal_code: info.postal_code || ''
         };
     };
 
@@ -607,6 +646,64 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         return new Intl.NumberFormat('fa-IR').format(subtotal);
     };
 
+    // ADDED: Format file size helper
+    const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
+
+    // ADDED: Handle download receipt
+    const handleDownloadReceipt = async (receipt) => {
+        try {
+            const downloadUrl = receipt.file_url || receipt.download_url;
+
+            if (!downloadUrl) {
+                alert('لینک دانلود در دسترس نیست');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = receipt.file_name;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (error) {
+            console.error('❌ Error downloading file:', error);
+            alert('خطا در دانلود فایل');
+        }
+    };
+
+    // ADDED: Handle view PDF
+    const handleViewPDF = async (receipt) => {
+        try {
+            const viewUrl = receipt.file_url || receipt.download_url;
+
+            if (!viewUrl) {
+                alert('فایل PDF در دسترس نیست');
+                return;
+            }
+
+            const newWindow = window.open(viewUrl, '_blank');
+
+            if (!newWindow) {
+                const link = document.createElement('a');
+                link.href = viewUrl;
+                link.download = receipt.file_name;
+                link.click();
+            }
+
+        } catch (error) {
+            console.error('❌ Error viewing PDF:', error);
+            alert('خطا در مشاهده فایل PDF');
+        }
+    };
+
     if (loading) {
         return (
             <div className="admin-order-detail">
@@ -727,7 +824,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
-            {/* UPDATED: Admin Invoice Manager Component Render Call */}
+            {/* Admin Invoice Manager Component */}
             {(order.status === 'waiting_customer_approval' || order.status === 'confirmed' || order.status === 'payment_uploaded' || order.status === 'completed') && (
                 <AdminInvoiceManager order={order} onUpdate={fetchOrder} />
             )}
@@ -783,7 +880,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                     </div>
                                 </div>
 
-                                {/*Invoice readiness indicator */}
+                                {/* Invoice readiness indicator */}
                                 <div className="invoice-readiness" style={{ marginTop: '1rem' }}>
                                     {(() => {
                                         const info = getCustomerInvoiceInfo();
@@ -799,7 +896,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                 gap: '0.5rem',
                                                 border: '2px solid #059669'
                                             }}>
-                                                <span>اطلاعات فاکتور رسمی کامل است</span>
+                                                <span>✅ اطلاعات فاکتور رسمی کامل است</span>
                                             </div>
                                         ) : (
                                             <div className="readiness-indicator incomplete" style={{
@@ -812,8 +909,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                 gap: '0.5rem',
                                                 border: '2px solid #f59e0b'
                                             }}>
-                                                <span>⚠️</span>
-                                                <span>برخی اطلاعات فاکتور رسمی ناقص است</span>
+                                                <span>⚠️ برخی اطلاعات فاکتور رسمی ناقص است</span>
                                             </div>
                                         );
                                     })()}
@@ -899,7 +995,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     {/* Items Table */}
                     <div className="admin-items-section">
                         <h3 className="admin-section-title">محصولات</h3>
-                        {/* MODIFIED: Added data-invoice-type attribute to connect with conditional CSS */}
                         <div
                             className="admin-items-table"
                             ref={tableRef}
@@ -911,7 +1006,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 <div className="admin-header-cell">نظر مشتری</div>
                                 <div className="admin-header-cell">قیمت واحد (ریال)</div>
                                 <div className="admin-header-cell">تعداد نهایی</div>
-                                {/* MODIFIED: Render tax columns only for official invoices */}
                                 {isOfficialInvoice() && (
                                     <>
                                         <div className="admin-header-cell">نرخ مالیات (%)</div>
@@ -955,7 +1049,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         />
                                     </div>
 
-                                    {/* MODIFIED: Render tax cells only for official invoices */}
                                     {isOfficialInvoice() && (
                                         <>
                                             <div className="admin-table-cell">
@@ -979,7 +1072,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         />
                                     </div>
                                     <div className="admin-table-cell admin-total-cell">
-                                        {/* MODIFIED: Calculate total based on invoice type */}
                                         {isOfficialInvoice()
                                             ? formatPrice(calculateItemTotalWithTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate))
                                             : formatPrice(calculateTotal(item.quoted_unit_price, item.final_quantity))
@@ -1005,6 +1097,139 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     </div>
                 </form>
             </NeoBrutalistCard>
+
+            {/* Payment Receipts Section for Admin */}
+            {(order.has_payment_receipts || paymentReceipts.length > 0) && (
+                <NeoBrutalistCard className="admin-payment-receipts-card">
+                    <div className="admin-card-header">
+                        <h2 className="admin-card-title">
+                            رسیدهای پرداخت ({paymentReceipts.length})
+                        </h2>
+                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
+                    </div>
+
+                    {receiptsError && (
+                        <div className="admin-error-message">
+                            <span>⚠️ {receiptsError}</span>
+                        </div>
+                    )}
+
+                    <div className="admin-payment-receipts-content">
+                        <div className="admin-receipts-grid">
+                            {paymentReceipts.map((receipt, index) => (
+                                <div key={receipt.id} className="admin-receipt-item" data-file-type={receipt.file_type}>
+                                    <div className="admin-receipt-header">
+                                        <h4>رسید {index + 1}</h4>
+                                        <div className="admin-receipt-meta">
+                                            <span className="admin-receipt-type">
+                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
+                                            </span>
+                                            <span className="admin-receipt-size">
+                                                {formatFileSize(receipt.file_size)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="admin-receipt-info">
+                                        <div className="admin-receipt-details">
+                                            <div className="admin-info-item">
+                                                <span className="admin-info-label">نام فایل:</span>
+                                                <span className="admin-info-value">{receipt.file_name}</span>
+                                            </div>
+                                            <div className="admin-info-item">
+                                                <span className="admin-info-label">تاریخ آپلود:</span>
+                                                <span className="admin-info-value">
+                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
+                                                </span>
+                                            </div>
+                                            <div className="admin-info-item">
+                                                <span className="admin-info-label">وضعیت:</span>
+                                                <span className={`admin-info-value ${
+                                                    receipt.is_verified ? 'admin-receipt-verified' : 'admin-receipt-pending'
+                                                }`}>
+                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                                </span>
+                                            </div>
+                                            {receipt.admin_notes && (
+                                                <div className="admin-info-item">
+                                                    <span className="admin-info-label">یادداشت ادمین:</span>
+                                                    <span className="admin-info-value">{receipt.admin_notes}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Receipt Preview */}
+                                        {receipt.file_type === 'image' ? (
+                                            <div className="admin-receipt-preview">
+                                                <img
+                                                    src={receipt.file_url}
+                                                    alt={`رسید پرداخت ${receipt.file_name}`}
+                                                    className="admin-receipt-image"
+                                                    onClick={() => window.open(receipt.file_url, '_blank')}
+                                                    style={{
+                                                        width: '100%',
+                                                        maxWidth: '300px',
+                                                        maxHeight: '200px',
+                                                        objectFit: 'contain',
+                                                        cursor: 'pointer',
+                                                        border: '2px solid #000',
+                                                        borderRadius: '8px',
+                                                        backgroundColor: '#fff'
+                                                    }}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="admin-pdf-preview">
+                                                <p className="admin-pdf-name">{receipt.file_name}</p>
+                                                <NeoBrutalistButton
+                                                    text="📄 مشاهده PDF"
+                                                    color="blue-400"
+                                                    textColor="white"
+                                                    onClick={() => handleViewPDF(receipt)}
+                                                    className="admin-pdf-view-btn"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Receipt actions */}
+                                    <div className="admin-receipt-actions">
+                                        <NeoBrutalistButton
+                                            text="📥 دانلود"
+                                            color="green-400"
+                                            textColor="black"
+                                            onClick={() => handleDownloadReceipt(receipt)}
+                                            className="admin-download-receipt-btn"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Overall payment status */}
+                        <div className="admin-payment-summary">
+                            <div className="admin-summary-stats">
+                                <div className="admin-stat-item">
+                                    <span className="admin-stat-label">کل رسیدها:</span>
+                                    <span className="admin-stat-value">{paymentReceipts.length}</span>
+                                </div>
+                                <div className="admin-stat-item">
+                                    <span className="admin-stat-label">تایید شده:</span>
+                                    <span className="admin-stat-value">
+                                        {paymentReceipts.filter(r => r.is_verified).length}
+                                    </span>
+                                </div>
+                                <div className="admin-stat-item">
+                                    <span className="admin-stat-label">در انتظار:</span>
+                                    <span className="admin-stat-value">
+                                        {paymentReceipts.filter(r => !r.is_verified).length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
 
             {(order.status === 'payment_uploaded' || (order.status === 'completed' && order.has_payment_receipts)) && (
                 <NeoBrutalistCard className="admin-payment-verification-card">
@@ -1053,7 +1278,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             )}
 
-            {/* MODIFIED: Payment Information Display - Always show for relevant statuses, hide receipt numbers for completed orders */}
+            {/* Payment Information Display */}
             {(order.status === 'payment_uploaded' || order.status === 'confirmed' || order.status === 'completed') && (
                 <NeoBrutalistCard className="admin-order-info-card">
                     <div className="admin-card-header">
@@ -1066,7 +1291,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                     <span className="admin-info-label">نوع پرداخت</span>
                                     <span className="admin-info-value">رسیدهای متعدد</span>
                                 </div>
-                                {/* MODIFIED: Hide receipt count for completed orders */}
                                 {order.status !== 'completed' && (
                                     <div className="admin-info-item">
                                         <span className="admin-info-label">تعداد رسیدها</span>
@@ -1102,7 +1326,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             </div>
                         )}
 
-                        {/* MODIFIED: Show completion status for completed orders */}
                         {order.status === 'completed' && (
                             <div className="admin-info-item">
                                 <span className="admin-info-label">وضعیت پرداخت</span>
@@ -1113,7 +1336,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         )}
                     </div>
 
-                    {/* MODIFIED: Always show receipt images regardless of order status */}
                     {order.payment_receipt && !order.has_payment_receipts && (
                         <div className="payment-receipt-view">
                             <h4>رسید پرداخت:</h4>
@@ -1133,7 +1355,6 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         </div>
                     )}
 
-                    {/* MODIFIED: Show completion message for completed orders, but keep receipts visible */}
                     {order.status === 'completed' && (order.payment_receipt || order.has_payment_receipts) && (
                         <div className="completed-payment-message" style={{
                             backgroundColor: '#d1fae5',
@@ -1146,7 +1367,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             fontSize: '0.9rem'
                         }}>
                             <span style={{ marginLeft: '0.5rem' }}>
-                                پرداخت تایید شده و سفارش تکمیل شده
+                                ✅ پرداخت تایید شده و سفارش تکمیل شده
                             </span>
                         </div>
                     )}
