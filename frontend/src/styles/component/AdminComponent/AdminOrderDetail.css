@@ -443,3 +443,197 @@
         flex-grow: 1;
     }
 }
+
+.neo-invoice-card .neo-card-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 3px solid #000;
+    background-color: #f8f9fa;
+    text-align: right;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.neo-invoice-status-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.neo-badge {
+    padding: 6px 12px;
+    border: 2px solid #000;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 2px 2px #000;
+}
+
+.neo-badge-info {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.neo-badge-success {
+    background-color: #059669;
+    color: white;
+}
+
+.neo-badge-verified {
+    background-color: #facc15;
+    color: #000;
+}
+
+.neo-info-value.neo-invoice-number {
+    background-color: #f3f4f6;
+    padding: 8px 12px;
+    border: 2px solid #000;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    box-shadow: 2px 2px #000;
+}
+
+.neo-info-value.neo-total-with-tax {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #dc2626;
+    background-color: #fef2f2;
+    padding: 8px 12px;
+    border: 2px solid #dc2626;
+    box-shadow: 2px 2px #dc2626;
+}
+
+.neo-invoice-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    direction: rtl;
+}
+
+.neo-action-group {
+    border: 3px solid #000;
+    background-color: #fff;
+    box-shadow: 4px 4px #000;
+}
+
+.neo-action-group-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #000;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.neo-action-buttons {
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.neo-btn {
+    padding: 12px 24px;
+    border: 3px solid #000;
+    background-color: #fff;
+    color: #000;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 4px 4px #000;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.neo-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px #000;
+}
+
+.neo-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: 2px 2px #000;
+}
+
+.neo-btn-primary {
+    background-color: #4ade80;
+    color: #000;
+}
+
+.neo-btn-primary:hover {
+    background-color: #22c55e;
+}
+
+.neo-btn-secondary {
+    background-color: #60a5fa;
+    color: #000;
+}
+
+.neo-no-invoices-message {
+    padding: 2rem;
+    background-color: #f9fafb;
+    border: 3px dashed #d1d5db;
+    text-align: center;
+}
+
+.neo-loading-content,
+.neo-error-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 2rem;
+    direction: rtl;
+}
+
+.neo-payable-amount {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #059669;
+    direction: rtl;
+}
+
+.neo-official-invoice {
+    color: #dc2626 !important;
+    font-weight: bold;
+}
+
+.neo-unofficial-invoice {
+    color: #059669 !important;
+    font-weight: bold;
+}
+
+.neo-tax-badge {
+    background-color: #fef3c7;
+    color: #92400e;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-left: 8px;
+    border: 1px solid #f59e0b;
+}
+
+.neo-invoice-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+    direction: rtl;
+}

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
-from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer
+from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer, OrderPaymentReceipt
 from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
 class OrderItemCreateSerializer(serializers.Serializer):
@@ -494,3 +494,26 @@ class OrderDetailSerializer(serializers.ModelSerializer):
             return obj.all_payment_receipts.count() if hasattr(obj, 'all_payment_receipts') else 0
         except:
             return 0
+
+
+class PaymentReceiptSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderPaymentReceipt
+        fields = ['id', 'file_name', 'file_size', 'file_type', 'uploaded_at',
+                  'is_verified', 'file_url', 'download_url', 'admin_notes']
+
+    def get_file_url(self, obj):
+        """Return direct media URL without authentication"""
+        if obj.receipt_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.receipt_file.url)
+            return obj.receipt_file.url
+        return None
+
+    def get_download_url(self, obj):
+        """Return the same URL as file_url for direct download"""
+        return self.get_file_url(obj)

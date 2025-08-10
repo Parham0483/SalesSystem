@@ -211,7 +211,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
         return None
 
     def get_images(self, obj):
-        """Return all images in the format frontend expects"""
+        """Return all images in the format frontend expects - FIXED to use 'additional_images'"""
         request = self.context.get('request')
         images = []
 
@@ -222,7 +222,7 @@ class ShipmentAnnouncementSerializer(serializers.ModelSerializer):
                 image_url = request.build_absolute_uri(image_url)
             images.append({'image': image_url})
 
-        # FIXED: Use the correct related name 'additional_images'
+        # FIXED: Use the correct related name 'additional_images' (not 'images')
         additional_images = obj.additional_images.all().order_by('order')
 
         for img in additional_images:

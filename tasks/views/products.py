@@ -436,7 +436,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
-    """Clean ViewSet for shipment announcements"""
+    """Fixed ViewSet for shipment announcements"""
     authentication_classes = [JWTAuthentication]
     serializer_class = ShipmentAnnouncementSerializer
 
@@ -448,12 +448,13 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def get_queryset(self):
+        """FIXED: Use correct prefetch_related"""
         if self.request.user.is_staff:
-            return ShipmentAnnouncement.objects.all().order_by('-created_at')
+            return ShipmentAnnouncement.objects.select_related('created_by').prefetch_related('additional_images').order_by('-created_at')
         else:
             return ShipmentAnnouncement.objects.filter(
                 is_active=True
-            ).order_by('-is_featured', '-created_at')
+            ).select_related('created_by').prefetch_related('additional_images').order_by('-is_featured', '-created_at')
 
     def create(self, request, *args, **kwargs):
         """Create announcement without using DRF serializer for files"""
@@ -527,7 +528,7 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
                 announcement.image = images[0]
                 announcement.save()
 
-                # Handle additional images (if more than 1 image uploaded)
+                # FIXED: Handle additional images using correct model
                 from ..models import ShipmentAnnouncementImage
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
@@ -621,14 +622,14 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
 
             # Handle image updates if new images provided
             if images:
-                # Clear existing additional images
-                instance.images.all().delete()
+                # FIXED: Clear existing additional images using correct related name
+                instance.additional_images.all().delete()
 
                 # Set first image as main image
                 instance.image = images[0]
                 instance.save()
 
-                # Add additional images
+                # FIXED: Add additional images using correct model
                 from ..models import ShipmentAnnouncementImage
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(

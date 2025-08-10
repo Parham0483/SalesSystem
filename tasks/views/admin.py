@@ -936,28 +936,24 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
 
 
 class AdminAnnouncementViewSet(viewsets.ModelViewSet):
-    """Admin shipment announcement management with email notifications"""
+    """Admin-specific ViewSet for shipment announcements with proper field names"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     serializer_class = ShipmentAnnouncementSerializer
 
     def get_queryset(self):
-        return ShipmentAnnouncement.objects.all().select_related('created_by').prefetch_related('images').order_by(
+        """FIXED: Use correct prefetch_related with 'additional_images'"""
+        return ShipmentAnnouncement.objects.select_related('created_by').prefetch_related('additional_images').order_by(
             '-created_at')
 
     def create(self, request, *args, **kwargs):
-        """Create announcement with email notifications"""
-        if not request.user.is_staff:
-            return Response({
-                'error': 'Permission denied. Admin access required.'
-            }, status=status.HTTP_403_FORBIDDEN)
-
+        """Create announcement with file upload support"""
         try:
             # Extract and validate images
             images = request.FILES.getlist('images')
 
-            # Validate images files
-            allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
+            # Validate image files
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
             max_size = 5 * 1024 * 1024  # 5MB
 
             for image in images:
@@ -974,8 +970,6 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
             # Convert boolean strings to actual booleans
             is_active = str(request.data.get('is_active', 'true')).lower() in ['true', '1', 'yes']
             is_featured = str(request.data.get('is_featured', 'false')).lower() in ['true', '1', 'yes']
-            send_email_notifications = str(request.data.get('send_email_notifications', 'true')).lower() in ['true',
-                                                                                                             '1', 'yes']
 
             # Clean up date fields
             shipment_date = request.data.get('shipment_date')
@@ -1015,12 +1009,11 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
 
             # Handle images if provided
             if images:
-                # Set first images as main images
+                # Set first image as main image
                 announcement.image = images[0]
                 announcement.save()
 
-                # Handle additional images (if more than 1 images uploaded)
-                from ..models import ShipmentAnnouncementImage
+                # FIXED: Handle additional images using correct model and field names
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
                         announcement=announcement,
@@ -1029,64 +1022,30 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
                         alt_text=f"Image {i + 1} for {announcement.title}"
                     )
 
-            # NEW: Send email notifications if requested
-            email_results = {}
-            if send_email_notifications and is_active:
-                print(f"📧 Sending new arrival notifications for announcement: {announcement.title}")
-
-                # Send to customers
-                customer_count = NotificationService.notify_all_customers_new_arrival(announcement)
-                email_results['customers_notified'] = customer_count
-
-                # Send to dealers
-                dealer_count = NotificationService.notify_dealers_new_arrival(announcement)
-                email_results['dealers_notified'] = dealer_count
-
-                print(f"✅ Email notifications sent: {customer_count} customers, {dealer_count} dealers")
-            else:
-                email_results = {
-                    'customers_notified': 0,
-                    'dealers_notified': 0,
-                    'reason': 'Email notifications disabled or announcement inactive'
-                }
-
             # Return success response using the serializer for output only
             serializer = self.get_serializer(announcement)
             return Response({
                 'message': 'Announcement created successfully',
-                'announcement': serializer.data,
-                'email_notifications': email_results
+                'announcement': serializer.data
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            print(f"❌ Error creating announcement: {str(e)}")
             return Response({
                 'error': f'خطا در ایجاد اطلاعیه: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def update(self, request, *args, **kwargs):
-        """Update announcement with optional email notifications"""
-        if not request.user.is_staff:
-            return Response({
-                'error': 'Permission denied. Admin access required.'
-            }, status=status.HTTP_403_FORBIDDEN)
-
+        """Update announcement with file upload support"""
         try:
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
-
-            # Check if this is an activation update
-            old_is_active = instance.is_active
-            send_email_notifications = str(request.data.get('send_email_notifications', 'false')).lower() in ['true',
-                                                                                                              '1',
-                                                                                                              'yes']
 
             # Extract and validate images if provided
             images = request.FILES.getlist('images')
 
             if images:
-                # Validate images files
-                allowed_types = ['images/jpeg', 'images/jpg', 'images/png', 'images/gif', 'images/webp']
+                # Validate image files
+                allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
                 max_size = 5 * 1024 * 1024  # 5MB
 
                 for image in images:
@@ -1140,17 +1099,16 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
             # Save the updated instance
             instance.save()
 
-            # Handle images updates if new images provided
+            # Handle image updates if new images provided
             if images:
-                # Clear existing additional images
-                instance.images.all().delete()
+                # FIXED: Clear existing additional images using correct related name
+                instance.additional_images.all().delete()
 
-                # Set first images as main images
+                # Set first image as main image
                 instance.image = images[0]
                 instance.save()
 
-                # Add additional images
-                from ..models import ShipmentAnnouncementImage
+                # FIXED: Add additional images using correct model and field names
                 for i, image_file in enumerate(images[1:], start=1):
                     ShipmentAnnouncementImage.objects.create(
                         announcement=instance,
@@ -1159,129 +1117,63 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
                         alt_text=f"Image {i + 1} for {instance.title}"
                     )
 
-            # NEW: Send email notifications if announcement was just activated
-            email_results = {}
-            if send_email_notifications and not old_is_active and instance.is_active:
-                print(f"📧 Sending activation notifications for announcement: {instance.title}")
-
-                # Send to customers
-                customer_count = NotificationService.notify_all_customers_new_arrival(instance)
-                email_results['customers_notified'] = customer_count
-
-                # Send to dealers
-                dealer_count = NotificationService.notify_dealers_new_arrival(instance)
-                email_results['dealers_notified'] = dealer_count
-
-                print(f"✅ Activation email notifications sent: {customer_count} customers, {dealer_count} dealers")
-            else:
-                email_results = {
-                    'customers_notified': 0,
-                    'dealers_notified': 0,
-                    'reason': 'Email notifications not requested or announcement was already active'
-                }
-
             # Return success response using the serializer for output only
             serializer = self.get_serializer(instance)
             return Response({
                 'message': 'Announcement updated successfully',
-                'announcement': serializer.data,
-                'email_notifications': email_results
+                'announcement': serializer.data
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print(f"❌ Error updating announcement: {str(e)}")
             return Response({
                 'error': f'خطا در به‌روزرسانی اطلاعیه: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=['POST'], url_path='send-notifications')
-    def send_notifications(self, request, pk=None):
-        """Manually send email notifications for an existing announcement"""
-        if not request.user.is_staff:
-            return Response({
-                'error': 'Permission denied. Admin access required.'
-            }, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            announcement = self.get_object()
-
-            if not announcement.is_active:
-                return Response({
-                    'error': 'Cannot send notifications for inactive announcement'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            print(f"📧 Manually sending notifications for announcement: {announcement.title}")
-
-            # Send to customers
-            customer_count = NotificationService.notify_all_customers_new_arrival(announcement)
-
-            # Send to dealers
-            dealer_count = NotificationService.notify_dealers_new_arrival(announcement)
-
-            return Response({
-                'message': 'Email notifications sent successfully',
-                'results': {
-                    'customers_notified': customer_count,
-                    'dealers_notified': dealer_count,
-                    'total_sent': customer_count + dealer_count
-                }
-            })
-
-        except Exception as e:
-            return Response({
-                'error': f'Failed to send notifications: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    def list(self, request, *args, **kwargs):
+        """List all announcements for admin"""
+        announcements = self.get_queryset()
+        serializer = self.get_serializer(announcements, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['POST'], url_path='bulk-action')
     def bulk_action(self, request):
         """Perform bulk actions on announcements"""
+        action = request.data.get('action')
+        announcement_ids = request.data.get('announcement_ids', [])
+
+        if not action or not announcement_ids:
+            return Response({
+                'error': 'Action and announcement_ids are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        announcements = ShipmentAnnouncement.objects.filter(id__in=announcement_ids)
+        if not announcements.exists():
+            return Response({
+                'error': 'No announcements found with provided IDs'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        updated_count = 0
         try:
-            announcement_ids = request.data.get('announcement_ids', [])
-            action = request.data.get('action')
-
-            if not announcement_ids:
-                return Response({
-                    'error': 'No announcements selected'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            announcements = ShipmentAnnouncement.objects.filter(id__in=announcement_ids)
-
-            if not announcements.exists():
-                return Response({
-                    'error': 'No announcements found'
-                }, status=status.HTTP_404_NOT_FOUND)
-
-            updated_count = 0
-
             if action == 'activate':
                 updated_count = announcements.update(is_active=True)
-                message = f'{updated_count} announcements activated'
             elif action == 'deactivate':
                 updated_count = announcements.update(is_active=False)
-                message = f'{updated_count} announcements deactivated'
-            elif action == 'feature':
-                updated_count = announcements.update(is_featured=True)
-                message = f'{updated_count} announcements featured'
-            elif action == 'unfeature':
-                updated_count = announcements.update(is_featured=False)
-                message = f'{updated_count} announcements unfeatured'
             elif action == 'delete':
                 updated_count = announcements.count()
                 announcements.delete()
-                message = f'{updated_count} announcements deleted'
             else:
                 return Response({
-                    'error': 'Invalid action'
+                    'error': f'Unknown action: {action}'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({
-                'message': message,
+                'message': f'Bulk {action} completed successfully',
                 'updated_count': updated_count
             })
 
         except Exception as e:
             return Response({
-                'error': f'Bulk action failed: {str(e)}'
+                'error': f'Error performing bulk action: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['GET'], url_path='analytics')
@@ -1293,45 +1185,35 @@ class AdminAnnouncementViewSet(viewsets.ModelViewSet):
             # Basic stats
             total = announcements.count()
             active = announcements.filter(is_active=True).count()
+            inactive = announcements.filter(is_active=False).count()
             featured = announcements.filter(is_featured=True).count()
 
-            # Recent stats
-            week_ago = timezone.now() - timedelta(days=7)
-            month_ago = timezone.now() - timedelta(days=30)
+            # This month stats
+            from datetime import datetime
+            now = datetime.now()
+            this_month = announcements.filter(
+                created_at__year=now.year,
+                created_at__month=now.month
+            ).count()
 
-            recent_week = announcements.filter(created_at__gte=week_ago).count()
-            recent_month = announcements.filter(created_at__gte=month_ago).count()
-
-            # Most recent announcements
-            recent_announcements = announcements[:5]
-            recent_data = []
-            for ann in recent_announcements:
-                recent_data.append({
-                    'id': ann.id,
-                    'title': ann.title,
-                    'created_at': ann.created_at.isoformat(),
-                    'is_active': ann.is_active,
-                    'is_featured': ann.is_featured,
-                    'created_by': ann.created_by.name if ann.created_by else 'Unknown'
-                })
+            # Total views
+            total_views = announcements.aggregate(
+                total=Sum('view_count')
+            )['total'] or 0
 
             return Response({
-                'stats': {
-                    'total': total,
-                    'active': active,
-                    'inactive': total - active,
-                    'featured': featured,
-                    'recent_week': recent_week,
-                    'recent_month': recent_month
-                },
-                'recent_announcements': recent_data
+                'total': total,
+                'active': active,
+                'inactive': inactive,
+                'featured': featured,
+                'this_month': this_month,
+                'total_views': total_views
             })
 
         except Exception as e:
             return Response({
                 'error': f'Analytics failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class AdminReportsViewSet(viewsets.ViewSet):
     """Admin reports and analytics"""

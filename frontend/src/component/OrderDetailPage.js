@@ -196,10 +196,9 @@ const InvoiceManager = ({ order, onUpdate }) => {
                 <div className="neo-info-item">
                     <span className="neo-info-label">مبلغ کل (بدون مالیات)</span>
                     <span className="neo-info-value">
-                        {invoiceStatus.quoted_total.toLocaleString('fa-IR')} ریال
+                        {formatPriceFixed(invoiceStatus.quoted_total)}
                     </span>
                 </div>
-
 
                 {order.business_invoice_type === 'official' && invoiceStatus.tax_breakdown && (
                     <>
@@ -207,16 +206,16 @@ const InvoiceManager = ({ order, onUpdate }) => {
                         <div className="neo-info-item">
                             <span className="neo-info-label">مجموع مالیات</span>
                             <span className="neo-info-value neo-tax-badge">
-                    {invoiceStatus.total_tax_amount.toLocaleString('fa-IR')} ریال
-                </span>
+                                {formatPriceFixed(invoiceStatus.total_tax_amount)}
+                            </span>
                         </div>
 
                         {/* Show final total */}
                         <div className="neo-info-item">
                             <span className="neo-info-label">مبلغ نهایی (با مالیات)</span>
                             <span className="neo-info-value neo-total-with-tax">
-                    {invoiceStatus.total_with_tax.toLocaleString('fa-IR')} ریال
-                </span>
+                                {formatPriceFixed(invoiceStatus.total_with_tax)}
+                            </span>
                         </div>
 
                         {/* Show tax breakdown by rate if multiple rates exist */}
@@ -226,7 +225,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
                                 <div className="tax-breakdown-details">
                                     {Object.values(invoiceStatus.tax_breakdown.breakdown_by_rate).map((rateInfo, index) => (
                                         <div key={index} className="tax-rate-info">
-                                            <span>مالیات {rateInfo.rate}%: {rateInfo.tax_amount.toLocaleString('fa-IR')} ریال</span>
+                                            <span>مالیات {rateInfo.rate}%: {formatPriceFixed(rateInfo.tax_amount)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -405,6 +404,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
     );
 };
 
+// FIXED: Simplified AuthenticatedImage Component - No Authentication Required
 const AuthenticatedImage = ({ receipt, onError }) => {
     const [imageData, setImageData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -412,59 +412,35 @@ const AuthenticatedImage = ({ receipt, onError }) => {
 
     useEffect(() => {
         if (receipt && receipt.file_type === 'image') {
-            loadAuthenticatedImage();
+            loadImage();
         }
     }, [receipt]);
 
-    const loadAuthenticatedImage = async () => {
+    const loadImage = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                throw new Error('Authentication token not found');
-            }
-
-            const imageUrl = receipt.download_url;
+            // FIXED: Use direct media URL without authentication
+            const imageUrl = receipt.file_url || receipt.download_url;
 
             if (!imageUrl) {
-                throw new Error('Download URL not available');
+                throw new Error('Image URL not available');
             }
 
-            const response = await fetch(imageUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            setImageData(objectUrl);
+            // FIXED: Simple direct access - no authentication needed for media files
+            setImageData(imageUrl);
+            setLoading(false);
 
         } catch (err) {
-            console.error('❌ Error loading authenticated image:', err);
+            console.error('❌ Error loading image:', err);
             setError(err.message);
+            setLoading(false);
             if (onError) {
                 onError(err);
             }
-        } finally {
-            setLoading(false);
         }
     };
-
-    useEffect(() => {
-        return () => {
-            if (imageData) {
-                URL.revokeObjectURL(imageData);
-            }
-        };
-    }, [imageData]);
 
     if (loading) {
         return (
@@ -497,7 +473,7 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                     {error}
                 </div>
                 <button
-                    onClick={loadAuthenticatedImage}
+                    onClick={loadImage}
                     style={{
                         padding: '8px 16px',
                         backgroundColor: '#3b82f6',
@@ -554,6 +530,69 @@ const AuthenticatedImage = ({ receipt, onError }) => {
             />
         </div>
     );
+};
+
+// FIXED: Enhanced price formatting function
+const formatPriceFixed = (price) => {
+    // Handle null, undefined, and zero values properly
+    if (price === null || price === undefined || isNaN(price)) {
+        return 'در انتظار';
+    }
+
+    const numericPrice = parseFloat(price);
+    if (numericPrice === 0) {
+        return 'در انتظار';
+    }
+
+    try {
+        return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
+    } catch (error) {
+        console.error('❌ Price formatting error:', error, 'for price:', price);
+        return `${numericPrice} ریال`;
+    }
+};
+
+// FIXED: Enhanced quantity formatting function
+const formatQuantityFixed = (quantity) => {
+    // Handle null, undefined, and zero values properly
+    if (quantity === null || quantity === undefined || isNaN(quantity)) {
+        return 'در انتظار';
+    }
+
+    const numericQuantity = parseInt(quantity);
+    if (numericQuantity === 0) {
+        return 'در انتظار';
+    }
+
+    try {
+        return new Intl.NumberFormat('fa-IR').format(numericQuantity);
+    } catch (error) {
+        console.error('❌ Quantity formatting error:', error, 'for quantity:', quantity);
+        return numericQuantity.toString();
+    }
+};
+
+// FIXED: Enhanced total calculation function
+const calculateTotalFixed = (unitPrice, quantity) => {
+    // Handle null, undefined, and zero values properly
+    if (!unitPrice || !quantity || isNaN(unitPrice) || isNaN(quantity)) {
+        return 'در انتظار';
+    }
+
+    const numericPrice = parseFloat(unitPrice);
+    const numericQuantity = parseInt(quantity);
+
+    if (numericPrice === 0 || numericQuantity === 0) {
+        return 'در انتظار';
+    }
+
+    try {
+        const total = numericPrice * numericQuantity;
+        return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
+    } catch (error) {
+        console.error('❌ Total calculation error:', error, 'for price:', unitPrice, 'quantity:', quantity);
+        return 'خطا در محاسبه';
+    }
 };
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
@@ -661,41 +700,24 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
+    // FIXED: Simplified download function - no authentication needed
     const handleDownloadReceipt = async (receipt) => {
         try {
-            const downloadUrl = receipt.download_url;
+            const downloadUrl = receipt.file_url || receipt.download_url;
 
             if (!downloadUrl) {
                 alert('لینک دانلود در دسترس نیست');
                 return;
             }
 
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                alert('لطفاً دوباره وارد شوید');
-                return;
-            }
-
-            const response = await fetch(downloadUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
+            // FIXED: Simple direct download - no authentication needed
             const link = document.createElement('a');
-            link.href = blobUrl;
+            link.href = downloadUrl;
             link.download = receipt.file_name;
+            link.target = '_blank';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            URL.revokeObjectURL(blobUrl);
 
         } catch (error) {
             console.error('❌ Error downloading file:', error);
@@ -703,46 +725,25 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
+    // FIXED: Simplified PDF view function - no authentication needed
     const handleViewPDF = async (receipt) => {
         try {
-            const viewUrl = receipt.file_url;
+            const viewUrl = receipt.file_url || receipt.download_url;
 
             if (!viewUrl) {
                 alert('فایل PDF در دسترس نیست');
                 return;
             }
 
-            const token = localStorage.getItem('access_token');
-            if (!token) {
-                alert('لطفاً دوباره وارد شوید');
-                return;
-            }
-
-            const response = await fetch(viewUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const newWindow = window.open(blobUrl, '_blank');
+            // FIXED: Direct PDF view - no authentication needed
+            const newWindow = window.open(viewUrl, '_blank');
 
             if (!newWindow) {
+                // Fallback to download if popup blocked
                 const link = document.createElement('a');
-                link.href = blobUrl;
+                link.href = viewUrl;
                 link.download = receipt.file_name;
                 link.click();
-                URL.revokeObjectURL(blobUrl);
-            } else {
-                setTimeout(() => {
-                    URL.revokeObjectURL(blobUrl);
-                }, 60000);
             }
 
         } catch (error) {
@@ -769,7 +770,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="neo-pdf-preview">
                         <p className="neo-pdf-name">{receipt.file_name}</p>
                         <NeoBrutalistButton
-                            text=" مشاهده PDF"
+                            text="📄 مشاهده PDF"
                             color="blue-400"
                             textColor="white"
                             onClick={() => handleViewPDF(receipt)}
@@ -881,23 +882,14 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         return statusMap[status] || status;
     };
 
-    const formatPrice = (price) => {
-        if (!price || price === 0) return 'در انتظار';
-        return `${new Intl.NumberFormat('fa-IR').format(price)} ریال`;
-    };
+    // FIXED: Use the enhanced formatPriceFixed function
+    const formatPrice = (price) => formatPriceFixed(price);
 
-    const formatQuantity = (quantity) => {
-        if (!quantity || quantity === 0) return 'در انتظار';
-        return new Intl.NumberFormat('fa-IR').format(quantity);
-    };
+    // FIXED: Use the enhanced formatQuantityFixed function
+    const formatQuantity = (quantity) => formatQuantityFixed(quantity);
 
-    const calculateTotal = (unitPrice, quantity) => {
-        if (!unitPrice || !quantity || unitPrice === 0 || quantity === 0) {
-            return 'در انتظار';
-        }
-        const total = unitPrice * quantity;
-        return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
-    };
+    // FIXED: Use the enhanced calculateTotalFixed function
+    const calculateTotal = (unitPrice, quantity) => calculateTotalFixed(unitPrice, quantity);
 
     const truncateText = (text, maxLength = 30) => {
         if (!text) return '-';
@@ -1118,7 +1110,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             gap: '0.5rem',
                                             border: '2px solid #059669'
                                         }}>
-                                            <span>اطلاعات فاکتور رسمی کامل است</span>
+                                            <span>✅ اطلاعات فاکتور رسمی کامل است</span>
                                         </div>
                                     ) : (
                                         <div className="readiness-indicator incomplete" style={{
@@ -1205,7 +1197,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                                 <span className={`neo-info-value ${
                                                     receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
                                                 }`}>
-                                                    {receipt.is_verified ? ' تایید شده' : ' در انتظار بررسی'}
+                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
                                                 </span>
                                             </div>
                                         </div>
@@ -1216,7 +1208,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                     {/* Receipt actions */}
                                     <div className="neo-receipt-actions">
                                         <NeoBrutalistButton
-                                            text=" دانلود"
+                                            text="📥 دانلود"
                                             color="green-400"
                                             textColor="black"
                                             onClick={() => handleDownloadReceipt(receipt)}
@@ -1226,7 +1218,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         {/* Allow deletion only if order is still in confirmed status */}
                                         {order.status === 'confirmed' && (
                                             <NeoBrutalistButton
-                                                text="حذف"
+                                                text="🗑️ حذف"
                                                 color="red-400"
                                                 textColor="white"
                                                 onClick={() => deletePaymentReceipt(receipt.id)}

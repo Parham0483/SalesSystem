@@ -184,7 +184,7 @@ const AdminAnnouncementsPage = () => {
                 estimated_arrival: announcement.estimated_arrival ? announcement.estimated_arrival.split('T')[0] : ''
             };
             setFormData(formattedAnnouncement);
-            setImagePreviews(announcement.images ? announcement.images.map(img => img.image) : []);
+            setImagePreviews(announcement.image ? announcement.image.map(img => img.image) : []);
         } else {
             setFormData({
                 title: '',
@@ -223,7 +223,7 @@ const AdminAnnouncementsPage = () => {
 
         if (files.length) {
             // Validate file types and sizes
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'images/png', 'image/gif', 'image/webp'];
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
             const maxSize = 5 * 1024 * 1024; // 5MB
 
             const validFiles = [];
@@ -955,7 +955,7 @@ const AdminAnnouncementsPage = () => {
                             type="file"
                             onChange={handleFileChange}
                             multiple
-                            accept="images/jpeg,images/jpg,images/png,images/gif,images/webp"
+                            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
                             className="file-input"
                         />
                         <p className="file-help-text">

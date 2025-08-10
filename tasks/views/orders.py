@@ -655,7 +655,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='upload-payment-receipt')
     def upload_payment_receipt(self, request, *args, **kwargs):
-        """Customer uploads multiple payment receipts (images and PDFs)"""
+        """Customer uploads multiple payment receipts (images and PDFs) - FIXED VERSION"""
         try:
             order = self.get_object()
 
@@ -670,7 +670,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             # Get multiple files
-            uploaded_files = request.FILES.getlist('payment_receipts')  # Changed from single to multiple
+            uploaded_files = request.FILES.getlist('payment_receipts')
 
             if not uploaded_files:
                 return Response({
@@ -683,9 +683,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             allowed_types = allowed_image_types + allowed_pdf_types
 
             max_file_size = 15 * 1024 * 1024  # 15MB
-            max_files_count = 10  # Maximum 10 files per upload
+            max_files_count = 10
 
-            # Validate file count
             if len(uploaded_files) > max_files_count:
                 return Response({
                     'error': f'Maximum {max_files_count} files allowed per upload'
@@ -698,16 +697,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             for i, file in enumerate(uploaded_files):
                 file_errors = []
 
-                # Check file type
                 if file.content_type not in allowed_types:
-                    file_errors.append(
-                        f'File {i + 1} ({file.name}): Unsupported format. Only images (JPEG, PNG, GIF, WebP) and PDF are allowed')
+                    file_errors.append(f'File {i + 1} ({file.name}): Unsupported format')
 
-                # Check file size
                 if file.size > max_file_size:
                     file_errors.append(f'File {i + 1} ({file.name}): Size exceeds 15MB limit')
 
-                # Check if file is empty
                 if file.size == 0:
                     file_errors.append(f'File {i + 1} ({file.name}): File is empty')
 
@@ -725,28 +720,43 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'details': errors
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Save valid files
+            # Save valid files with proper error handling
             saved_receipts = []
             from ..models import OrderPaymentReceipt
+            import os
+            from django.conf import settings
 
             for file, file_type in valid_files:
                 try:
-                    receipt = OrderPaymentReceipt.objects.create(
+                    # Create the receipt record
+                    receipt = OrderPaymentReceipt(
                         order=order,
-                        receipt_file=file,
                         file_type=file_type,
                         uploaded_by=request.user
                     )
-                    saved_receipts.append({
-                        'id': receipt.id,
-                        'file_name': receipt.file_name,
-                        'file_type': receipt.file_type,
-                        'file_size': receipt.file_size,
-                        'uploaded_at': receipt.uploaded_at,
-                        'file_url': receipt.receipt_file.url if receipt.receipt_file else None
-                    })
+
+                    # Save the file
+                    receipt.receipt_file.save(file.name, file, save=True)
+
+                    # Verify file was saved
+                    if receipt.receipt_file and os.path.exists(receipt.receipt_file.path):
+                        logger.info(f"✅ File saved successfully: {receipt.receipt_file.path}")
+
+                        saved_receipts.append({
+                            'id': receipt.id,
+                            'file_name': receipt.file_name,
+                            'file_type': receipt.file_type,
+                            'file_size': receipt.file_size,
+                            'uploaded_at': receipt.uploaded_at,
+                            'file_url': request.build_absolute_uri(receipt.receipt_file.url)
+                        })
+                    else:
+                        logger.error(f"❌ File not found after save: {file.name}")
+                        receipt.delete()  # Clean up the database record
+                        errors.append(f'Failed to save {file.name}: File not found after upload')
+
                 except Exception as e:
-                    logger.error(f"Error saving receipt file {file.name}: {str(e)}")
+                    logger.error(f"❌ Error saving receipt file {file.name}: {str(e)}")
                     errors.append(f'Failed to save {file.name}: {str(e)}')
 
             # Update order status if we have successfully saved receipts
@@ -791,7 +801,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['GET'], url_path='payment-receipts')
     def get_payment_receipts(self, request, *args, **kwargs):
-        """Get all payment receipts for an order"""
+        """Get all payment receipts for an order with DIRECT media URLs"""
         try:
             order = self.get_object()
 
@@ -805,6 +815,18 @@ class OrderViewSet(viewsets.ModelViewSet):
             receipts_data = []
 
             for receipt in receipts:
+                # Build the file URL properly
+                file_url = None
+                download_url = None
+
+                if receipt.receipt_file:
+                    try:
+                        # Get the direct media URL
+                        file_url = request.build_absolute_uri(receipt.receipt_file.url)
+                        download_url = file_url
+                    except (ValueError, AttributeError) as e:
+                        logger.warning(f"Could not generate URL for receipt {receipt.id}: {e}")
+
                 receipts_data.append({
                     'id': receipt.id,
                     'file_name': receipt.file_name,
@@ -814,7 +836,9 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'uploaded_by': receipt.uploaded_by.name,
                     'is_verified': receipt.is_verified,
                     'admin_notes': receipt.admin_notes,
-                    'file_url': receipt.receipt_file.url if receipt.receipt_file else None
+                    # FIXED: Direct media URLs - no authentication needed
+                    'file_url': file_url,
+                    'download_url': download_url
                 })
 
             return Response({
@@ -955,47 +979,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'error': f'Payment verification failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    @action(detail=True, methods=['GET'], url_path='payment-receipts')
-    def get_payment_receipts(self, request, *args, **kwargs):
-        try:
-            order = self.get_object()
 
-            # Permission check
-            if not (request.user.is_staff or request.user == order.customer or request.user == order.assigned_dealer):
-                return Response({
-                    'error': 'Permission denied'
-                }, status=status.HTTP_403_FORBIDDEN)
-
-            receipts = order.all_payment_receipts
-            receipts_data = []
-
-            for receipt in receipts:
-                base_url = request.build_absolute_uri('/')[:-1]  # Remove trailing slash
-
-                receipts_data.append({
-                    'id': receipt.id,
-                    'file_name': receipt.file_name,
-                    'file_type': receipt.file_type,
-                    'file_size': receipt.file_size,
-                    'uploaded_at': receipt.uploaded_at,
-                    'uploaded_by': receipt.uploaded_by.name,
-                    'is_verified': receipt.is_verified,
-                    'admin_notes': receipt.admin_notes,
-                    'file_url': f"{base_url}/api/receipts/{receipt.id}/view/",
-                    'download_url': f"{base_url}/api/receipts/{receipt.id}/download/"
-                })
-
-            return Response({
-                'order_id': order.id,
-                'total_receipts': len(receipts_data),
-                'receipts': receipts_data
-            })
-
-        except Exception as e:
-            logger.error(f"❌ Error getting payment receipts: {str(e)}")
-            return Response({
-                'error': 'Failed to retrieve payment receipts'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['GET'], url_path='dealer-dashboard-stats')
     def dealer_dashboard_stats(self, request):

@@ -532,6 +532,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                 </div>
             )}
 
+            {order.status !== 'completed' && (
             <div className="verification-form">
                 <div className="notes-section">
                     <label>یادداشت‌های پرداخت (اختیاری)</label>
@@ -564,6 +565,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
                     />
                 </div>
             </div>
+            )}
 
             {isImageModalOpen && (
                 <div
