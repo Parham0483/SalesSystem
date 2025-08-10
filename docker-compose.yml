@@ -2,13 +2,13 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: salesDb
-      POSTGRES_USER: salesuser
-      POSTGRES_PASSWORD: yourpassword
+      POSTGRES_DB: ${DB_NAME:-salesDb}
+      POSTGRES_USER: ${DB_USER:-salesuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-parham.0770}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U salesuser -d salesDb"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-salesuser} -d ${DB_NAME:-salesDb}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,11 +20,12 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=mysite.settings_docker
       - DATABASE_HOST=db
-      - DATABASE_NAME=salesDb
-      - DATABASE_USER=salesuser
-      - DATABASE_PASSWORD=yourpassword
-      - GOOGLE_OAUTH_CLIENT_ID=775814213572-h7009vmkdj87gpuko2puh3n22oesfnj5.apps.googleusercontent.com
-      - GOOGLE_OAUTH_CLIENT_SECRET=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
+      - DATABASE_NAME=${DB_NAME:-salesDb}
+      - DATABASE_USER=${DB_USER:-salesuser}
+      - DATABASE_PASSWORD=${DB_PASSWORD:-parham.0770}
+      - DEBUG=1
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
     depends_on:
       db:
         condition: service_healthy
@@ -47,7 +48,7 @@ services:
       - backend
     environment:
       - REACT_APP_API_URL=/api/
-      - REACT_APP_GOOGLE_CLIENT_ID=775814213572-h7009vmkdj87gpuko2puh3n22oesfnj5.apps.googleusercontent.com
+      - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
     networks:
       - app-network
 

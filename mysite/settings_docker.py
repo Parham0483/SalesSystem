@@ -2,7 +2,7 @@ from .settings import *
 import os
 
 # Override settings for Docker deployment
-DEBUG = False
+DEBUG = os.environ.get('DEBUG', '0') == '1'
 
 # Production hosts
 ALLOWED_HOSTS = [
@@ -19,7 +19,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('DATABASE_NAME', 'salesDb'),
         'USER': os.environ.get('DATABASE_USER', 'salesuser'),
-        'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'yourpassword'),
+        'PASSWORD': os.environ.get('DATABASE_PASSWORD', 'parham.0770'),
         'HOST': os.environ.get('DATABASE_HOST', 'db'),
         'PORT': os.environ.get('DATABASE_PORT', '5432'),
     }
