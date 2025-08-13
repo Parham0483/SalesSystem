@@ -145,7 +145,7 @@ const RegisterPage = () => {
                         disabled={loading}
                     />
                     <NeoBrutalistButton
-                        text={loading ? "در حال ثبت نام..." : "ثبت نام"}
+                        text={loading ? "" : "ثبت نام"}
                         type="submit"
                         color="yellow-400"
                         textColor="black"

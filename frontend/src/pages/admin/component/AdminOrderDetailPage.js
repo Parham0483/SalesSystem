@@ -1086,7 +1086,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="admin-submit-section">
                         {order.status === 'pending_pricing' && (
                             <NeoBrutalistButton
-                                text={submitting ? "در حال ارسال..." : "ثبت قیمت‌گذاری"}
+                                text={submitting ? "" : "ثبت قیمت‌گذاری"}
                                 color="yellow-400"
                                 textColor="black"
                                 type="submit"
@@ -1098,138 +1098,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </form>
             </NeoBrutalistCard>
 
-            {/* Payment Receipts Section for Admin */}
-            {(order.has_payment_receipts || paymentReceipts.length > 0) && (
-                <NeoBrutalistCard className="admin-payment-receipts-card">
-                    <div className="admin-card-header">
-                        <h2 className="admin-card-title">
-                            رسیدهای پرداخت ({paymentReceipts.length})
-                        </h2>
-                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
-                    </div>
 
-                    {receiptsError && (
-                        <div className="admin-error-message">
-                            <span>⚠️ {receiptsError}</span>
-                        </div>
-                    )}
-
-                    <div className="admin-payment-receipts-content">
-                        <div className="admin-receipts-grid">
-                            {paymentReceipts.map((receipt, index) => (
-                                <div key={receipt.id} className="admin-receipt-item" data-file-type={receipt.file_type}>
-                                    <div className="admin-receipt-header">
-                                        <h4>رسید {index + 1}</h4>
-                                        <div className="admin-receipt-meta">
-                                            <span className="admin-receipt-type">
-                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
-                                            </span>
-                                            <span className="admin-receipt-size">
-                                                {formatFileSize(receipt.file_size)}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="admin-receipt-info">
-                                        <div className="admin-receipt-details">
-                                            <div className="admin-info-item">
-                                                <span className="admin-info-label">نام فایل:</span>
-                                                <span className="admin-info-value">{receipt.file_name}</span>
-                                            </div>
-                                            <div className="admin-info-item">
-                                                <span className="admin-info-label">تاریخ آپلود:</span>
-                                                <span className="admin-info-value">
-                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
-                                                </span>
-                                            </div>
-                                            <div className="admin-info-item">
-                                                <span className="admin-info-label">وضعیت:</span>
-                                                <span className={`admin-info-value ${
-                                                    receipt.is_verified ? 'admin-receipt-verified' : 'admin-receipt-pending'
-                                                }`}>
-                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
-                                                </span>
-                                            </div>
-                                            {receipt.admin_notes && (
-                                                <div className="admin-info-item">
-                                                    <span className="admin-info-label">یادداشت ادمین:</span>
-                                                    <span className="admin-info-value">{receipt.admin_notes}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Receipt Preview */}
-                                        {receipt.file_type === 'image' ? (
-                                            <div className="admin-receipt-preview">
-                                                <img
-                                                    src={receipt.file_url}
-                                                    alt={`رسید پرداخت ${receipt.file_name}`}
-                                                    className="admin-receipt-image"
-                                                    onClick={() => window.open(receipt.file_url, '_blank')}
-                                                    style={{
-                                                        width: '100%',
-                                                        maxWidth: '300px',
-                                                        maxHeight: '200px',
-                                                        objectFit: 'contain',
-                                                        cursor: 'pointer',
-                                                        border: '2px solid #000',
-                                                        borderRadius: '8px',
-                                                        backgroundColor: '#fff'
-                                                    }}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="admin-pdf-preview">
-                                                <p className="admin-pdf-name">{receipt.file_name}</p>
-                                                <NeoBrutalistButton
-                                                    text="📄 مشاهده PDF"
-                                                    color="blue-400"
-                                                    textColor="white"
-                                                    onClick={() => handleViewPDF(receipt)}
-                                                    className="admin-pdf-view-btn"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Receipt actions */}
-                                    <div className="admin-receipt-actions">
-                                        <NeoBrutalistButton
-                                            text="📥 دانلود"
-                                            color="green-400"
-                                            textColor="black"
-                                            onClick={() => handleDownloadReceipt(receipt)}
-                                            className="admin-download-receipt-btn"
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Overall payment status */}
-                        <div className="admin-payment-summary">
-                            <div className="admin-summary-stats">
-                                <div className="admin-stat-item">
-                                    <span className="admin-stat-label">کل رسیدها:</span>
-                                    <span className="admin-stat-value">{paymentReceipts.length}</span>
-                                </div>
-                                <div className="admin-stat-item">
-                                    <span className="admin-stat-label">تایید شده:</span>
-                                    <span className="admin-stat-value">
-                                        {paymentReceipts.filter(r => r.is_verified).length}
-                                    </span>
-                                </div>
-                                <div className="admin-stat-item">
-                                    <span className="admin-stat-label">در انتظار:</span>
-                                    <span className="admin-stat-value">
-                                        {paymentReceipts.filter(r => !r.is_verified).length}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
 
             {(order.status === 'payment_uploaded' || (order.status === 'completed' && order.has_payment_receipts)) && (
                 <NeoBrutalistCard className="admin-payment-verification-card">

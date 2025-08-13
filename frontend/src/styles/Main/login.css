@@ -157,6 +157,17 @@
     margin-top: 10px;
 }
 
+@keyframes loading-dots-login {
+    0%, 20% { content: ".درحال ورود"; }
+    40% { content: "..درحال ورود"; }
+    60%, 100% { content: "...درحال ورود"; }
+}
+
+.submit-btn:disabled::after {
+    content: "";
+    animation: loading-dots-login 1.5s infinite;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .login-container {

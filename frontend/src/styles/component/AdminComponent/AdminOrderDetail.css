@@ -585,6 +585,17 @@
     color: #000;
 }
 
+@keyframes loading-dots-admin-order {
+    0%, 20% { content: "در حال ارسال."; }
+    40% { content: "در حال ارسال.."; }
+    60%, 100% { content: "در حال ارسال..."; }
+}
+
+.admin-submit-btn:disabled::after {
+    content: "";
+    animation: loading-dots-admin-order 1.5s infinite;
+}
+
 .neo-no-invoices-message {
     padding: 2rem;
     background-color: #f9fafb;

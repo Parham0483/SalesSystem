@@ -131,7 +131,7 @@ const LoginPage = () => {
 
                     <div className="button-group">
                         <NeoBrutalistButton
-                            text={loading ? "در حال ورود..." : "ورود"}
+                            text={loading ? "" : "ورود"}
                             color="yellow-400"
                             textColor="black"
                             type="submit"

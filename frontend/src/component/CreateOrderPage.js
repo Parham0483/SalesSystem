@@ -494,7 +494,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 {/* Submit Button */}
                 <div className="neo-form-actions">
                     <NeoBrutalistButton
-                        text={loading ? "در حال ثبت..." : "ثبت سفارش"}
+                        text={loading ? "" : "ثبت سفارش"}
                         color="yellow-400"
                         textColor="black"
                         onClick={handleSubmit}

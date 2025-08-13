@@ -600,9 +600,9 @@
 
 /* Loading state animation */
 @keyframes loading-dots {
-    0%, 20% { content: "Creating Order."; }
-    40% { content: "Creating Order.."; }
-    60%, 100% { content: "Creating Order..."; }
+    0%, 20% { content: "درحال ایجاد."; }
+    40% { content: "درحال ایجاد.."; }
+    60%, 100% { content: "درحال ایجاد..."; }
 }
 
 .neo-submit-btn:disabled::after {
