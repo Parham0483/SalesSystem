@@ -69,6 +69,17 @@
     margin-top: 1rem;
 }
 
+@keyframes loading-dots-register {
+    0%, 20% { content: ".درحال ثبت نام"; }
+    40% { content: "..درحال  ثبت نام"; }
+    60%, 100% { content: "...درحال ثبت نام"; }
+}
+
+.register-submit-btn:disabled::after {
+    content: "";
+    animation: loading-dots-register 1.5s infinite;
+}
+
 .google-login-section,
 .google-register-section {
     margin: 20px 0;

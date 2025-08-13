@@ -112,6 +112,38 @@ class Customer(AbstractBaseUser, PermissionsMixin):
         verbose_name="نوع فاکتور ترجیحی"
     )
 
+    reset_token = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,  # Index for faster lookups
+        help_text="Password reset token"
+    )
+    reset_token_expires = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,  # Index for cleanup queries
+        help_text="When the reset token expires"
+    )
+    reset_attempts = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of reset attempts in current window"
+    )
+    reset_attempts_reset_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When reset attempts counter resets"
+    )
+
+    # Security audit fields
+    last_password_change = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When password was last changed"
+    )
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    account_locked_until = models.DateTimeField(null=True, blank=True)
+
     objects = CustomerManager()
 
     USERNAME_FIELD = 'email'
@@ -247,10 +279,43 @@ class Customer(AbstractBaseUser, PermissionsMixin):
             return self.assigned_orders.count()
         return 0
 
+    def is_account_locked(self):
+        """Check if account is temporarily locked"""
+        if self.account_locked_until:
+            return timezone.now() < self.account_locked_until
+        return False
+
+    def can_request_password_reset(self):
+        """Check if user can request password reset based on rate limiting"""
+        now = timezone.now()
+
+        # Reset counter if window expired (1 hour)
+        if self.reset_attempts_reset_at and now > self.reset_attempts_reset_at:
+            self.reset_attempts = 0
+            self.reset_attempts_reset_at = None
+            self.save(update_fields=['reset_attempts', 'reset_attempts_reset_at'])
+
+        # Allow max 3 attempts per hour
+        return self.reset_attempts < 3
+
+    def increment_reset_attempts(self):
+        """Increment password reset attempts counter"""
+        now = timezone.now()
+        if not self.reset_attempts_reset_at:
+            self.reset_attempts_reset_at = now + timedelta(hours=1)
+
+        self.reset_attempts += 1
+        self.save(update_fields=['reset_attempts', 'reset_attempts_reset_at'])
+
     class Meta:
         db_table = 'customers'
         verbose_name = 'Customer'
         verbose_name_plural = 'Customers'
+        indexes = [
+            models.Index(fields=['reset_token']),
+            models.Index(fields=['reset_token_expires']),
+            models.Index(fields=['email', 'is_active']),
+        ]
 
 
 class ProductCategory(models.Model):
