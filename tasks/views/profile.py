@@ -429,80 +429,127 @@ class UserProfileViewSet(viewsets.ViewSet):
 
 # Password Reset Views (using OTP)
 
+def rate_limit_password_reset(func):
+    """Decorator to rate limit password reset requests"""
+
+    def wrapper(request, *args, **kwargs):
+        client_ip = get_client_ip(request)
+        email = request.data.get('email', '')
+
+        # Rate limit by IP and email
+        ip_key = f"reset_rate_limit_ip_{client_ip}"
+        email_key = f"reset_rate_limit_email_{email.lower()}"
+
+        ip_attempts = cache.get(ip_key, 0)
+        email_attempts = cache.get(email_key, 0)
+
+        # Allow max 5 attempts per hour per IP, 3 per hour per email
+        if ip_attempts >= 5:
+            return Response({
+                'error': 'Too many reset attempts from this IP. Please try again later.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        if email_attempts >= 3:
+            return Response({
+                'error': 'Too many reset attempts for this email. Please try again later.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # Execute the function
+        response = func(request, *args, **kwargs)
+
+        # Increment counters on any request (successful or not)
+        cache.set(ip_key, ip_attempts + 1, timeout=3600)  # 1 hour
+        if email:
+            cache.set(email_key, email_attempts + 1, timeout=3600)  # 1 hour
+
+        return response
+
+    return wrapper
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@rate_limit_password_reset
 def request_password_reset(request):
-    """Request password reset via email/SMS OTP"""
+    """Enhanced password reset request with better security"""
     try:
-        email = request.data.get('email')
+        email = request.data.get('email', '').strip().lower()
 
         if not email:
             return Response({
                 'error': 'Email is required'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if user exists
+        # Validate email format
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response({
+                'error': 'Please enter a valid email address'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if user exists and is active
         try:
             user = Customer.objects.get(email=email, is_active=True)
         except Customer.DoesNotExist:
             # Don't reveal if email exists or not for security
+            # But still return success to avoid enumeration
+            logger.warning(f"Password reset requested for non-existent email: {email}")
             return Response({
-                'message': 'If an account with this email exists, you will receive reset instructions.'
+                'message': 'If an account with this email exists, you will receive reset instructions.',
+                'email_sent': True,
+                'sms_sent': False
             })
 
-        # Generate OTP
-        otp = ''.join(random.choices(string.digits, k=6))
+        # Check user-specific rate limiting
+        if not user.can_request_password_reset():
+            return Response({
+                'error': 'Too many reset attempts. Please wait before trying again.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-        # Store OTP in cache (expires in 10 minutes)
+        # Check for recent reset requests (cooldown)
+        recent_request_key = f"reset_cooldown_{user.id}"
+        if cache.get(recent_request_key):
+            return Response({
+                'error': 'Please wait before requesting another reset code.'
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        # Generate OTP
+        otp = generate_secure_otp()
+
+        # Store OTP in cache with shorter expiry for security
         cache_key = f"password_reset_otp_{user.id}"
         cache.set(cache_key, {
             'otp': otp,
             'user_id': user.id,
-            'created_at': timezone.now().isoformat()
+            'email': email,
+            'created_at': timezone.now().isoformat(),
+            'attempts': 0  # Track verification attempts
         }, timeout=600)  # 10 minutes
 
+        # Set cooldown period
+        cache.set(recent_request_key, True, timeout=60)  # 1 minute cooldown
+
+        # Increment user's reset attempts
+        user.increment_reset_attempts()
+
         # Send OTP via email
-        subject = "بازیابی رمز عبور - کیان تجارت پویا کویر"
-        message = f"""
-{user.name} عزیز،
-
-کد بازیابی رمز عبور شما: {otp}
-
-این کد تا 10 دقیقه معتبر است.
-
-اگر درخواست بازیابی رمز عبور نداده‌اید، این پیام را نادیده بگیرید.
-
-با احترام،
-تیم کیان تجارت پویا کویر
-        """.strip()
-
-        from django.core.mail import send_mail
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        email_sent = send_reset_otp_email(user, otp)
 
         # Send SMS if phone available
-        if user.phone:
-            sms_message = f"""کد بازیابی رمز عبور: {otp}
-این کد تا 10 دقیقه معتبر است.
-کیان تجارت پویا کویر"""
+        sms_sent = False
+        if user.phone and getattr(settings, 'SMS_NOTIFICATIONS_ENABLED', False):
+            sms_sent = send_reset_otp_sms(user, otp)
 
-            NotificationService.send_sms_notification(
-                phone=user.phone,
-                message=sms_message,
-                sms_type='password_reset_otp'
-            )
-
-        logger.info(f"✅ Password reset OTP sent to user {user.id}")
+        # Log the request
+        logger.info(f"✅ Password reset OTP sent to user {user.id} ({email})")
 
         return Response({
-            'message': 'Reset code sent to your email and phone (if available)',
-            'email_sent': True,
-            'sms_sent': bool(user.phone)
+            'message': 'Reset code sent to your email' + (' and phone' if sms_sent else ''),
+            'email_sent': email_sent,
+            'sms_sent': sms_sent
         })
 
     except Exception as e:
@@ -515,14 +562,20 @@ def request_password_reset(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_reset_otp(request):
-    """Verify OTP for password reset"""
+    """Enhanced OTP verification with attempt limiting"""
     try:
-        email = request.data.get('email')
-        otp = request.data.get('otp')
+        email = request.data.get('email', '').strip().lower()
+        otp = request.data.get('otp', '').strip()
 
         if not email or not otp:
             return Response({
                 'error': 'Email and OTP are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate OTP format
+        if len(otp) != 6 or not otp.isdigit():
+            return Response({
+                'error': 'Please enter a valid 6-digit code'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Get user
@@ -537,20 +590,43 @@ def verify_reset_otp(request):
         cache_key = f"password_reset_otp_{user.id}"
         cached_data = cache.get(cache_key)
 
-        if not cached_data or cached_data['otp'] != otp:
+        if not cached_data:
             return Response({
-                'error': 'Invalid or expired OTP'
+                'error': 'Reset code has expired. Please request a new one.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Generate reset token
-        reset_token = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+        # Check verification attempts
+        attempts = cached_data.get('attempts', 0)
+        if attempts >= 3:
+            # Delete OTP after max attempts
+            cache.delete(cache_key)
+            logger.warning(f"⚠️ Max OTP verification attempts exceeded for user {user.id}")
+            return Response({
+                'error': 'Too many incorrect attempts. Please request a new reset code.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Store reset token (expires in 30 minutes)
+        # Verify OTP
+        if cached_data['otp'] != otp or cached_data['email'] != email:
+            # Increment attempts
+            cached_data['attempts'] = attempts + 1
+            cache.set(cache_key, cached_data, timeout=600)
+
+            remaining_attempts = 3 - cached_data['attempts']
+            return Response({
+                'error': f'Invalid reset code. {remaining_attempts} attempts remaining.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Generate secure reset token
+        reset_token = generate_secure_token()
+
+        # Store reset token with metadata
         reset_cache_key = f"password_reset_token_{user.id}"
         cache.set(reset_cache_key, {
             'token': reset_token,
             'user_id': user.id,
-            'verified_at': timezone.now().isoformat()
+            'email': email,
+            'verified_at': timezone.now().isoformat(),
+            'ip_address': get_client_ip(request)
         }, timeout=1800)  # 30 minutes
 
         # Clear OTP
@@ -559,42 +635,43 @@ def verify_reset_otp(request):
         logger.info(f"✅ Password reset OTP verified for user {user.id}")
 
         return Response({
-            'message': 'OTP verified successfully',
+            'message': 'Code verified successfully',
             'reset_token': reset_token
         })
 
     except Exception as e:
         logger.error(f"❌ Error verifying reset OTP: {str(e)}")
         return Response({
-            'error': 'Failed to verify OTP'
+            'error': 'Failed to verify code'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password(request):
-    """Reset password with verified token"""
+    """Enhanced password reset with comprehensive validation"""
     try:
-        email = request.data.get('email')
-        reset_token = request.data.get('reset_token')
-        new_password = request.data.get('new_password')
-        confirm_password = request.data.get('confirm_password')
+        email = request.data.get('email', '').strip().lower()
+        reset_token = request.data.get('reset_token', '').strip()
+        new_password = request.data.get('new_password', '')
+        confirm_password = request.data.get('confirm_password', '')
 
         if not all([email, reset_token, new_password, confirm_password]):
             return Response({
                 'error': 'All fields are required'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check password confirmation
+        # Validate password match
         if new_password != confirm_password:
             return Response({
                 'error': 'Passwords do not match'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate password strength
-        if len(new_password) < 8:
+        # Enhanced password validation
+        password_errors = validate_password_strength(new_password)
+        if password_errors:
             return Response({
-                'error': 'Password must be at least 8 characters long'
+                'error': password_errors[0]  # Return first error
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Get user
@@ -609,22 +686,201 @@ def reset_password(request):
         reset_cache_key = f"password_reset_token_{user.id}"
         cached_data = cache.get(reset_cache_key)
 
-        if not cached_data or cached_data['token'] != reset_token:
+        if not cached_data:
             return Response({
-                'error': 'Invalid or expired reset token'
+                'error': 'Reset session has expired. Please start over.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify token and email
+        if (cached_data['token'] != reset_token or
+                cached_data['email'] != email or
+                cached_data['user_id'] != user.id):
+            return Response({
+                'error': 'Invalid reset token'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify IP address for additional security (optional)
+        current_ip = get_client_ip(request)
+        if cached_data.get('ip_address') != current_ip:
+            logger.warning(f"⚠️ IP address mismatch during password reset for user {user.id}")
+            # You can choose to block this or just log it
+
+        # Check if new password is same as current (optional security)
+        if check_password(new_password, user.password):
+            return Response({
+                'error': 'New password must be different from current password'
             }, status=status.HTTP_400_BAD_REQUEST)
 
         # Update password
         user.set_password(new_password)
+        user.last_password_change = timezone.now()
+        user.failed_login_attempts = 0  # Reset failed attempts
+        user.account_locked_until = None  # Unlock account if locked
+
+        # Reset password reset attempts
+        user.reset_attempts = 0
+        user.reset_attempts_reset_at = None
+
         user.save()
 
-        # Clear reset token
+        # Clear reset token and related cache
         cache.delete(reset_cache_key)
+        cache.delete(f"password_reset_otp_{user.id}")
 
-        # Send confirmation
+        # Clear rate limiting cache for this user
+        cache.delete(f"reset_rate_limit_email_{email}")
+
+        # Send confirmation notifications
         try:
-            subject = "رمز عبور با موفقیت تغییر یافت"
-            message = f"""
+            send_password_reset_confirmation(user)
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to send password reset confirmation: {str(e)}")
+
+        # Log successful password reset
+        logger.info(f"✅ Password reset completed for user {user.id} ({email})")
+
+        return Response({
+            'message': 'Password reset successfully. You can now log in with your new password.'
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Error resetting password: {str(e)}")
+        return Response({
+            'error': 'Failed to reset password'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def validate_password_strength(password):
+    """Validate password strength with comprehensive rules"""
+    errors = []
+
+    if len(password) < 8:
+        errors.append('Password must be at least 8 characters long')
+
+    if len(password) > 128:
+        errors.append('Password must be less than 128 characters')
+
+    if not any(c.isalpha() for c in password):
+        errors.append('Password must contain at least one letter')
+
+    if not any(c.isdigit() for c in password):
+        errors.append('Password must contain at least one number')
+
+    # Check for common patterns
+    if password.lower() in ['password', '12345678', 'qwerty123', 'admin123']:
+        errors.append('Password is too common. Please choose a stronger password')
+
+    # Check for sequential characters
+    if has_sequential_chars(password):
+        errors.append('Password should not contain sequential characters')
+
+    return errors
+
+
+def has_sequential_chars(password, min_length=4):
+    """Check for sequential characters in password"""
+    sequential_patterns = [
+        '0123456789',
+        'abcdefghijklmnopqrstuvwxyz',
+        'qwertyuiopasdfghjklzxcvbnm'
+    ]
+
+    password_lower = password.lower()
+
+    for pattern in sequential_patterns:
+        for i in range(len(pattern) - min_length + 1):
+            if pattern[i:i + min_length] in password_lower:
+                return True
+            # Check reverse sequence
+            if pattern[i:i + min_length][::-1] in password_lower:
+                return True
+
+    return False
+
+
+def send_reset_otp_email(user, otp):
+    """Send password reset OTP via email"""
+    try:
+        subject = "بازیابی رمز عبور - کیان تجارت پویا کویر"
+        message = f"""
+{user.name} عزیز،
+
+کد بازیابی رمز عبور شما: {otp}
+
+این کد تا 10 دقیقه معتبر است.
+زمان درخواست: {timezone.now().strftime('%Y/%m/%d %H:%M')}
+
+اگر درخواست بازیابی رمز عبور نداده‌اید، این پیام را نادیده بگیرید.
+
+توجه: هرگز کد بازیابی خود را با دیگران به اشتراک نگذارید.
+
+با احترام،
+تیم کیان تجارت پویا کویر
+        """.strip()
+
+        from django.core.mail import send_mail
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=False,
+        )
+
+        # Log email notification
+        EmailNotification.objects.create(
+            email_type='password_reset_otp',
+            recipient_email=user.email,
+            subject=subject,
+            is_successful=True
+        )
+
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Failed to send reset OTP email to {user.email}: {str(e)}")
+
+        # Log failed email notification
+        EmailNotification.objects.create(
+            email_type='password_reset_otp',
+            recipient_email=user.email,
+            subject=subject,
+            is_successful=False,
+            error_message=str(e)
+        )
+
+        return False
+
+
+def send_reset_otp_sms(user, otp):
+    """Send password reset OTP via SMS"""
+    try:
+        if not user.phone:
+            return False
+
+        sms_message = f"""کد بازیابی رمز عبور: {otp}
+این کد تا 10 دقیقه معتبر است.
+کیان تجارت پویا کویر"""
+
+        success = NotificationService.send_sms_notification(
+            phone=user.phone,
+            message=sms_message,
+            sms_type='password_reset_otp'
+        )
+
+        return success
+
+    except Exception as e:
+        logger.error(f"❌ Failed to send reset OTP SMS to {user.phone}: {str(e)}")
+        return False
+
+
+def send_password_reset_confirmation(user):
+    """Send confirmation after successful password reset"""
+    try:
+        # Send email confirmation
+        subject = "رمز عبور با موفقیت تغییر یافت - کیان تجارت پویا کویر"
+        message = f"""
 {user.name} عزیز،
 
 رمز عبور حساب کاربری شما با موفقیت تغییر یافت.
@@ -633,30 +889,59 @@ def reset_password(request):
 
 اکنون می‌توانید با رمز عبور جدید وارد حساب خود شوید.
 
+اگر این تغییر توسط شما انجام نشده، فوراً با پشتیبانی تماس بگیرید.
+
 با احترام،
 تیم کیان تجارت پویا کویر
-            """.strip()
+        """.strip()
 
-            from django.core.mail import send_mail
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
+        from django.core.mail import send_mail
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+
+        # Send SMS confirmation if phone available
+        if user.phone and getattr(settings, 'SMS_NOTIFICATIONS_ENABLED', False):
+            sms_message = f"""سلام {user.name}
+رمز عبور حساب شما تغییر یافت.
+زمان: {timezone.now().strftime('%H:%M')}
+اگر توسط شما نبوده، تماس بگیرید.
+کیان تجارت پویا کویر"""
+
+            NotificationService.send_sms_notification(
+                phone=user.phone,
+                message=sms_message,
+                sms_type='password_changed'
             )
 
-        except Exception as e:
-            logger.warning(f"⚠️ Failed to send password reset confirmation: {str(e)}")
-
-        logger.info(f"✅ Password reset completed for user {user.id}")
-
-        return Response({
-            'message': 'Password reset successfully'
-        })
+        logger.info(f"✅ Password reset confirmation sent to user {user.id}")
 
     except Exception as e:
-        logger.error(f"❌ Error resetting password: {str(e)}")
-        return Response({
-            'error': 'Failed to reset password'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        logger.error(f"❌ Failed to send password reset confirmation: {str(e)}")
+
+
+
+
+
+def get_client_ip(request):
+    """Get client IP address"""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+def generate_secure_otp():
+    """Generate a secure 6-digit OTP"""
+    return ''.join(random.choices(string.digits, k=6))
+
+
+def generate_secure_token():
+    """Generate a secure reset token"""
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=64))

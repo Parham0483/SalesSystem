@@ -207,6 +207,19 @@ LOGGING = {
     }
 }
 
+LOGGING['loggers'].update({
+    'password_reset': {
+        'handlers': ['console'],
+        'level': 'INFO',
+        'propagate': False,
+    },
+    'tasks.views.profile': {
+        'handlers': ['console'],
+        'level': 'INFO',
+        'propagate': False,
+    },
+})
+
 #Google
 load_dotenv()
 
@@ -280,6 +293,12 @@ if DEBUG:
         'new_arrival': 'سلام {customer_name}\nمحموله جدید "{announcement_title}" رسید!\nبرای مشاهده وارد سایت شوید.\nکیان تجارت پویا کویر',
 
         'otp_verification': 'کد تایید شما: {otp_code}\nکیان تجارت پویا کویر',
+
+        'password_reset_otp': 'کد بازیابی رمز عبور: {otp_code}\nاین کد تا 10 دقیقه معتبر است.\nکیان تجارت پویا کویر',
+
+        'password_changed': 'سلام {customer_name}\nرمز عبور حساب شما تغییر یافت.\nزمان: {time}\nاگر توسط شما نبوده، تماس بگیرید.\nکیان تجارت پویا کویر',
+
+        'password_reset_success': 'سلام {customer_name}\nرمز عبور شما با موفقیت تغییر یافت.\nاکنون می‌توانید با رمز جدید وارد شوید.\nکیان تجارت پویا کویر',
     }
 
     # Kavenegar OTP Templates (if you create them in your Kavenegar panel)
@@ -357,3 +376,51 @@ INCLUDE_TAX_IN_OFFICIAL_INVOICES = True
 INVOICE_FONT_PATH = os.path.join(BASE_DIR, 'static', 'fonts', 'Vazir.ttf')
 INVOICE_LOGO_PATH = os.path.join(BASE_DIR, 'static', 'images', 'company_logo.png')
 LETTERHEAD_PATH = os.path.join(BASE_DIR, 'static', 'images', 'letterhead.jpg')
+
+PASSWORD_RESET_SETTINGS = {
+    'OTP_EXPIRY_MINUTES': 10,  # OTP expires in 10 minutes
+    'RESET_TOKEN_EXPIRY_MINUTES': 30,  # Reset token expires in 30 minutes
+    'MAX_RESET_ATTEMPTS_PER_HOUR': 3,  # Max 3 reset attempts per hour per user
+    'MAX_RESET_ATTEMPTS_PER_DAY': 5,  # Max 5 reset attempts per day per user
+    'COOLDOWN_BETWEEN_REQUESTS': 60,  # 60 seconds between reset requests
+    'ENABLE_SMS_OTP': True,  # Send OTP via SMS as well
+    'REQUIRE_EMAIL_VERIFICATION': True,  # Require email to exist and be active
+}
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'cache_table',
+    }
+}
+# If Redis is not available, fallback to database cache
+#if not os.environ.get('REDIS_URL'):
+ #   CACHES = {
+ #       'default': {
+ #           'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+ #           'LOCATION': 'cache_table',
+ #       }
+ #   }
+
+# Enhanced Security Headers for Production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    ACCOUNT_SECURITY = {
+        'MAX_LOGIN_ATTEMPTS': 5,
+        'ACCOUNT_LOCKOUT_TIME': timedelta(minutes=30),
+        'PASSWORD_RESET_RATE_LIMIT': timedelta(minutes=1),  # 1 minute between reset requests
+        'REQUIRE_STRONG_PASSWORDS': True,
+    }
+
+    SMS_TEMPLATES.update({
+        'password_reset_otp': 'کد بازیابی رمز عبور: {otp_code}\nاین کد تا 10 دقیقه معتبر است.\nکیان تجارت پویا کویر',
+        'password_changed': 'سلام {customer_name}\nرمز عبور حساب شما تغییر یافت.\nزمان: {time}\nاگر توسط شما نبوده، تماس بگیرید.\nکیان تجارت پویا کویر',
+        'password_reset_success': 'سلام {customer_name}\nرمز عبور شما با موفقیت تغییر یافت.\nاکنون می‌توانید با رمز جدید وارد شوید.\nکیان تجارت پویا کویر',
+    })

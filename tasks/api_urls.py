@@ -77,8 +77,8 @@ urlpatterns = [
 
     # Password Reset URLs
     path('auth/password-reset/request/', request_password_reset, name='password_reset_request'),
-    path('auth/password-reset/verify-otp/', verify_reset_otp, name='password_reset_verify'),
-    path('auth/password-reset/reset/', reset_password, name='password_reset_complete'),
+    path('auth/password-reset/verify/', verify_reset_otp, name='password_reset_verify'),
+    path('auth/password-reset/complete/', reset_password, name='password_reset_complete'),
 
     # API endpoints from the router
     path('', include(router.urls)),
