@@ -467,17 +467,17 @@ const DashboardPage = () => {
                                     border: `1px solid ${order.business_invoice_type === 'official' ? '#dc2626' : '#16a34a'}`,
                                     padding: '0.5rem',
                                     marginTop: '0.5rem',
-                                    fontSize: '0.85rem',
+                                    fontSize: '1rem',
                                     borderRadius: '4px'
                                 }}>
                                     <div style={{
                                         color: order.business_invoice_type === 'official' ? '#dc2626' : '#16a34a',
-                                        fontWeight: 'bold'
+                                        fontWeight: 'bolder'
                                     }}>
                                         📋 نوع فاکتور: {order.business_invoice_type_display}
                                     </div>
                                     {order.is_official_invoice && (
-                                        <div style={{ fontSize: '0.8rem', color: '#dc2626' }}>
+                                        <div style={{ fontSize: '1rem', color: '#dc2626' }}>
                                             دارای مالیات و اعتبار حسابداری
                                         </div>
                                     )}
