@@ -8,7 +8,7 @@ const GoogleAuthProvider = ({ children }) => {
 
     // Validate that Client ID is available
     if (!clientId) {
-        console.error('❌ REACT_APP_GOOGLE_CLIENT_ID environment variable is required');
+        console.error('REACT_APP_GOOGLE_CLIENT_ID environment variable is required');
         return (
             <div style={{
                 padding: '20px',
@@ -23,8 +23,6 @@ const GoogleAuthProvider = ({ children }) => {
             </div>
         );
     }
-
-    console.log(`✅ Google OAuth Provider initialized with Client ID: ${clientId.substring(0, 20)}...`);
 
     return (
         <GoogleOAuthProvider clientId={clientId}>

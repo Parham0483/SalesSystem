@@ -4,8 +4,6 @@ import axios from 'axios';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 if (!API_BASE_URL) {
-    console.error('❌ REACT_APP_API_URL is not defined!');
-    console.log('Available env vars:', process.env);
 }
 
 const API = axios.create({
@@ -16,13 +14,9 @@ const API = axios.create({
     }
 });
 
-console.log('🔧 API Base URL:', API_BASE_URL);
-console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
-
 // Add this enhanced debugging to your api.js
 API.interceptors.request.use(
     (config) => {
-        console.log('🚀 API Request:', config.method?.toUpperCase(), config.baseURL + config.url);
         const token = localStorage.getItem('access_token');
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`
@@ -34,11 +28,10 @@ API.interceptors.request.use(
 
 API.interceptors.response.use(
     (response) => {
-        console.log('✅ API Response:', response.status, response.config.url);
         return response;
     },
     async (error) => {
-        console.error('❌ API Error:', error.response?.status, error.config?.url, error.message);
+        console.error('API Error:', error.response?.status, error.config?.url, error.message);
 
         const originalRequest = error.config;
 

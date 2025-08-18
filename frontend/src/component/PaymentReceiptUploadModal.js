@@ -197,8 +197,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             if (!token) {
                 throw new Error('لطفاً دوباره وارد شوید');
             }
-
-            console.log('📤 Uploading', selectedFiles.length, 'payment receipts for order:', orderId);
             const API_URL = process.env.REACT_APP_API_URL || '/api';
             const uploadUrl = `${API_URL}orders/${orderId}/upload-payment-receipt/`;
 
@@ -217,7 +215,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                     responseData = JSON.parse(responseText);
                 }
             } catch (jsonError) {
-                console.error('❌ JSON parsing error:', jsonError);
+                console.error('JSON parsing error:', jsonError);
                 if (!response.ok) {
                     throw new Error(`خطای سرور (${response.status}): پاسخ نامعتبر`);
                 }
@@ -248,9 +246,6 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
                 throw new Error(errorMessage);
             }
 
-            // Success
-            console.log('✅ Payment receipts uploaded successfully:', responseData);
-
             // Show success message
             const uploadedCount = responseData.uploaded_receipts?.length || selectedFiles.length;
             alert(`${uploadedCount} رسید پرداخت با موفقیت آپلود شد!`);
@@ -274,7 +269,7 @@ const PaymentReceiptUploadModal = ({ orderId, onUploadSuccess, isOpen, onClose }
             }
 
         } catch (err) {
-            console.error('❌ Payment receipts upload failed:', err);
+            console.error('Payment receipts upload failed:', err);
 
             let errorMessage = 'خطا در آپلود رسیدهای پرداخت';
 

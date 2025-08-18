@@ -34,7 +34,7 @@ const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setOrder(response.data);
             setDealerNotes(response.data.dealer_notes || '');
         } catch (err) {
-            console.error('❌ Error fetching order:', err);
+            console.error('Error fetching order:', err);
             setError('خطا در بارگیری جزئیات سفارش');
         } finally {
             setLoading(false);
@@ -84,7 +84,7 @@ const DealerOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             fetchOrder();
 
         } catch (err) {
-            console.error('❌ Error updating dealer notes:', err);
+            console.error('Error updating dealer notes:', err);
             setError('خطا در به‌روزرسانی یادداشت‌ها');
         } finally {
             setSubmittingNotes(false);

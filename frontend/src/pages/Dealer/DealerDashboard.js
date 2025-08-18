@@ -76,7 +76,7 @@ const DealerDashboard = () => {
             const response = await API.get('/orders/dealer-dashboard-stats/');
             setDealerStats(response.data);
         } catch (err) {
-            console.error('❌ Error fetching dealer stats:', err);
+            console.error('Error fetching dealer stats:', err);
         }
     };
 
@@ -85,7 +85,7 @@ const DealerDashboard = () => {
             const response = await API.get('/products/new-arrivals/');
             setRecentProducts(response.data.slice(0, 6));
         } catch (err) {
-            console.error('❌ Error fetching recent products:', err);
+            console.error('Error fetching recent products:', err);
         }
     };
 
@@ -94,7 +94,7 @@ const DealerDashboard = () => {
             const response = await API.get('/shipment-announcements/');
             setRecentAnnouncements(response.data.slice(0, 3));
         } catch (err) {
-            console.error('❌ Error fetching announcements:', err);
+            console.error('Error fetching announcements:', err);
         }
     };
 

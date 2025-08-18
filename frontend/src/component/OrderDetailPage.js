@@ -25,9 +25,8 @@ const InvoiceManager = ({ order, onUpdate }) => {
         try {
             const response = await API.get(`/orders/${order.id}/invoice-status/`);
             setInvoiceStatus(response.data);
-            console.log('✅ Invoice status fetched:', response.data);
         } catch (error) {
-            console.error('❌ Error fetching invoice status:', error);
+            console.error('Error fetching invoice status:', error);
         } finally {
             setLoadingStatus(false);
         }
@@ -77,7 +76,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error('❌ Error downloading pre-invoice:', err);
+            console.error('Error downloading pre-invoice:', err);
             if (err.response?.data?.error) {
                 alert(`خطا: ${err.response.data.error}`);
             } else {
@@ -105,7 +104,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error('❌ Error downloading final invoice:', err);
+            console.error('Error downloading final invoice:', err);
             if (err.response?.data?.missing_fields) {
                 alert(`خطا: اطلاعات مشتری ناقص است. فیلدهای مورد نیاز: ${err.response.data.missing_fields.join(', ')}`);
             } else if (err.response?.data?.error) {
@@ -136,7 +135,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
                 window.URL.revokeObjectURL(url);
             }, 60000);
         } catch (error) {
-            console.error('❌ Error previewing invoice:', error);
+            console.error('Error previewing invoice:', error);
             if (error.response?.data?.error) {
                 alert(`خطا: ${error.response.data.error}`);
             } else {
@@ -433,7 +432,7 @@ const AuthenticatedImage = ({ receipt, onError }) => {
             setLoading(false);
 
         } catch (err) {
-            console.error('❌ Error loading image:', err);
+            console.error('Error loading image:', err);
             setError(err.message);
             setLoading(false);
             if (onError) {
@@ -522,9 +521,8 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                     borderRadius: '8px',
                     backgroundColor: '#fff'
                 }}
-                onLoad={() => console.log('✅ Image rendered successfully')}
                 onError={(e) => {
-                    console.error('❌ Image render error:', e);
+                    console.error('Image render error:', e);
                     setError('خطا در نمایش تصویر');
                 }}
             />
@@ -547,7 +545,7 @@ const formatPriceFixed = (price) => {
     try {
         return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
     } catch (error) {
-        console.error('❌ Price formatting error:', error, 'for price:', price);
+        console.error('Price formatting error:', error, 'for price:', price);
         return `${numericPrice} ریال`;
     }
 };
@@ -567,7 +565,7 @@ const formatQuantityFixed = (quantity) => {
     try {
         return new Intl.NumberFormat('fa-IR').format(numericQuantity);
     } catch (error) {
-        console.error('❌ Quantity formatting error:', error, 'for quantity:', quantity);
+        console.error('Quantity formatting error:', error, 'for quantity:', quantity);
         return numericQuantity.toString();
     }
 };
@@ -590,7 +588,7 @@ const calculateTotalFixed = (unitPrice, quantity) => {
         const total = numericPrice * numericQuantity;
         return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
     } catch (error) {
-        console.error('❌ Total calculation error:', error, 'for price:', unitPrice, 'quantity:', quantity);
+        console.error('Total calculation error:', error, 'for price:', unitPrice, 'quantity:', quantity);
         return 'خطا در محاسبه';
     }
 };
@@ -644,9 +642,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         try {
             const response = await API.get(`/orders/${orderId}/`);
             setOrder(response.data);
-            console.log('✅ Order fetched:', response.data);
         } catch (err) {
-            console.error('❌ Error fetching order:', err);
+            console.error('Error fetching order:', err);
             setError('خطا در بارگیری جزئیات سفارش');
         } finally {
             setLoading(false);
@@ -660,10 +657,9 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             const response = await API.get('/customers/invoice-info/');
             if (response.status === 200) {
                 setCustomerInfo(response.data.customer_info);
-                console.log('✅ Customer info fetched:', response.data.customer_info);
             }
         } catch (err) {
-            console.error('❌ Error fetching customer info:', err);
+            console.error('Error fetching customer info:', err);
             // Don't show error for missing customer info
         } finally {
             setLoadingCustomerInfo(false);
@@ -677,7 +673,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             const response = await API.get(`/orders/${orderId}/payment-receipts/`);
             setPaymentReceipts(response.data.receipts || []);
         } catch (err) {
-            console.error('❌ Error fetching payment receipts:', err);
+            console.error('Error fetching payment receipts:', err);
             setReceiptsError('خطا در بارگیری رسیدهای پرداخت');
         } finally {
             setLoadingReceipts(false);
@@ -695,7 +691,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             fetchOrder();
             alert('رسید با موفقیت حذف شد');
         } catch (err) {
-            console.error('❌ Error deleting payment receipt:', err);
+            console.error('Error deleting payment receipt:', err);
             alert('خطا در حذف رسید پرداخت');
         }
     };
@@ -720,7 +716,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             document.body.removeChild(link);
 
         } catch (error) {
-            console.error('❌ Error downloading file:', error);
+            console.error('Error downloading file:', error);
             alert('خطا در دانلود فایل');
         }
     };
@@ -747,7 +743,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
 
         } catch (error) {
-            console.error('❌ Error viewing PDF:', error);
+            console.error('Error viewing PDF:', error);
             alert('خطا در مشاهده فایل PDF');
         }
     };

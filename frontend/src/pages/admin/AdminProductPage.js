@@ -83,7 +83,7 @@ const AdminProductsPage = () => {
             //extractCategories(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching products:', err);
+            console.error('Error fetching products:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -146,7 +146,7 @@ const AdminProductsPage = () => {
             const response = await API.get('/admin/products/categories/');
             setCategories(response.data);
         } catch (err) {
-            console.error('❌ Error fetching categories:', err);
+            console.error('Error fetching categories:', err);
             setCategories([
                 { id: 1, name: 'Coffee Related', display_name: 'محصولات قهوه' },
                 { id: 2, name: 'Seeds', display_name: 'دانه‌ها' },
@@ -372,7 +372,7 @@ const AdminProductsPage = () => {
             fetchProducts();
             handleCloseModal();
         } catch (err) {
-            console.error('❌ Error saving product:', err.response?.data);
+            console.error('Error saving product:', err.response?.data);
             setError(`خطا در ذخیره محصول: ${JSON.stringify(err.response?.data)}`);
         }
     };

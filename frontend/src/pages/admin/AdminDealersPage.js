@@ -98,7 +98,7 @@ const AdminDealersPage = () => {
             setDealers(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching dealers:', err);
+            console.error('Error fetching dealers:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -115,7 +115,7 @@ const AdminDealersPage = () => {
             const response = await API.get('/admin/dealers/commissions/');
             setCommissions(response.data);
         } catch (err) {
-            console.error('❌ Error fetching commissions:', err);
+            console.error('Error fetching commissions:', err);
         }
     }, []);
 
@@ -124,7 +124,7 @@ const AdminDealersPage = () => {
             const response = await API.get('/admin/dashboard/stats/dealers/');
             setDealerStats(response.data);
         } catch (err) {
-            console.error('❌ Error fetching dealer stats:', err);
+            console.error('Error fetching dealer stats:', err);
         }
     }, []);
 

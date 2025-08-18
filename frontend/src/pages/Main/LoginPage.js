@@ -70,7 +70,7 @@ const LoginPage = () => {
             }
 
         } catch (err) {
-            console.error("⚠️ Login error:", err);
+            console.error("Login error:", err);
 
             if (err.response?.data?.error) {
                 setError(err.response.data.error);
@@ -112,7 +112,7 @@ const LoginPage = () => {
             }
 
         } catch (err) {
-            console.error("⚠️ Password reset request error:", err);
+            console.error("Password reset request error:", err);
             if (err.response?.data?.error) {
                 setError(err.response.data.error);
             } else {
@@ -150,7 +150,7 @@ const LoginPage = () => {
             }
 
         } catch (err) {
-            console.error("⚠️ OTP verification error:", err);
+            console.error("OTP verification error:", err);
             if (err.response?.data?.error) {
                 setError(err.response.data.error);
             } else {
@@ -203,7 +203,7 @@ const LoginPage = () => {
             }
 
         } catch (err) {
-            console.error("⚠️ Password reset error:", err);
+            console.error("Password reset error:", err);
             if (err.response?.data?.error) {
                 setError(err.response.data.error);
             } else {

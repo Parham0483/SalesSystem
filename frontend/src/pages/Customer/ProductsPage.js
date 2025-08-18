@@ -42,7 +42,7 @@ const ProductsPage = () => {
             setProducts(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching products:', err);
+            console.error('Error fetching products:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -59,7 +59,7 @@ const ProductsPage = () => {
             const response = await API.get('/categories/');
             setCategories(response.data);
         } catch (err) {
-            console.error('❌ Error fetching categories:', err);
+            console.error('Error fetching categories:', err);
         }
     };
 

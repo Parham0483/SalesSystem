@@ -31,9 +31,6 @@ const DefaultAuthenticatedImage = ({ receipt, onError, className = "" }) => {
             if (!imageUrl) {
                 throw new Error('Download URL not available');
             }
-
-            console.log('🔍 PaymentVerification loading image from download URL:', imageUrl);
-
             const response = await fetch(imageUrl, {
                 method: 'GET',
                 headers: {
@@ -48,10 +45,8 @@ const DefaultAuthenticatedImage = ({ receipt, onError, className = "" }) => {
             const blob = await response.blob();
             const objectUrl = URL.createObjectURL(blob);
             setImageData(objectUrl);
-            console.log('✅ PaymentVerification image loaded successfully');
-
         } catch (err) {
-            console.error('❌ Error loading PaymentVerification authenticated image:', err);
+            console.error('Error loading PaymentVerification authenticated image:', err);
             setError(err.message);
             if (onError) {
                 onError(err);
@@ -146,9 +141,8 @@ const DefaultAuthenticatedImage = ({ receipt, onError, className = "" }) => {
                     borderRadius: '8px',
                     backgroundColor: '#fff'
                 }}
-                onLoad={() => console.log('✅ PaymentVerification image rendered successfully')}
                 onError={(e) => {
-                    console.error('❌ PaymentVerification image render error:', e);
+                    console.error('PaymentVerification image render error:', e);
                     setError('خطا در نمایش تصویر');
                 }}
             />
@@ -197,7 +191,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
             const response = await API.get(`/orders/${order.id}/payment-receipts/`);
             setPaymentReceipts(response.data.receipts || []);
         } catch (err) {
-            console.error('❌ Error fetching payment receipts:', err);
+            console.error('Error fetching payment receipts:', err);
             setError('خطا در بارگیری رسیدهای پرداخت');
         } finally {
             setLoadingReceipts(false);
@@ -229,7 +223,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
             }
 
         } catch (err) {
-            console.error('❌ Payment verification failed:', err);
+            console.error('Payment verification failed:', err);
             const errorMessage = err.response?.data?.error || 'خطا در تایید پرداخت';
             setError(errorMessage);
         } finally {
@@ -321,7 +315,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
             }
 
         } catch (error) {
-            console.error('❌ Error fetching PDF for preview:', error);
+            console.error('Error fetching PDF for preview:', error);
             if (newWindow) {
                 newWindow.close();
             }
@@ -366,7 +360,7 @@ const PaymentVerificationComponent = ({ order, onPaymentVerified, AuthenticatedI
             URL.revokeObjectURL(blobUrl);
 
         } catch (error) {
-            console.error('❌ Error downloading file:', error);
+            console.error('Error downloading file:', error);
             alert('خطا در دانلود فایل');
         }
     };

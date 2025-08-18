@@ -50,7 +50,7 @@ const ProfilePage = ({ isModal = false }) => {
                 company_name: response.data.profile.company_name || ''
             });
         } catch (error) {
-            console.error('❌ Error fetching profile:', error);
+            console.error('Error fetching profile:', error);
             if (error.response?.status === 401) {
                 handleLogout();
             } else {
@@ -66,7 +66,7 @@ const ProfilePage = ({ isModal = false }) => {
             const response = await API.get('/profile/orders-summary/');
             setOrdersData(response.data);
         } catch (error) {
-            console.error('❌ Error fetching orders summary:', error);
+            console.error('Error fetching orders summary:', error);
         }
     };
 
@@ -75,7 +75,7 @@ const ProfilePage = ({ isModal = false }) => {
             const response = await API.get('/profile/notifications-history/');
             setNotificationsData(response.data);
         } catch (error) {
-            console.error('❌ Error fetching notifications:', error);
+            console.error('Error fetching notifications:', error);
         }
     };
 
@@ -88,7 +88,7 @@ const ProfilePage = ({ isModal = false }) => {
             setMessage('پروفایل با موفقیت به‌روزرسانی شد');
             setTimeout(() => setMessage(''), 3000);
         } catch (error) {
-            console.error('❌ Error updating profile:', error);
+            console.error('Error updating profile:', error);
             setError('خطا در به‌روزرسانی پروفایل');
         }
     };
@@ -722,7 +722,7 @@ const ChangePasswordForm = ({ onSuccess, onError }) => {
             onSuccess();
             setFormData({ current_password: '', new_password: '', confirm_password: '' });
         } catch (error) {
-            console.error('❌ Error changing password:', error);
+            console.error('Error changing password:', error);
             const errorMsg = error.response?.data?.error || 'خطایی در هنگام تغییر رمز عبور رخ داد. لطفاً رمز عبور فعلی خود را بررسی کنید.';
             onError(errorMsg);
         } finally {

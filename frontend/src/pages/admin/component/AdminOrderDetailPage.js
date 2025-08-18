@@ -22,7 +22,7 @@ const formatPriceFixed = (price) => {
     try {
         return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
     } catch (error) {
-        console.error('❌ Admin price formatting error:', error, 'for price:', price);
+        console.error('Admin price formatting error:', error, 'for price:', price);
         return `${numericPrice} ریال`;
     }
 };
@@ -42,7 +42,7 @@ const formatQuantityFixed = (quantity) => {
     try {
         return new Intl.NumberFormat('fa-IR').format(numericQuantity);
     } catch (error) {
-        console.error('❌ Admin quantity formatting error:', error, 'for quantity:', quantity);
+        console.error('Admin quantity formatting error:', error, 'for quantity:', quantity);
         return numericQuantity.toString();
     }
 };
@@ -73,10 +73,8 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
         try {
             const response = await API.get(`/orders/${order.id}/invoice-status/`);
             setInvoiceStatus(response.data);
-            console.log('✅ Admin invoice status fetched:', response.data);
         } catch (error) {
-            console.error('❌ Error fetching admin invoice status:', error);
-            // FIXED: Set a basic status to prevent crashes
+            console.error('Error fetching admin invoice status:', error);
             setInvoiceStatus({
                 business_invoice_type_display: order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی',
                 quoted_total: order.quoted_total || 0,
@@ -106,7 +104,7 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (err) {
-            console.error('❌ Admin error downloading final invoice:', err);
+            console.error('Admin error downloading final invoice:', err);
             if (err.response?.data?.error) {
                 alert(`خطا: ${err.response.data.error}`);
             } else {
@@ -224,7 +222,7 @@ const BusinessInvoiceTypeUpdate = ({ order, onUpdate }) => {
                 }
             }
         } catch (err) {
-            console.error('❌ Error updating business invoice type:', err);
+            console.error('Error updating business invoice type:', err);
             const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی نوع فاکتور';
             alert(errorMessage);
         } finally {
@@ -361,7 +359,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             setItems(res.data.items || []);
             setAdminComment(res.data.admin_comment || '');
         } catch (err) {
-            console.error('❌ Error fetching order:', err);
+            console.error('Error fetching order:', err);
             setError('خطا در بارگیری سفارش');
         } finally {
             setLoading(false);
@@ -375,9 +373,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         try {
             const response = await API.get(`/orders/${orderId}/payment-receipts/`);
             setPaymentReceipts(response.data.receipts || []);
-            console.log('✅ Admin payment receipts fetched:', response.data);
         } catch (err) {
-            console.error('❌ Admin error fetching payment receipts:', err);
             setReceiptsError('خطا در بارگیری رسیدهای پرداخت');
         } finally {
             setLoadingReceipts(false);
@@ -392,10 +388,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             const response = await API.get(`/admin/orders/${orderId}/customer-info/`);
             if (response.status === 200) {
                 setCustomerInfo(response.data);
-                console.log('✅ Customer info fetched for admin:', response.data);
             }
         } catch (err) {
-            console.error('❌ Error fetching customer info for admin:', err);
+            console.error('Error fetching customer info for admin:', err);
             if (order.customer_info) {
                 setCustomerInfo({ customer_info: order.customer_info });
             }
@@ -444,7 +439,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
 
         } catch (err) {
-            console.error('❌ Error completing order:', err);
+            console.error('Error completing order:', err);
             const errorMessage = err.response?.data?.error || 'خطا در تکمیل سفارش';
             setError(errorMessage);
         } finally {
@@ -470,7 +465,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
 
         } catch (err) {
-            console.error('❌ Error removing dealer:', err);
+            console.error('Error removing dealer:', err);
             const errorMessage = err.response?.data?.error || 'خطا در حذف نماینده';
             setError(errorMessage);
         }
@@ -527,13 +522,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     admin_notes: item.admin_notes || '',
                 }))
             };
-
-            console.log('📤 Submitting pricing data:', submissionData);
-
             const response = await API.post(`/orders/${orderId}/submit_pricing/`, submissionData);
 
             if (response.status === 200) {
-                console.log('✅ Pricing submission successful:', response.data);
                 alert('قیمت‌گذاری با موفقیت ثبت شد!');
 
                 if (onOrderUpdated) {
@@ -544,7 +535,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
 
         } catch (err) {
-            console.error('❌ Error submitting pricing:', err);
+            console.error('Error submitting pricing:', err);
             const errorMessage = err.response?.data?.error || 'خطا در به‌روزرسانی قیمت‌گذاری';
             setError(errorMessage);
         } finally {
@@ -674,7 +665,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             document.body.removeChild(link);
 
         } catch (error) {
-            console.error('❌ Error downloading file:', error);
+            console.error('Error downloading file:', error);
             alert('خطا در دانلود فایل');
         }
     };
@@ -699,7 +690,7 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
 
         } catch (error) {
-            console.error('❌ Error viewing PDF:', error);
+            console.error('Error viewing PDF:', error);
             alert('خطا در مشاهده فایل PDF');
         }
     };

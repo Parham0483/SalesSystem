@@ -36,7 +36,7 @@ function App() {
         axios.get(`${API_URL}csrf/`, { withCredentials: true })
             .then(() => {
             })
-            .catch(err => console.error('❌ CSRF fetch failed:', err));
+            .catch(err => console.error(' CSRF fetch failed:', err));
 
         // Initialize authentication
         const initializeAuth = () => {

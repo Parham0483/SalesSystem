@@ -101,7 +101,7 @@ const AdminOrdersPage = () => {
             calculateStats(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching orders:', err);
+            console.error('Error fetching orders:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -124,7 +124,7 @@ const AdminOrdersPage = () => {
             setCustomers(customersRes.data);
             setDealers(dealersRes.data);
         } catch (err) {
-            console.error('❌ Error fetching filter data:', err);
+            console.error('Error fetching filter data:', err);
         }
     };
 

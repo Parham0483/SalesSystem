@@ -77,7 +77,7 @@ const CompleteProfilePage = () => {
             }
 
         } catch (err) {
-            console.error("❌ Profile completion error:", err);
+            console.error("Profile completion error:", err);
 
             if (err.response?.data?.error) {
                 setError(err.response.data.error);

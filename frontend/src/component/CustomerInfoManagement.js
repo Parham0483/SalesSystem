@@ -34,10 +34,9 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
             const response = await API.get('/customers/invoice-info/');
             if (response.status === 200) {
                 setCustomerInfo(response.data.customer_info);
-                console.log('✅ Customer info loaded:', response.data);
             }
         } catch (err) {
-            console.error('❌ Error loading customer info:', err);
+            console.error('Error loading customer info:', err);
             setError('خطا در بارگیری اطلاعات');
         } finally {
             setLoading(false);
@@ -107,7 +106,6 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
 
             if (response.status === 200) {
                 setSuccess('اطلاعات با موفقیت به‌روزرسانی شد');
-                console.log('✅ Customer info updated:', response.data);
 
                 if (onUpdate) {
                     onUpdate(response.data.customer_info);
@@ -121,7 +119,7 @@ const CustomerInfoManagement = ({ onClose, onUpdate }) => {
                 }, 2000);
             }
         } catch (err) {
-            console.error('❌ Error updating customer info:', err);
+            console.error('Error updating customer info:', err);
 
             if (err.response?.data?.details) {
                 setErrors(err.response.data.details);

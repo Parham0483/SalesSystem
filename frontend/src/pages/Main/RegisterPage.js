@@ -59,7 +59,7 @@ const RegisterPage = () => {
             }
 
         } catch (err) {
-            console.error("❌ Registration error:", err);
+            console.error("Registration error:", err);
 
             if (err.response?.data?.error) {
                 setError(err.response.data.error);

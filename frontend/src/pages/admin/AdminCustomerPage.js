@@ -71,7 +71,7 @@ const AdminCustomersPage = () => {
             calculateStats(response.data);
             setError('');
         } catch (err) {
-            console.error('❌ Error fetching customers:', err);
+            console.error('Error fetching customers:', err);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);

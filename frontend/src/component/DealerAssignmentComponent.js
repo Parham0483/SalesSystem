@@ -27,7 +27,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
             const response = await API.get('/dealers/list-for-assignment/');
             setDealers(response.data.dealers || []);
         } catch (err) {
-            console.error('❌ Error fetching dealers:', err);
+            console.error('Error fetching dealers:', err);
             setError('خطا در بارگیری نمایندگان فروش');
         }
     };
@@ -102,7 +102,7 @@ const DealerAssignmentComponent = ({ orderId, onDealerAssigned }) => {
             }
 
         } catch (err) {
-            console.error('❌ Error assigning dealer:', err);
+            console.error('Error assigning dealer:', err);
             const errorMessage = err.response?.data?.error ||
                 err.response?.data?.details ||
                 'خطا در تخصیص نماینده';

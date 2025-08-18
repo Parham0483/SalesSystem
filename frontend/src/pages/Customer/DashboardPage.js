@@ -70,12 +70,10 @@ const DashboardPage = () => {
         setError('');
 
         try {
-            console.log('🔄 Fetching orders...');
             const response = await API.get('/orders/');
-            console.log('✅ Orders fetched:', response.data.length);
             setOrders(response.data);
         } catch (error) {
-            console.error('❌ Error fetching orders:', error);
+            console.error('Error fetching orders:', error);
             if (error.response?.status === 401) {
                 setError('جلسه شما منقضی شده است. لطفاً دوباره وارد شوید.');
                 setTimeout(() => handleLogout(), 2000);
@@ -92,7 +90,7 @@ const DashboardPage = () => {
             const response = await API.get('/products/new-arrivals/');
             setRecentProducts(response.data.slice(0, 6));
         } catch (error) {
-            console.error('❌ Error fetching recent products:', error);
+            console.error('Error fetching recent products:', error);
         }
     };
 
@@ -101,7 +99,7 @@ const DashboardPage = () => {
             const response = await API.get('/shipment-announcements/');
             setRecentAnnouncements(response.data.slice(0, 3));
         } catch (error) {
-            console.error('❌ Error fetching announcements:', error);
+            console.error('Error fetching announcements:', error);
         }
     };
 
@@ -131,7 +129,6 @@ const DashboardPage = () => {
     };
 
     const handleOrderUpdated = () => {
-        console.log('🔄 Order updated, refreshing...');
         setSelectedOrder(null);
         setRefreshKey(prev => prev + 1); // Force refresh
         fetchOrders();
@@ -203,7 +200,7 @@ const DashboardPage = () => {
             link.remove();
             window.URL.revokeObjectURL(url);
         } catch (error) {
-            console.error('❌ Error downloading invoice:', error);
+            console.error('Error downloading invoice:', error);
             setError('خطا در دانلود فاکتور');
         }
     };

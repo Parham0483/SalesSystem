@@ -64,10 +64,9 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             if (response.status === 200) {
                 setCustomerInfo(response.data.customer_info);
                 setCustomerInfoLoaded(true);
-                console.log('✅ Customer info loaded:', response.data.customer_info);
             }
         } catch (err) {
-            console.error('❌ Error loading customer info:', err);
+            console.error('Error loading customer info:', err);
             // Don't show error for missing customer info - it's expected for new users
         } finally {
             setLoadingCustomerInfo(false);
@@ -131,11 +130,10 @@ const CreateOrderPage = ({ onOrderCreated }) => {
             });
 
             if (response.status === 200) {
-                console.log('✅ Customer info updated successfully');
                 return true;
             }
         } catch (err) {
-            console.error('❌ Error updating customer info:', err);
+            console.error('Error updating customer info:', err);
             if (err.response?.data?.details) {
                 setCustomerInfoErrors(err.response.data.details);
             } else {
@@ -210,14 +208,10 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 };
             }
 
-            console.log('📤 Sending order data:', orderData);
 
             const response = await API.post('orders/', orderData);
 
             if (response.status === 201) {
-                console.log('✅ Order created successfully:', response.data);
-
-                // Show success message
                 alert(`سفارش با موفقیت ثبت شد!\nشماره سفارش: ${response.data.id}`);
 
                 if (onOrderCreated) {
@@ -225,7 +219,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 }
             }
         } catch (err) {
-            console.error('❌ Order creation failed:', err);
+            console.error('Order creation failed:', err);
             setError(err.response?.data?.error || err.message || 'خطا در ثبت سفارش');
         } finally {
             setLoading(false);

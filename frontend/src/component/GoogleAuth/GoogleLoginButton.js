@@ -73,7 +73,7 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
             }
 
         } catch (err) {
-            console.error("❌ Google login error:", err);
+            console.error("Google login error:", err);
 
             let errorMessage = "خطا در ورود با Google. لطفاً دوباره تلاش کنید.";
 
@@ -98,7 +98,7 @@ const GoogleLoginButton = ({ onSuccess, onError }) => {
     };
 
     const handleGoogleError = (error) => {
-        console.error("❌ Google login failed:", error);
+        console.error("Google login failed:", error);
         const errorMessage = "ورود با Google ناموفق بود. لطفاً دوباره تلاش کنید.";
 
         if (onError) {
