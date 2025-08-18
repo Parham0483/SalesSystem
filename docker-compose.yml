@@ -1,60 +1,68 @@
-services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: ${DB_NAME:-salesDb}
-      POSTGRES_USER: ${DB_USER:-salesuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-parham.0770}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-salesuser} -d ${DB_NAME:-salesDb}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-network
+  services:
+    db:
+      image: postgres:15
+      environment:
+        POSTGRES_DB: ${DB_NAME:-salesDb}
+        POSTGRES_USER: ${DB_USER:-salesuser}
+        POSTGRES_PASSWORD: ${DB_PASSWORD:-parham.0770}
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-salesuser} -d ${DB_NAME:-salesDb}"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+      networks:
+        - app-network
 
-  backend:
-    build: .
-    environment:
-      - DJANGO_SETTINGS_MODULE=mysite.settings_docker
-      - DATABASE_HOST=db
-      - DATABASE_NAME=${DB_NAME:-salesDb}
-      - DATABASE_USER=${DB_USER:-salesuser}
-      - DATABASE_PASSWORD=${DB_PASSWORD:-parham.0770}
-      - DEBUG=1
-      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
-      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./media:/app/media
-      - ./staticfiles:/app/staticfiles
-    networks:
-      - app-network
-    command: >
-      sh -c "python manage.py collectstatic --noinput &&
-             python manage.py makemigrations &&
-             python manage.py migrate &&
-             gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 mysite.wsgi:application"
+    backend:
+      build: .
+      ports:
+        - "8000:8000"
+      environment:
+        - DJANGO_SETTINGS_MODULE=mysite.settings_docker
+        - DATABASE_HOST=db
+        - DATABASE_NAME=${DB_NAME:-salesDb}
+        - DATABASE_USER=${DB_USER:-salesuser}
+        - DATABASE_PASSWORD=${DB_PASSWORD:-parham.0770}
+        - DEBUG=1
+        - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+        - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+        - EMAIL_HOST_USER=${EMAIL_HOST_USER}
+        - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
+        - KAVENEGAR_API_KEY=${KAVENEGAR_API_KEY}
+        - SECRET_KEY=${SECRET_KEY}
+      depends_on:
+        db:
+          condition: service_healthy
+      volumes:
+        - ./media:/app/media
+        - ./staticfiles:/app/staticfiles
+      networks:
+        - app-network
+      command: >
+        sh -c "python manage.py collectstatic --noinput &&
+               python manage.py makemigrations &&
+               python manage.py migrate &&
+               gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 mysite.wsgi:application"
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=/api/
-      - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
-    networks:
-      - app-network
+    frontend:
+      build: ./frontend
+      ports:
+        - "80:80"
+      depends_on:
+        - backend
+      environment:
+        - REACT_APP_API_URL=/api/
+        - REACT_APP_GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      networks:
+        - app-network
 
-volumes:
-  postgres_data:
+  volumes:
+    postgres_data:
 
-networks:
-  app-network:
-    driver: bridge
+  networks:
+    app-network:
+      driver: bridge
+
+
