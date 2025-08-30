@@ -74,8 +74,8 @@ function App() {
         <Router>
             <Routes>
                 {/* PUBLIC ROUTES */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/main" element={<MainPage />} />
+                {/*<Route path="/" element={<LandingPage />} />*/}
+                <Route path="/" element={<MainPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/complete-profile" element={<CompleteProfilePage />} />

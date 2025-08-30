@@ -6,7 +6,6 @@ import NeoBrutalistInput from './NeoBrutalist/NeoBrutalistInput';
 import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import CustomerInfoManagement from './CustomerInfoManagement';
 import '../styles/component/CustomerComponent/OrderDetail.css';
-import axios from 'axios';
 
 // Enhanced InvoiceManager Component for OrderDetailPage.js
 const InvoiceManager = ({ order, onUpdate }) => {
