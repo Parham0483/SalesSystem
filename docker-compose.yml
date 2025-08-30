@@ -65,3 +65,7 @@
       driver: bridge
 
 
+
+
+USE_HTTPS=True
+DJANGO_HANDLES_SSL=False

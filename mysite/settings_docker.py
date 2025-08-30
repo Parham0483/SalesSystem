@@ -10,7 +10,7 @@ ALLOWED_HOSTS = [
     'www.gtc.market',
     'localhost',
     '127.0.0.1',
-    'backend',  # Docker internal
+    'backend',
 ]
 
 # Database configuration for Docker
@@ -26,14 +26,12 @@ DATABASES = {
 }
 
 USE_HTTPS = os.environ.get('USE_HTTPS', 'True').lower() == 'true'
+DJANGO_HANDLES_SSL = os.environ.get('DJANGO_HANDLES_SSL', 'False').lower() == 'true'
 
-if USE_HTTPS or not DEBUG:
-    # HTTPS configuration
+# SSL Configuration - separate redirect from security settings
+if USE_HTTPS:
+    # Always set security headers and cookie settings for HTTPS
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = True
-    USE_TLS = True
-
-    # Update session and CSRF cookies for HTTPS
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
@@ -41,6 +39,20 @@ if USE_HTTPS or not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+    # Only redirect if Django is handling SSL directly
+    if DJANGO_HANDLES_SSL:
+        SECURE_SSL_REDIRECT = True
+        USE_TLS = True
+    else:
+        SECURE_SSL_REDIRECT = False
+        USE_TLS = False
+else:
+    # Development/HTTP settings
+    SECURE_SSL_REDIRECT = False
+    USE_TLS = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
 
 CORS_ALLOWED_ORIGINS = [
     "https://gtc.market",
@@ -69,7 +81,6 @@ CSRF_TRUSTED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-
 # Enhanced CORS headers for production
 CORS_ALLOW_HEADERS = [
     'accept',
@@ -83,7 +94,6 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'access-control-allow-origin',
     'cache-control',
-    'x-requested-with',
 ]
 
 CORS_ALLOW_METHODS = [
@@ -97,11 +107,7 @@ CORS_ALLOW_METHODS = [
 
 # Static files for Docker
 STATIC_ROOT = '/app/staticfiles'
-if USE_HTTPS or not DEBUG:
-    MEDIA_URL = 'https://gtc.market/media/'
-else:
-    MEDIA_URL = '/media/'
-
+MEDIA_URL = 'https://gtc.market/media/' if USE_HTTPS else '/media/'
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
@@ -109,11 +115,9 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
 # Update frontend URL for production emails
-FRONTEND_URL = 'https://gtc.market'
+FRONTEND_URL = 'https://gtc.market' if USE_HTTPS else 'http://localhost'
 
 # Session settings
-SESSION_COOKIE_SECURE = False  # Set to True when using HTTPS only
-CSRF_COOKIE_SECURE = False     # Set to True when using HTTPS only
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
