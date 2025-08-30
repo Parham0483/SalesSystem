@@ -34,8 +34,12 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Enhanced product serializer with Persian category names for all users"""
+    """Enhanced product serializer with multiple images support"""
     image_url = serializers.SerializerMethodField()
+    primary_image_url = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
+    product_images = serializers.SerializerMethodField()  # ADD THIS - Frontend expects this field
+    images_count = serializers.SerializerMethodField()
     stock_status = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
     category_name = serializers.SerializerMethodField()
@@ -51,37 +55,93 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'origin', 'image', 'image_url',
+            'weight', 'origin', 'image', 'image_url', 'primary_image_url',
+            'images', 'product_images', 'images_count',  # ADD product_images here
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created',
-            'tax_rate' , 'price_with_tax', 'tax_amount'
+            'tax_rate', 'price_with_tax', 'tax_amount'
         ]
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
 
-    def get_image_url(self, obj):
-        """Get the primary image URL with full domain"""
+    def get_product_images(self, obj):
+        """Return product images in the format frontend expects"""
+        request = self.context.get('request')
+        images = []
+
+        # Get all ProductImage instances for this product
+        product_images = obj.images.all().order_by('order', 'id')
+
+        for img in product_images:
+            image_url = img.image.url if img.image else None
+            if image_url and request:
+                image_url = request.build_absolute_uri(image_url)
+
+            images.append({
+                'id': img.id,
+                'image': image_url,  # CHANGED: 'image_url' -> 'image' to match frontend
+                'alt_text': img.alt_text,
+                'order': img.order,
+                'is_primary': img.is_primary
+            })
+
+        return images
+
+    def get_images(self, obj):
+        """Return all product images with proper URLs (backward compatibility)"""
+        request = self.context.get('request')
+        images = []
+
+        # Get all ProductImage instances for this product
+        product_images = obj.images.all().order_by('order', 'id')
+
+        for img in product_images:
+            image_url = img.image.url if img.image else None
+            if image_url and request:
+                image_url = request.build_absolute_uri(image_url)
+
+            images.append({
+                'id': img.id,
+                'image_url': image_url,
+                'url': image_url,  # Alternative field name
+                'alt_text': img.alt_text,
+                'order': img.order,
+                'is_primary': img.is_primary
+            })
+
+        return images
+
+    def get_images_count(self, obj):
+        """Return count of product images"""
+        return obj.images.count()
+
+    def get_primary_image_url(self, obj):
+        """Get the primary image URL"""
         request = self.context.get('request')
 
-        if obj.image:
-            if request:
-                return request.build_absolute_uri(obj.image.url)
-            else:
-                from django.conf import settings
-                base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
-                return f"{base_url}{obj.image.url}"
+        # First try to find primary image from ProductImage
+        primary_image = obj.images.filter(is_primary=True).first()
+        if primary_image and primary_image.image:
+            image_url = primary_image.image.url
+            return request.build_absolute_uri(image_url) if request else image_url
 
-        # Use the model's method if no direct image
-        image_url = obj.get_primary_image_url()
-        if image_url and request:
-            return request.build_absolute_uri(image_url)
-        elif image_url:
-            from django.conf import settings
-            base_url = getattr(settings, 'BACKEND_URL', 'http://localhost:8000')
-            return f"{base_url}{image_url}"
+        # Fallback to first image
+        first_image = obj.images.first()
+        if first_image and first_image.image:
+            image_url = first_image.image.url
+            return request.build_absolute_uri(image_url) if request else image_url
+
+        # Final fallback to old single image field
+        if obj.image:
+            image_url = obj.image.url
+            return request.build_absolute_uri(image_url) if request else image_url
 
         return None
+
+    def get_image_url(self, obj):
+        """Backward compatibility - returns primary image URL"""
+        return self.get_primary_image_url(obj)
 
     def get_category_name(self, obj):
         """Return Persian category name for ALL users"""

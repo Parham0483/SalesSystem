@@ -256,7 +256,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
                 {/* Pre-invoice downloads */}
                 {invoiceStatus.can_download_pre_invoice && (
                     <div className="neo-action-group">
-                        <h4 className="neo-action-group-title">پیش‌فاکتور (معتبر ۴۸ ساعت)</h4>
+                        <h4 className="neo-action-group-title">پیش‌فاکتور (معتبر تا انتها روز کاری)</h4>
                         <div className="neo-action-buttons">
                             <button
                                 className="neo-btn neo-btn-secondary"
@@ -267,7 +267,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
                             </button>
                         </div>
                         <div className="neo-pre-invoice-note">
-                            <span>⚠️ پیش‌فاکتور تا ۴۸ ساعت معتبر است</span>
+                            <span>⚠️ معتبر تا انتها روز کار </span>
                         </div>
                     </div>
                 )}

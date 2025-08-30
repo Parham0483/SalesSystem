@@ -136,7 +136,7 @@ class PreInvoicePDFGenerator:
         elements.append(header_table)
 
         # Validity warning
-        validity_warning = f"⚠️ این پیش فاکتور تا تاریخ {expiry_str} (۴۸ ساعت) معتبر است"
+        validity_warning = f"⚠️ این پیش فاکتور تا تاریخ {expiry_str} ( تا انتها روز کاری) معتبر است"
         elements.append(Spacer(1, 5 * mm))
         elements.append(self._para(validity_warning, 'warning'))
         elements.append(Spacer(1, 5 * mm))

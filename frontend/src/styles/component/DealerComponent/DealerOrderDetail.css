@@ -1,0 +1,914 @@
+/* Enhanced Dealer Order Detail Styles */
+.dealer-order-detail {
+    min-height: 100vh;
+    background-color: #f5f5f5;
+    padding: 1.5rem;
+    font-family: 'Tahoma', sans-serif;
+    direction: rtl;
+}
+
+/* Header Styles */
+.dealer-order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px #000;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.dealer-order-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    letter-spacing: 3px;
+    margin: 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+.dealer-status-badge {
+    padding: 12px 20px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    min-width: auto;
+    white-space: nowrap;
+    border-radius: 6px;
+}
+
+/* Step Indicator - Similar to Login Password Reset Flow */
+.dealer-step-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px #000;
+    overflow-x: auto;
+    flex-wrap: wrap;
+}
+
+.dealer-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border: 3px solid #d1d5db;
+    background-color: #f9fafb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    min-width: 200px;
+    box-shadow: 2px 2px 0px #d1d5db;
+}
+
+.dealer-step:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0px #d1d5db;
+}
+
+.dealer-step.active {
+    border-color: #3b82f6;
+    background-color: #dbeafe;
+    box-shadow: 4px 4px 0px #3b82f6;
+}
+
+.dealer-step.active:hover {
+    box-shadow: 6px 6px 0px #3b82f6;
+}
+
+.dealer-step.completed {
+    border-color: #10b981;
+    background-color: #d1fae5;
+    box-shadow: 2px 2px 0px #10b981;
+}
+
+.dealer-step.completed:hover {
+    box-shadow: 4px 4px 0px #10b981;
+}
+
+.dealer-step-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.dealer-step-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.dealer-step-title {
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
+}
+
+.dealer-step-description {
+    font-size: 0.75rem;
+    color: #6b7280;
+    line-height: 1.3;
+}
+
+.dealer-step-check {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    font-size: 1rem;
+    background: #fff;
+    border-radius: 50%;
+    padding: 2px;
+}
+
+/* Step Cards */
+.dealer-step-card {
+    margin-bottom: 2rem;
+    background-color: #fff;
+    cursor: default;
+}
+
+.dealer-step-card:hover {
+    transform: none;
+    box-shadow: 6px 6px 0px #000;
+}
+
+.dealer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 3px solid #e5e7eb;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.dealer-card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 2px;
+    margin: 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+}
+
+/* Order Info Grid */
+.dealer-order-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.dealer-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    background-color: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    box-shadow: 2px 2px 0px #e2e8f0;
+}
+
+.dealer-info-label {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dealer-info-value {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #1e293b;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* Enhanced Table Styles - Horizontal Scroll Design */
+.dealer-items-table {
+    width: 100%;
+    border: 4px solid #000;
+    border-radius: 8px;
+    overflow-x: auto;
+    overflow-y: visible;
+    background-color: #fff;
+    box-shadow: 4px 4px 0px #000;
+    margin-bottom: 1.5rem;
+    /* Enable smooth scrolling */
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Table Headers - Fixed width columns for horizontal scroll */
+.dealer-table-header {
+    display: grid;
+    background-color: #1f2937;
+    color: #fff;
+    font-weight: bold;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: max-content;
+}
+
+/* Fixed width columns for unofficial invoices (6 columns) */
+.dealer-items-table:not([data-invoice-type="official"]) .dealer-table-header {
+    grid-template-columns: 280px 120px 200px 140px 120px 160px;
+}
+
+/* Fixed width columns for official invoices (8 columns) */
+.dealer-items-table[data-invoice-type="official"] .dealer-table-header {
+    grid-template-columns: 250px 120px 180px 130px 120px 100px 130px 160px;
+}
+
+.dealer-header-cell {
+    padding: 1.2rem 1rem;
+    border-right: 1px solid #374151;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    font-size: 0.8rem;
+    word-break: break-word;
+    min-height: 60px;
+    white-space: nowrap;
+}
+
+.dealer-header-cell:last-child {
+    border-right: none;
+}
+
+/* Table Rows - Fixed width columns */
+.dealer-table-row {
+    display: grid;
+    border-bottom: 2px solid #e5e7eb;
+    transition: background-color 0.2s ease;
+    min-height: 80px;
+    min-width: max-content;
+}
+
+/* Fixed width columns for unofficial invoices (6 columns) */
+.dealer-items-table:not([data-invoice-type="official"]) .dealer-table-row {
+    grid-template-columns: 280px 120px 200px 140px 120px 160px;
+}
+
+/* Fixed width columns for official invoices (8 columns) */
+.dealer-items-table[data-invoice-type="official"] .dealer-table-row {
+    grid-template-columns: 250px 120px 180px 130px 120px 100px 130px 160px;
+}
+
+.dealer-table-row:hover {
+    background-color: #f8fafc;
+}
+
+.dealer-table-row:last-child {
+    border-bottom: none;
+}
+
+.dealer-table-cell {
+    padding: 1rem 0.75rem;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    word-break: break-word;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.dealer-table-cell:last-child {
+    border-right: none;
+}
+
+/* Product name cell - left aligned */
+.dealer-table-cell:first-child {
+    justify-content: flex-start;
+    text-align: right;
+    font-family: 'Tahoma', sans-serif;
+    font-weight: 600;
+}
+
+/* Notes cell - left aligned */
+.dealer-table-cell:nth-child(3) {
+    justify-content: flex-start;
+    text-align: right;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
+/* Price and total cells - emphasized */
+.dealer-table-cell:nth-child(4),
+.dealer-table-cell:last-child {
+    font-weight: bold;
+    color: #059669;
+    font-family: 'Roboto Mono', monospace;
+    direction: ltr;
+    text-align: left;
+}
+
+/* Quantity cells - Persian numbers */
+.dealer-table-cell:nth-child(2),
+.dealer-table-cell:nth-child(5) {
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 600;
+    direction: rtl;
+}
+
+/* Tax-related cells for official invoices */
+.dealer-items-table[data-invoice-type="official"] .dealer-table-cell:nth-child(6) {
+    font-weight: 600;
+    color: #dc2626;
+    font-size: 0.8rem;
+}
+
+.dealer-items-table[data-invoice-type="official"] .dealer-table-cell:nth-child(7) {
+    font-weight: bold;
+    color: #dc2626;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* Remove tax-related styles since dealer view doesn't show tax columns */
+
+/* Pending data styling */
+.dealer-table-cell[data-pending="true"] {
+    background-color: #fef3c7;
+    color: #d97706;
+    font-style: italic;
+}
+
+/* Smart text sizing classes */
+.dealer-table-cell.text-overflow {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Notes Section */
+.dealer-notes-edit {
+    margin-bottom: 1.5rem;
+}
+
+.dealer-notes-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 1rem;
+    border: 3px solid #000;
+    border-radius: 6px;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.9rem;
+    background-color: #fff;
+    box-shadow: 3px 3px 0px #000;
+    resize: vertical;
+    transition: all 0.2s ease;
+}
+
+.dealer-notes-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 5px 5px 0px #3b82f6;
+    transform: translate(-2px, -2px);
+}
+
+.dealer-notes-display {
+    padding: 1.5rem;
+    background-color: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    font-family: 'Tahoma', sans-serif;
+    line-height: 1.6;
+    color: #475569;
+    min-height: 80px;
+    box-shadow: 2px 2px 0px #e2e8f0;
+}
+
+/* Step Actions */
+.dealer-step-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #e5e7eb;
+    flex-wrap: wrap;
+}
+
+.dealer-next-btn,
+.dealer-back-btn,
+.dealer-dashboard-btn,
+.dealer-save-notes-btn {
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.dealer-next-btn:hover,
+.dealer-save-notes-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px #000;
+}
+
+.dealer-back-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0px #000;
+}
+
+.dealer-dashboard-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0px #000;
+}
+
+/* Invoice Type Indicators */
+.dealer-info-value.neo-official-invoice {
+    color: #dc2626;
+    font-weight: bold;
+}
+
+.dealer-info-value.neo-unofficial-invoice {
+    color: #059669;
+    font-weight: bold;
+}
+
+.neo-tax-badge {
+    display: inline-block;
+    background-color: #fee2e2;
+    color: #dc2626;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+    border: 1px solid #dc2626;
+}
+
+/* Payment Receipt Section */
+.dealer-receipts-info {
+    padding: 1.5rem;
+    background-color: #ede9fe;
+    border: 2px solid #8b5cf6;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0px #8b5cf6;
+}
+
+.dealer-receipts-info p {
+    margin: 0;
+    color: #5b21b6;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.dealer-receipt-status {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+.dealer-status-badge {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 2px solid currentColor;
+    box-shadow: 2px 2px 0px currentColor;
+}
+
+.dealer-status-badge.payment {
+    background-color: #f3e8ff;
+    color: #7c3aed;
+}
+
+/* Summary Section */
+.dealer-summary-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.dealer-summary-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: #f1f5f9;
+    border: 2px solid #cbd5e1;
+    border-radius: 6px;
+    box-shadow: 2px 2px 0px #cbd5e1;
+}
+
+.dealer-summary-item.highlight {
+    background-color: #fef3c7;
+    border-color: #f59e0b;
+    box-shadow: 2px 2px 0px #f59e0b;
+}
+
+.dealer-summary-label {
+    font-weight: 600;
+    color: #475569;
+    font-size: 0.85rem;
+}
+
+.dealer-summary-value {
+    font-weight: bold;
+    color: #1e293b;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+}
+
+.dealer-summary-notes {
+    grid-column: 1 / -1;
+    padding: 1rem;
+    background-color: #f0f9ff;
+    border: 2px solid #0ea5e9;
+    border-radius: 6px;
+    box-shadow: 2px 2px 0px #0ea5e9;
+}
+
+.dealer-summary-notes .dealer-summary-value {
+    color: #0c4a6e;
+    font-family: 'Tahoma', sans-serif;
+    font-weight: normal;
+    margin-top: 0.5rem;
+    display: block;
+    line-height: 1.5;
+}
+
+/* Loading and Error States */
+.dealer-loading-card,
+.dealer-error-card {
+    text-align: center;
+    cursor: default;
+    max-width: 600px;
+    margin: 2rem auto;
+}
+
+.dealer-loading-card:hover,
+.dealer-error-card:hover {
+    transform: none;
+    box-shadow: 6px 6px 0px #000;
+}
+
+.dealer-loading-content,
+.dealer-error-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 3rem 2rem;
+}
+
+.dealer-loading-icon,
+.dealer-error-icon {
+    font-size: 3rem;
+}
+
+.dealer-loading-text,
+.dealer-error-text {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.1rem;
+    color: #374151;
+    font-weight: 600;
+}
+
+.dealer-debug-info {
+    margin-top: 1.5rem;
+    max-width: 100%;
+}
+
+.dealer-debug-info details {
+    background-color: #f3f4f6;
+    border: 2px solid #9ca3af;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 2px 2px 0px #9ca3af;
+}
+
+.dealer-debug-content {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    color: #374151;
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    border: 1px solid #d1d5db;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.dealer-error-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.dealer-retry-btn {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+/* Error Messages */
+.dealer-error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background-color: #fef2f2;
+    border: 3px solid #ef4444;
+    border-radius: 6px;
+    color: #dc2626;
+    font-weight: bold;
+    margin-bottom: 1.5rem;
+    box-shadow: 3px 3px 0px #ef4444;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .dealer-order-detail {
+        padding: 1rem;
+    }
+
+    .dealer-order-title {
+        font-size: 2rem;
+        letter-spacing: 2px;
+    }
+
+    .dealer-step-indicator {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .dealer-step {
+        min-width: unset;
+        width: 100%;
+    }
+
+    .dealer-order-info-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.75rem;
+    }
+
+    /* Table becomes horizontally scrollable */
+    .dealer-items-table {
+        overflow-x: auto;
+    }
+
+    .dealer-table-header,
+    .dealer-table-row {
+        min-width: 800px;
+    }
+}
+
+/* Mobile responsive table */
+@media (max-width: 768px) {
+    .dealer-order-detail {
+        padding: 0.75rem;
+    }
+
+    .dealer-order-header {
+        flex-direction: column;
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .dealer-order-title {
+        font-size: 1.75rem;
+        letter-spacing: 1px;
+    }
+
+    .dealer-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .dealer-card-title {
+        font-size: 1.5rem;
+        letter-spacing: 1px;
+    }
+
+    /* Switch to card layout on mobile */
+    .dealer-items-table {
+        border: none;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    .dealer-table-header {
+        display: none;
+    }
+
+    .dealer-table-row {
+        display: block;
+        background-color: #fff;
+        border: 3px solid #000;
+        border-radius: 8px;
+        box-shadow: 4px 4px 0px #000;
+        margin-bottom: 1rem;
+        padding: 1rem;
+    }
+
+    .dealer-table-cell {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border: none;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: right;
+        direction: rtl;
+    }
+
+    .dealer-table-cell:last-child {
+        border-bottom: none;
+    }
+
+    .dealer-table-cell:before {
+        content: attr(data-label) ":";
+        font-weight: bold;
+        color: #374151;
+        font-size: 0.85rem;
+        min-width: 120px;
+        text-align: right;
+        padding-left: 1rem;
+        font-family: 'Tahoma', sans-serif;
+    }
+
+    /* Fix mobile cell alignment for prices and quantities */
+    .dealer-table-cell:nth-child(1):before { content: "محصول:"; }
+    .dealer-table-cell:nth-child(2):before { content: "تعداد درخواستی:"; }
+    .dealer-table-cell:nth-child(3):before { content: "یادداشت مشتری:"; }
+    .dealer-table-cell:nth-child(4):before { content: "قیمت واحد:"; }
+    .dealer-table-cell:nth-child(5):before { content: "تعداد نهایی:"; }
+
+    /* Tax columns for official invoices */
+    .dealer-items-table[data-invoice-type="official"] .dealer-table-cell:nth-child(6):before { content: "نرخ مالیات:"; }
+    .dealer-items-table[data-invoice-type="official"] .dealer-table-cell:nth-child(7):before { content: "مبلغ مالیات:"; }
+    .dealer-items-table[data-invoice-type="official"] .dealer-table-cell:nth-child(8):before { content: "مبلغ کل:"; }
+
+    /* For unofficial invoices */
+    .dealer-items-table:not([data-invoice-type="official"]) .dealer-table-cell:nth-child(6):before { content: "مبلغ کل:"; }
+
+    .dealer-step-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .dealer-next-btn,
+    .dealer-back-btn,
+    .dealer-dashboard-btn,
+    .dealer-save-notes-btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .dealer-order-info-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .dealer-summary-content {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .dealer-summary-item {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .dealer-order-detail {
+        padding: 0.5rem;
+    }
+
+    .dealer-order-header {
+        padding: 0.75rem;
+    }
+
+    .dealer-order-title {
+        font-size: 1.5rem;
+    }
+
+    .dealer-step {
+        padding: 0.75rem 1rem;
+    }
+
+    .dealer-step-title {
+        font-size: 0.8rem;
+    }
+
+    .dealer-step-description {
+        font-size: 0.7rem;
+    }
+
+    .dealer-card-title {
+        font-size: 1.3rem;
+    }
+
+    .dealer-info-item {
+        padding: 0.75rem;
+    }
+
+    .dealer-notes-textarea {
+        min-height: 100px;
+        padding: 0.75rem;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .dealer-order-detail {
+        background-color: white;
+        padding: 0;
+    }
+
+    .dealer-step-indicator,
+    .dealer-step-actions,
+    .dealer-error-message,
+    .dealer-debug-info,
+    .dealer-error-actions {
+        display: none;
+    }
+
+    .dealer-order-header,
+    .dealer-step-card {
+        box-shadow: none;
+        border: 1px solid #000;
+        break-inside: avoid;
+        margin-bottom: 1rem;
+    }
+
+    .dealer-items-table {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .dealer-table-row {
+        break-inside: avoid;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .dealer-step:hover,
+    .dealer-next-btn:hover,
+    .dealer-back-btn:hover,
+    .dealer-dashboard-btn:hover,
+    .dealer-save-notes-btn:hover,
+    .dealer-notes-textarea:focus {
+        transform: none;
+    }
+
+    .dealer-step,
+    .dealer-table-row,
+    .dealer-notes-textarea {
+        transition: none;
+    }
+}
+
+/* Focus States for Accessibility */
+.dealer-step:focus-within {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+.dealer-notes-textarea:focus,
+.dealer-next-btn:focus,
+.dealer-back-btn:focus,
+.dealer-dashboard-btn:focus,
+.dealer-save-notes-btn:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+

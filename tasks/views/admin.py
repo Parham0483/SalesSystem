@@ -3,10 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
+from django.db.models import Q, Count, Sum, Max
 
 from ..models import (
     Customer, Product, Order, OrderItem, Invoice,
@@ -176,16 +176,375 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         return Product.objects.all().order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
-        """Create new product"""
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            product = serializer.save()
-            return Response({
-                'message': 'Product created successfully',
-                'product': ProductSerializer(product).data
-            }, status=status.HTTP_201_CREATED)
+        """Create new product with multiple images support"""
+        print("=== ADMIN CREATE PRODUCT DEBUG START ===")
+        print(f"POST data keys: {list(request.data.keys())}")
+        print(f"FILES keys: {list(request.FILES.keys())}")
+        print(f"Content-Type: {request.content_type}")
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Handle images from both FILES and data
+        images = []
+
+        # First, try to get images from request.FILES (multipart/form-data)
+        images_from_files = request.FILES.getlist('images')
+        if images_from_files:
+            images.extend(images_from_files)
+            print(f"Found {len(images_from_files)} images in request.FILES")
+
+        # Then, check request.data for images (in case they come as file objects)
+        if 'images' in request.data:
+            data_images = request.data.get('images')
+            print(f"Found 'images' in request.data: {type(data_images)}")
+
+            if isinstance(data_images, list):
+                for item in data_images:
+                    if hasattr(item, 'read'):  # It's a file-like object
+                        images.append(item)
+                        print(f"Added file object: {getattr(item, 'name', 'unnamed')}")
+            elif hasattr(data_images, 'read'):
+                images.append(data_images)
+                print(f"Added single file object: {getattr(data_images, 'name', 'unnamed')}")
+
+        print(f"Total images collected: {len(images)}")
+
+        if not images:
+            print("ERROR: No images found")
+            return Response({
+                'error': 'حداقل یک تصویر الزامی است',
+                'debug': {
+                    'files_keys': list(request.FILES.keys()),
+                    'data_keys': list(request.data.keys()),
+                    'data_images_type': str(type(request.data.get('images', 'not found'))),
+                    'content_type': request.content_type,
+                    'request_method': request.method
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate image files
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        max_size = 5 * 1024 * 1024  # 5MB
+
+        for i, image_file in enumerate(images):
+            if hasattr(image_file, 'content_type') and image_file.content_type:
+                if image_file.content_type.lower() not in allowed_types:
+                    return Response({
+                        'error': f'فرمت فایل {getattr(image_file, "name", f"image_{i}")} پشتیبانی نمی‌شود'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            if hasattr(image_file, 'size') and image_file.size > max_size:
+                return Response({
+                    'error': f'حجم فایل {getattr(image_file, "name", f"image_{i}")} بیش از 5MB است'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create product first (WITHOUT images in serializer)
+        product_data = request.data.copy()
+
+        # Remove images from product data since we'll handle them separately
+        product_data.pop('images', None)
+        product_data.pop('image_order', None)  # Remove image_order too
+
+        serializer = self.get_serializer(data=product_data)
+        if not serializer.is_valid():
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        product = serializer.save()
+        print(f"Product created: {product.id} - {product.name}")
+
+        # Handle image ordering from frontend
+        image_order_data = None
+        if 'image_order' in request.data:
+            try:
+                image_order_str = request.data.get('image_order')
+                if isinstance(image_order_str, str):
+                    import json
+                    image_order_data = json.loads(image_order_str)
+                    print(f"Image order data: {image_order_data}")
+            except Exception as e:
+                print(f"Error parsing image_order: {e}")
+
+        # NOW handle images separately
+        from tasks.models import ProductImage
+
+        created_images = []
+        for i, image_file in enumerate(images):
+            try:
+                print(f"Creating ProductImage {i}: {getattr(image_file, 'name', f'image_{i}')}")
+
+                # Determine order and primary status
+                order = i
+                is_primary = (i == 0)  # Default: first image is primary
+
+                # If we have image_order data, use it
+                if image_order_data:
+                    for order_item in image_order_data:
+                        if order_item.get('type') == 'new':
+                            # Match by index or other identifier
+                            if order_item.get('order', 0) == i:
+                                order = order_item.get('order', i)
+                                is_primary = order_item.get('is_primary', i == 0)
+                                break
+
+                product_image = ProductImage.objects.create(
+                    product=product,
+                    image=image_file,
+                    order=order,
+                    is_primary=is_primary,
+                    alt_text=f"تصویر {i + 1} برای {product.name}"
+                )
+                created_images.append(product_image)
+                print(f"SUCCESS: Created ProductImage {product_image.id} with order={order}, primary={is_primary}")
+            except Exception as e:
+                print(f"ERROR creating image {i}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+
+        print(f"Total ProductImage objects created: {len(created_images)}")
+
+        # Refresh product from database to include new images
+        product.refresh_from_db()
+
+        return Response({
+            'message': 'Product created successfully',
+            'product': ProductSerializer(product, context={'request': request}).data,
+            'debug': {
+                'images_uploaded': len(images),
+                'images_created': len(created_images),
+                'created_image_ids': [img.id for img in created_images],
+                'content_type_received': request.content_type,
+                'request_method': request.method
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Update product with multiple images support"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        print("=== ADMIN UPDATE PRODUCT DEBUG START ===")
+        print(f"Updating product: {instance.id} - {instance.name}")
+        print(f"POST data keys: {list(request.data.keys())}")
+        print(f"FILES keys: {list(request.FILES.keys())}")
+
+        # Handle existing images to keep
+        existing_images_to_keep = request.data.get('existing_images')
+        if existing_images_to_keep:
+            try:
+                if isinstance(existing_images_to_keep, str):
+                    import json
+                    existing_images_to_keep = json.loads(existing_images_to_keep)
+                print(f"Existing images to keep: {existing_images_to_keep}")
+            except:
+                existing_images_to_keep = []
+
+        # Handle new images if provided
+        new_images = []
+        images_from_files = request.FILES.getlist('images')
+        if images_from_files:
+            new_images.extend(images_from_files)
+            print(f"Found {len(images_from_files)} new images")
+
+        # Update product fields (excluding images)
+        product_data = request.data.copy()
+        product_data.pop('images', None)
+        product_data.pop('existing_images', None)
+        product_data.pop('image_order', None)  # Remove image_order from product data
+
+        serializer = self.get_serializer(instance, data=product_data, partial=partial)
+        if not serializer.is_valid():
+            print(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        product = serializer.save()
+        print(f"Product updated: {product.id} - {product.name}")
+
+        # Handle images if new images provided or existing images management
+        if new_images or existing_images_to_keep is not None:
+            from tasks.models import ProductImage
+
+            # If we have existing images to keep, remove others
+            if existing_images_to_keep is not None:
+                # Normalize existing_images_to_keep to relative paths
+                normalized_keep_list = []
+                for url in existing_images_to_keep:
+                    if url.startswith('http'):
+                        # Extract just the path from full URL
+                        from urllib.parse import urlparse
+                        normalized_keep_list.append(urlparse(url).path)
+                    else:
+                        normalized_keep_list.append(url)
+
+                # Remove images not in the keep list
+                current_images = product.images.all()
+                for img in current_images:
+                    if img.image.url not in normalized_keep_list:
+                        print(f"Removing image: {img.image.url}")
+                        img.delete()
+
+            # Handle image ordering if provided
+            if 'image_order' in request.data:
+                try:
+                    image_order_data = request.data.get('image_order')
+                    if isinstance(image_order_data, str):
+                        import json
+                        image_order_data = json.loads(image_order_data)
+
+                    print(f"Processing image_order: {image_order_data}")
+
+                    # Reset all images to not primary first
+                    product.images.update(is_primary=False)
+
+                    # Update order and primary status based on the order data
+                    for order_item in image_order_data:
+                        if order_item.get('type') == 'existing' and order_item.get('src'):
+                            # Normalize the URL for comparison
+                            src_url = order_item['src']
+                            if src_url.startswith('http'):
+                                from urllib.parse import urlparse
+                                src_path = urlparse(src_url).path
+                            else:
+                                src_path = src_url
+
+                            # Find the ProductImage by matching the image filename
+                            filename = src_path.split('/')[-1]
+                            product_image = product.images.filter(image__icontains=filename).first()
+
+                            if product_image:
+                                product_image.order = order_item.get('order', 0)
+                                product_image.is_primary = order_item.get('is_primary', False)
+                                product_image.save()
+                                print(
+                                    f"Updated image {product_image.id}: order={product_image.order}, primary={product_image.is_primary}")
+                            else:
+                                print(f"Could not find image for filename: {filename}")
+
+                except Exception as e:
+                    print(f"Error processing image_order: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # Add new images if provided
+            if new_images:
+                # Get current max order
+                current_max_order = product.images.aggregate(
+                    max_order=Max('order')
+                )['max_order'] or -1
+
+                created_images = []
+                for i, image_file in enumerate(new_images):
+                    try:
+                        print(f"Adding new ProductImage {i}: {getattr(image_file, 'name', f'image_{i}')}")
+                        product_image = ProductImage.objects.create(
+                            product=product,
+                            image=image_file,
+                            order=current_max_order + i + 1,
+                            is_primary=False,  # Don't auto-set as primary for updates
+                            alt_text=f"تصویر {current_max_order + i + 2} برای {product.name}"
+                        )
+                        created_images.append(product_image)
+                        print(f"SUCCESS: Created ProductImage {product_image.id}")
+                    except Exception as e:
+                        print(f"ERROR creating image {i}: {str(e)}")
+                        import traceback
+                        traceback.print_exc()
+
+                print(f"Total new ProductImage objects created: {len(created_images)}")
+
+        # Refresh product from database
+        product.refresh_from_db()
+
+        return Response({
+            'message': 'Product updated successfully',
+            'product': ProductSerializer(product, context={'request': request}).data,
+            'debug': {
+                'new_images_added': len(new_images) if new_images else 0,
+                'existing_images_kept': len(existing_images_to_keep) if existing_images_to_keep else 0
+            }
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=True, methods=['DELETE'], url_path='remove-image/(?P<image_id>[^/.]+)')
+    def remove_image(self, request, pk=None, image_id=None):
+        """Remove a specific image from a product"""
+        product = self.get_object()
+
+        try:
+            from tasks.models import ProductImage
+            image = ProductImage.objects.get(id=image_id, product=product)
+
+            # If removing primary image, set another as primary
+            if image.is_primary:
+                next_primary = product.images.exclude(id=image.id).first()
+                if next_primary:
+                    next_primary.is_primary = True
+                    next_primary.save()
+
+            image.delete()
+
+            return Response({
+                'message': 'Image deleted successfully',
+                'product': ProductSerializer(product, context={'request': request}).data
+            })
+
+        except ProductImage.DoesNotExist:
+            return Response({
+                'error': 'Image not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['POST'], url_path='reorder-images')
+    def reorder_images(self, request, pk=None):
+        """Reorder product images"""
+        product = self.get_object()
+        image_order = request.data.get('image_order', [])
+
+        if not image_order:
+            return Response({
+                'error': 'image_order is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from tasks.models import ProductImage
+
+            for index, image_id in enumerate(image_order):
+                ProductImage.objects.filter(
+                    id=image_id,
+                    product=product
+                ).update(order=index)
+
+            return Response({
+                'message': 'Images reordered successfully',
+                'product': ProductSerializer(product, context={'request': request}).data
+            })
+
+        except Exception as e:
+            return Response({
+                'error': f'Error reordering images: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='set-primary-image/(?P<image_id>[^/.]+)')
+    def set_primary_image(self, request, pk=None, image_id=None):
+        """Set a specific image as primary"""
+        product = self.get_object()
+
+        try:
+            from tasks.models import ProductImage
+
+            # Remove primary from all images
+            product.images.update(is_primary=False)
+
+            # Set new primary
+            image = ProductImage.objects.get(id=image_id, product=product)
+            image.is_primary = True
+            image.save()
+
+            return Response({
+                'message': 'Primary image set successfully',
+                'product': ProductSerializer(product, context={'request': request}).data
+            })
+
+        except ProductImage.DoesNotExist:
+            return Response({
+                'error': 'Image not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=False, methods=['GET'], url_path='low-stock')
     def low_stock(self, request):

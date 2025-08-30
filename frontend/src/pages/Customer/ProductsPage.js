@@ -18,8 +18,12 @@ const ProductsPage = () => {
     const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
 
-    const [filterStatus, setFilterStatus] = useState('all'); // For stock status
-    const [selectedCategory, setSelectedCategory] = useState('all'); // For category
+    // Add state for modal image gallery
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [fullscreenImage, setFullscreenImage] = useState(null);
+
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [selectedCategory, setSelectedCategory] = useState('all');
     const [sortBy, setSortBy] = useState('newest');
     const [categories, setCategories] = useState([]);
 
@@ -34,6 +38,60 @@ const ProductsPage = () => {
     useEffect(() => {
         filterAndSortProducts();
     }, [products, searchTerm, filterStatus, sortBy, selectedCategory]);
+
+    // Reset image index when product changes
+    useEffect(() => {
+        setCurrentImageIndex(0);
+    }, [selectedProduct]);
+
+    // Handle ESC key and arrow keys for fullscreen image
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (!fullscreenImage) return;
+
+            if (event.key === 'Escape') {
+                setFullscreenImage(null);
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                const productImages = getProductImages(selectedProduct);
+                if (productImages.length <= 1) return;
+
+                const currentIndex = productImages.findIndex(img => img.image_url === fullscreenImage.url);
+                let newIndex;
+
+                if (event.key === 'ArrowLeft') {
+                    newIndex = currentIndex === 0 ? productImages.length - 1 : currentIndex - 1;
+                } else {
+                    newIndex = currentIndex === productImages.length - 1 ? 0 : currentIndex + 1;
+                }
+
+                setFullscreenImage({
+                    url: productImages[newIndex].image_url,
+                    productName: selectedProduct.name,
+                    index: newIndex + 1,
+                    total: productImages.length
+                });
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [fullscreenImage, selectedProduct]);
+
+    // Prevent body scroll when fullscreen is open
+    useEffect(() => {
+        if (fullscreenImage) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [fullscreenImage]);
 
     const fetchProducts = async () => {
         setLoading(true);
@@ -61,6 +119,42 @@ const ProductsPage = () => {
         } catch (err) {
             console.error('Error fetching categories:', err);
         }
+    };
+
+    // Helper function to get product image URL
+    const getProductImageUrl = (product) => {
+        // Priority: primary_image_url > first image from images array > fallback
+        if (product.primary_image_url) {
+            return product.primary_image_url;
+        }
+        if (product.images && product.images.length > 0) {
+            return product.images[0].image_url;
+        }
+        return product.image_url; // fallback to old field
+    };
+
+    // Helper function to get second image for hover effect
+    const getSecondImageUrl = (product) => {
+        if (product.images && product.images.length > 1) {
+            return product.images[1].image_url;
+        }
+        return null;
+    };
+
+    // Helper function to get all product images
+    const getProductImages = (product) => {
+        if (product.images && product.images.length > 0) {
+            return product.images;
+        }
+        // Fallback to single image
+        if (product.image_url || product.primary_image_url) {
+            return [{
+                image_url: product.primary_image_url || product.image_url,
+                is_primary: true,
+                id: 'fallback'
+            }];
+        }
+        return [];
     };
 
     const filterAndSortProducts = () => {
@@ -190,6 +284,42 @@ const ProductsPage = () => {
         return productDate > oneWeekAgo;
     };
 
+    const handleImageClick = (imageUrl, productName, imageIndex = null) => {
+        setFullscreenImage({
+            url: imageUrl,
+            productName: productName,
+            index: imageIndex,
+            total: selectedProduct ? getProductImages(selectedProduct).length : 1
+        });
+    };
+
+    const handleFullscreenClose = () => {
+        setFullscreenImage(null);
+    };
+
+    const handleFullscreenNavigation = (direction) => {
+        if (!selectedProduct) return;
+
+        const productImages = getProductImages(selectedProduct);
+        if (productImages.length <= 1) return;
+
+        const currentIndex = productImages.findIndex(img => img.image_url === fullscreenImage.url);
+        let newIndex;
+
+        if (direction === 'prev') {
+            newIndex = currentIndex === 0 ? productImages.length - 1 : currentIndex - 1;
+        } else {
+            newIndex = currentIndex === productImages.length - 1 ? 0 : currentIndex + 1;
+        }
+
+        setFullscreenImage({
+            url: productImages[newIndex].image_url,
+            productName: selectedProduct.name,
+            index: newIndex + 1,
+            total: productImages.length
+        });
+    };
+
     if (loading) {
         return <div className="products-page"><div className="products-header"><div className="loading-container"><div className="loading-spinner"></div><h1>در حال بارگیری محصولات...</h1></div></div></div>;
     }
@@ -200,7 +330,7 @@ const ProductsPage = () => {
             <div className="products-header">
                 <div className="header-content">
                     <div className="title-section">
-                        <h1 className="products-title">🛍️ کاتالوگ محصولات</h1>
+                        <h1 className="products-title">🛒 کاتالوگ محصولات</h1>
                         <p className="products-subtitle">
                             {filteredProducts.length} محصول یافت شد
                             {selectedCategory !== 'all' && categories.find(c => c.id == selectedCategory) &&
@@ -303,54 +433,60 @@ const ProductsPage = () => {
                 </NeoBrutalistCard>
             </div>
 
-            {/* Products Grid */}
+            {/* Clean Products Grid with Hover Effects */}
             <div className="products-grid">
                 {filteredProducts.map((product) => {
                     const stockStatus = getStockStatus(product);
                     const isNew = isNewProduct(product.created_at);
+                    const primaryImage = getProductImageUrl(product);
+                    const secondaryImage = getSecondImageUrl(product);
+                    const productImages = getProductImages(product);
 
                     return (
                         <NeoBrutalistCard
                             key={product.id}
-                            className={`product-card ${stockStatus.status}`}
+                            className={`product-card ${stockStatus.status} ${productImages.length > 1 ? 'has-multiple-images' : ''}`}
                             onClick={() => handleProductClick(product)}
                         >
                             <div className="product-image-container">
-                                {product.image_url ? (
-                                    <img src={product.image_url} alt={product.name} className="product-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} />
+                                {primaryImage ? (
+                                    <>
+                                        <img
+                                            src={primaryImage}
+                                            alt={product.name}
+                                            className="product-image"
+                                            onError={(e) => { e.target.src = '/placeholder-product.png'; }}
+                                        />
+                                        {/* Second image for hover effect */}
+                                        {secondaryImage && (
+                                            <img
+                                                src={secondaryImage}
+                                                alt={`${product.name} - دوم`}
+                                                className="product-image-secondary"
+                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                            />
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="product-image-placeholder">
                                         {product.category_name === 'آجیل' ? '🥜' : product.category_name === 'ادویه' ? '🌶️' : '📦'}
                                         <span>تصویر ندارد</span>
                                     </div>
                                 )}
-                                {isNew && ( <div className="new-badge"> جدید </div> )}
-                                {product.category_name && ( <div className="category-badge"> {product.category_name} </div> )}
+
+                                {/* Multiple Images Indicator */}
+                                {productImages.length > 1 && (
+                                    <div className="images-indicator">
+                                         {productImages.length}
+                                    </div>
+                                )}
                             </div>
+
                             <div className="product-info">
                                 <h3 className="product-name">{product.name}</h3>
                                 <p className="product-description">
-                                    {product.description.length > 100 ? `${product.description.substring(0, 100)}...` : product.description}
+                                    {product.description.length > 80 ? `${product.description.substring(0, 80)}...` : product.description}
                                 </p>
-                                <div className="product-details-cus">
-                                    <div className="product-price"><span className="price-label">قیمت پایه:</span><span className="price-value">{formatPrice(product.base_price)}</span></div>
-                                    <div className="product-availability"><span className="availability-label">وضعیت:</span><span className={`availability-status ${stockStatus.status}`} title={stockStatus.description}>{stockStatus.text}</span></div>
-                                    {product.origin && ( <div className="product-origin"><span className="origin-label">🌍 مبدأ:</span><span className="origin-value">{product.origin}</span></div> )}
-                                    {product.sku && ( <div className="product-sku"><span className="sku-label">کد محصول:</span><span className="sku-value">{product.sku}</span></div> )}
-                                </div>
-                                <div className="product-actions">
-                                    <NeoBrutalistButton text="مشاهده جزئیات" color="blue-400" textColor="white" onClick={(e) => { e.stopPropagation(); handleProductClick(product); }} className="details-btn"/>
-
-                                    {!isDealer && stockStatus.status !== 'discontinued' && (
-                                        <NeoBrutalistButton
-                                            text={ stockStatus.status === 'out_of_stock' ? 'استعلام موجودی' : stockStatus.status === 'low_stock' ? 'سفارش سریع' : 'سفارش دهید' }
-                                            color={ stockStatus.status === 'out_of_stock' ? 'yellow-400' : stockStatus.status === 'low_stock' ? 'yellow-400' : 'green-400' }
-                                            textColor="black"
-                                            onClick={(e) => { e.stopPropagation(); handleCreateOrder(product); }}
-                                            className="order-btn"
-                                        />
-                                    )}
-                                </div>
                             </div>
                         </NeoBrutalistCard>
                     );
@@ -364,58 +500,248 @@ const ProductsPage = () => {
                 </div>
             )}
 
-            {/* Product Detail Modal */}
+            {/* Enhanced Product Detail Modal with Full Image Gallery */}
             <NeoBrutalistModal
                 isOpen={!!selectedProduct}
                 onClose={() => setSelectedProduct(null)}
-                title={selectedProduct ? `جزئیات ${selectedProduct.name}` : ""}
+                title=""
                 size="large"
             >
                 {selectedProduct && (
                     <div className="product-detail-modal" dir="rtl">
-                        <div className="modal-product-image">
-                            {selectedProduct.image_url ? (
-                                <img src={selectedProduct.image_url} alt={selectedProduct.name} className="modal-image" onError={(e) => { e.target.src = '/placeholder-product.png'; }} />
-                            ) : (
-                                <div className="modal-image-placeholder">
-                                    {selectedProduct.category_name === 'آجیل' ? '🥜' : selectedProduct.category_name === 'ادویه' ? '🌶️' : '📦'}
-                                    <span>تصویر موجود نیست</span>
-                                </div>
-                            )}
+                        {/* Product Name and Status at Top */}
+                        <div className="modal-header-section">
+                            <h2 className="modal-product-name">{selectedProduct.name}</h2>
+                            <div className={`modal-status-badge ${getStockStatus(selectedProduct).status}`}>
+                                {getStockStatus(selectedProduct).text}
+                            </div>
                         </div>
 
-                        <div className="modal-product-info">
-                            <h2 className="modal-product-name">{selectedProduct.name}</h2>
-                            <NeoBrutalistButton text={getStockStatus(selectedProduct).text} color={getStockStatus(selectedProduct).color} textColor="black" className="modal-status-badge"/>
+                        {/* Image Gallery and Description Row */}
+                        <div className="modal-main-content">
+                            {/* Enhanced Image Gallery Section */}
+                            <div className="modal-product-images">
+                                {(() => {
+                                    const productImages = getProductImages(selectedProduct);
+
+                                    if (productImages.length > 0) {
+                                        return (
+                                            <div className="image-gallery">
+                                                {/* Main Image */}
+                                                <div className="main-image-container">
+                                                    <img
+                                                        src={productImages[currentImageIndex]?.image_url}
+                                                        alt={selectedProduct.name}
+                                                        className="modal-main-image"
+                                                        onClick={() => handleImageClick(
+                                                            productImages[currentImageIndex]?.image_url,
+                                                            selectedProduct.name,
+                                                            currentImageIndex + 1
+                                                        )}
+                                                        onError={(e) => { e.target.src = '/placeholder-product.png'; }}
+                                                    />
+
+                                                    {/* Image Navigation */}
+                                                    {productImages.length > 1 && (
+                                                        <>
+                                                            <button
+                                                                className="image-nav prev"
+                                                                onClick={() => setCurrentImageIndex(prev =>
+                                                                    prev === 0 ? productImages.length - 1 : prev - 1
+                                                                )}
+                                                            >
+                                                                ❯
+                                                            </button>
+                                                            <button
+                                                                className="image-nav next"
+                                                                onClick={() => setCurrentImageIndex(prev =>
+                                                                    prev === productImages.length - 1 ? 0 : prev + 1
+                                                                )}
+                                                            >
+                                                                ❮
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {/* Thumbnail Strip */}
+                                                {productImages.length > 1 && (
+                                                    <div className="image-thumbnails">
+                                                        {productImages.map((image, index) => (
+                                                            <img
+                                                                key={image.id || index}
+                                                                src={image.image_url}
+                                                                alt={`${selectedProduct.name} ${index + 1}`}
+                                                                className={`thumbnail ${index === currentImageIndex ? 'active' : ''}`}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (e.detail === 1) {
+                                                                        // Single click - change main image
+                                                                        setCurrentImageIndex(index);
+                                                                    } else if (e.detail === 2) {
+                                                                        // Double click - open fullscreen
+                                                                        handleImageClick(image.image_url, selectedProduct.name, index + 1);
+                                                                    }
+                                                                }}
+                                                                onError={(e) => { e.target.src = '/placeholder-product.png'; }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Image Counter */}
+                                                {productImages.length > 1 && (
+                                                    <div className="image-counter">
+                                                        {currentImageIndex + 1} از {productImages.length}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    } else {
+                                        return (
+                                            <div className="modal-image-placeholder">
+                                                {selectedProduct.category_name === 'آجیل' ? '🥜' :
+                                                    selectedProduct.category_name === 'ادویه' ? '🌶️' : '📦'}
+                                                <span>تصویر موجود نیست</span>
+                                            </div>
+                                        );
+                                    }
+                                })()}
+                            </div>
+
                             <div className="modal-product-description">
                                 <h4>توضیحات محصول:</h4>
                                 <p>{selectedProduct.description}</p>
                             </div>
+                        </div>
 
-                            {getStockStatus(selectedProduct).status === 'out_of_stock' && (
-                                <div className="availability-notice out-of-stock">
-                                    <p>این محصول در حال حاضر موجود نیست</p>
-                                </div>
-                            )}
-                            {getStockStatus(selectedProduct).status === 'low_stock' && (
-                                <div className="availability-notice low-stock">
-                                    <p>موجودی این محصول کم است، در اسرع وقت سفارش دهید</p>
-                                </div>
-                            )}
-
-                            <div className="modal-actions">
-                                <NeoBrutalistButton
-                                    text="بستن"
-                                    color="gray-400"
-                                    textColor="black"
-                                    onClick={() => setSelectedProduct(null)}
-                                    className="modal-close-btn"
-                                />
+                        {/* Stock Status Notice */}
+                        {getStockStatus(selectedProduct).status === 'out_of_stock' && (
+                            <div className="availability-notice out-of-stock">
+                                <p>این محصول در حال حاضر موجود نیست. برای اطلاع از زمان موجودی مجدد با ما تماس بگیرید.</p>
                             </div>
+                        )}
+
+                        {getStockStatus(selectedProduct).status === 'low_stock' && (
+                            <div className="availability-notice low-stock">
+                                <p>موجودی این محصول کم است، در اسرع وقت سفارش دهید.</p>
+                            </div>
+                        )}
+
+                        {getStockStatus(selectedProduct).status === 'discontinued' && (
+                            <div className="availability-notice discontinued">
+                                <p>این محصول دیگر در دسترس نیست و تولید آن متوقف شده است.</p>
+                            </div>
+                        )}
+
+                        {/* Detailed Information */}
+                        <div className="modal-product-details">
+                            <h4>اطلاعات تفصیلی:</h4>
+
+                            <div className="details-grid">
+                                <div className="detail-item">
+                                    <span className="detail-label">قیمت پایه:</span>
+                                    <span className="detail-value price-value">
+                                        {formatPrice(selectedProduct.base_price)}
+                                    </span>
+                                </div>
+
+                                <div className="detail-item">
+                                    <span className="detail-label">وضعیت موجودی:</span>
+                                    <span className={`detail-value status-${getStockStatus(selectedProduct).status}`}>
+                                        {getStockStatus(selectedProduct).text}
+                                    </span>
+                                </div>
+
+                                {selectedProduct.origin && (
+                                    <div className="detail-item">
+                                        <span className="detail-label">مبدأ:</span>
+                                        <span className="detail-value">{selectedProduct.origin}</span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.sku && (
+                                    <div className="detail-item">
+                                        <span className="detail-label">کد محصول:</span>
+                                        <span className="detail-value sku-code">{selectedProduct.sku}</span>
+                                    </div>
+                                )}
+
+                                {selectedProduct.category_name && (
+                                    <div className="detail-item">
+                                        <span className="detail-label">دسته‌بندی:</span>
+                                        <span className="detail-value">{selectedProduct.category_name}</span>
+                                    </div>
+                                )}
+
+                                <div className="detail-item">
+                                    <span className="detail-label">تاریخ افزوده شدن:</span>
+                                    <span className="detail-value">
+                                        {new Date(selectedProduct.created_at).toLocaleDateString('fa-IR')}
+                                        {isNewProduct(selectedProduct.created_at) && (
+                                            <span className="new-label">جدید</span>
+                                        )}
+                                    </span>
+                                </div>
+
+                                {/* Show image count if multiple images */}
+                                {getProductImages(selectedProduct).length > 1 && (
+                                    <div className="detail-item">
+                                        <span className="detail-label">تعداد تصاویر:</span>
+                                        <span className="detail-value">
+                                            {getProductImages(selectedProduct).length} تصویر
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="modal-actions">
+                            <NeoBrutalistButton
+                                text="بستن"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => setSelectedProduct(null)}
+                                className="modal-close-btn"
+                            />
                         </div>
                     </div>
                 )}
             </NeoBrutalistModal>
+
+            {/* Fullscreen Image Modal */}
+            {fullscreenImage && (
+                <div
+                    className="fullscreen-image-overlay"
+                    onClick={handleFullscreenClose}
+                >
+                    <button
+                        className="fullscreen-close-btn"
+                        onClick={handleFullscreenClose}
+                        aria-label="بستن تصویر"
+                    >
+                        ✕
+                    </button>
+
+                    <img
+                        src={fullscreenImage.url}
+                        alt={fullscreenImage.productName}
+                        className="fullscreen-image"
+                        onClick={(e) => e.stopPropagation()}
+                        onError={(e) => { e.target.src = '/placeholder-product.png'; }}
+                    />
+
+                    <div className="fullscreen-image-info">
+                        <strong>{fullscreenImage.productName}</strong>
+                        {fullscreenImage.index && (
+                            <span> - تصویر {fullscreenImage.index} از {fullscreenImage.total}</span>
+                        )}
+                        <br />
+                        <small>برای بستن کلیک کنید یا ESC فشار دهید</small>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

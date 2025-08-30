@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Package, Search, Filter, Eye, Edit, ShoppingCart, TrendingUp,
     AlertTriangle, CheckCircle, XCircle, Plus, Download, Star,
-    BarChart3, DollarSign, Archive, RefreshCw
+    BarChart3, DollarSign, Archive, RefreshCw, ChevronLeft, ChevronRight,
+    Trash2, GripVertical, Move, ArrowUp, ArrowDown
 } from 'lucide-react';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
@@ -25,13 +26,21 @@ const AdminProductsPage = () => {
     const [editingProduct, setEditingProduct] = useState(null);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [selectedImage, setSelectedImage] = useState('');
+    const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [productImages, setProductImages] = useState([]);
+
+    // Drag & Drop States
+    const [draggedIndex, setDraggedIndex] = useState(null);
+    const [draggedOver, setDraggedOver] = useState(null);
+    const [imageOrder, setImageOrder] = useState([]); // Track image display order
+    const dragCounter = useRef(0);
 
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
     };
 
-    // Form State
+    // Form State with image ordering
     const [productFormData, setProductFormData] = useState({
         name: '',
         description: '',
@@ -45,7 +54,13 @@ const AdminProductsPage = () => {
         weight: 0,
     });
     const [imageFile, setImageFile] = useState(null);
+    const [imageFiles, setImageFiles] = useState([]);
     const [imagePreview, setImagePreview] = useState('');
+    const [imagePreviews, setImagePreviews] = useState([]);
+    const [existingImages, setExistingImages] = useState([]);
+
+    // Enhanced image structure with metadata
+    const [orderedImages, setOrderedImages] = useState([]); // { src, id, type: 'existing'|'new', file?, order }
 
     // Filtering and Sorting State
     const [searchTerm, setSearchTerm] = useState('');
@@ -80,7 +95,6 @@ const AdminProductsPage = () => {
             const response = await API.get('/admin/products/');
             setProducts(response.data);
             calculateStats(response.data);
-            //extractCategories(response.data);
             setError('');
         } catch (err) {
             console.error('Error fetching products:', err);
@@ -101,19 +115,12 @@ const AdminProductsPage = () => {
     }, [fetchProducts]);
 
     const calculateStats = (productsList) => {
-
         const totalValue = productsList.reduce((sum, p) => {
-            // Convert to numbers and handle null/undefined values
             const price = parseFloat(p.base_price) || 0;
             const stock = parseInt(p.stock) || 0;
             const productValue = price * stock;
-
-            // Debug individual product values
-            if (productValue > 0) {
-            }
             return sum + productValue;
         }, 0);
-
 
         const stats = {
             total: productsList.length,
@@ -127,7 +134,6 @@ const AdminProductsPage = () => {
 
         setProductStats(stats);
     };
-
 
     const formatTotalValue = (value) => {
         if (value >= 1000000000) {
@@ -152,35 +158,110 @@ const AdminProductsPage = () => {
                 { id: 2, name: 'Seeds', display_name: 'دانه‌ها' },
                 { id: 3, name: 'Spices', display_name: 'ادویه‌جات' },
                 { id: 4, name: 'Nuts', display_name: 'آجیل' },
-                { id:5, name:'Confectionery products', display_name: 'محصولات قنادی' }
+                { id: 5, name: 'Confectionery products', display_name: 'محصولات قنادی' }
             ]);
         }
     };
 
+    // Drag & Drop Functions
+    const handleDragStart = (e, index) => {
+        setDraggedIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', e.target.outerHTML);
+        e.target.style.opacity = '0.4';
+        dragCounter.current = 0;
+    };
+
+    const handleDragEnd = (e) => {
+        e.target.style.opacity = '1';
+        setDraggedIndex(null);
+        setDraggedOver(null);
+        dragCounter.current = 0;
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDragEnter = (e, index) => {
+        e.preventDefault();
+        dragCounter.current++;
+        setDraggedOver(index);
+    };
+
+    const handleDragLeave = (e) => {
+        dragCounter.current--;
+        if (dragCounter.current === 0) {
+            setDraggedOver(null);
+        }
+    };
+
+    const handleDrop = (e, dropIndex) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+        const newOrderedImages = [...orderedImages];
+        const draggedImage = newOrderedImages[draggedIndex];
+
+        // Remove dragged item and insert at new position
+        newOrderedImages.splice(draggedIndex, 1);
+        newOrderedImages.splice(dropIndex, 0, draggedImage);
+
+        // Update order property
+        newOrderedImages.forEach((img, idx) => {
+            img.order = idx;
+        });
+
+        setOrderedImages(newOrderedImages);
+        setDraggedIndex(null);
+        setDraggedOver(null);
+        dragCounter.current = 0;
+    };
+
+    const moveImageUp = (index) => {
+        if (index === 0) return;
+        const newOrderedImages = [...orderedImages];
+        [newOrderedImages[index - 1], newOrderedImages[index]] =
+            [newOrderedImages[index], newOrderedImages[index - 1]];
+
+        // Update order property
+        newOrderedImages.forEach((img, idx) => {
+            img.order = idx;
+        });
+
+        setOrderedImages(newOrderedImages);
+    };
+
+    const moveImageDown = (index) => {
+        if (index === orderedImages.length - 1) return;
+        const newOrderedImages = [...orderedImages];
+        [newOrderedImages[index], newOrderedImages[index + 1]] =
+            [newOrderedImages[index + 1], newOrderedImages[index]];
+
+        // Update order property
+        newOrderedImages.forEach((img, idx) => {
+            img.order = idx;
+        });
+
+        setOrderedImages(newOrderedImages);
+    };
+
     const getCategoryDisplayName = (product) => {
         if (!product.category) return null;
-
-        // If category is an object with display_name
         if (typeof product.category === 'object' && product.category.display_name) {
             return product.category.display_name;
         }
-
-        // If category is an object with name
         if (typeof product.category === 'object' && product.category.name) {
             return product.category.name;
         }
-
-        // If category is an ID, find it in your existing categories array
         if (typeof product.category === 'number') {
             const categoryObj = categories.find(cat => cat.id === product.category);
             return categoryObj ? (categoryObj.display_name || categoryObj.name) : `دسته ${product.category}`;
         }
-
-        // If category is a string
         if (typeof product.category === 'string') {
             return product.category;
         }
-
         return null;
     };
 
@@ -188,16 +269,125 @@ const AdminProductsPage = () => {
         const categoryName = getCategoryDisplayName(product);
         if (!categoryName) return '';
 
-        // Map your existing categories to CSS classes
         const categoryMap = {
-            'محصولات قهوه': 'coffee',      // Coffee Related
-            'دانه‌ها': 'seeds',             // Seeds
-            'ادویه‌جات': 'spices',          // Spices
-            'آجیل': 'nuts',                // Nuts
-            'محصولات قنادی': 'confectionery' // Confectionery products
+            'محصولات قهوه': 'admin-category-coffee',
+            'دانه‌ها': 'admin-category-seeds',
+            'ادویه‌جات': 'admin-category-spices',
+            'آجیل': 'admin-category-nuts',
+            'محصولات قنادی': 'admin-category-confectionery'
         };
 
-        return categoryMap[categoryName] || '';
+        return categoryMap[categoryName] || 'admin-category-default';
+    };
+
+    // Add state for card image navigation
+    const [cardImageIndices, setCardImageIndices] = useState({});
+
+    // Card image navigation functions
+    const getProductImages = (product) => {
+        const images = [];
+
+        // Add main product image if exists
+        if (product.image_url || product.image) {
+            images.push(product.image_url || product.image);
+        }
+
+        // Add images from ProductImage model
+        if (product.product_images && Array.isArray(product.product_images)) {
+            images.push(...product.product_images.map(img => img.image));
+        }
+
+        // Remove duplicates and empty values
+        return [...new Set(images.filter(img => img))];
+    };
+
+    const nextCardImage = (productId, e) => {
+        e.stopPropagation();
+        const product = products.find(p => p.id === productId);
+        const images = getProductImages(product);
+
+        if (images.length > 1) {
+            setCardImageIndices(prev => {
+                const currentIndex = prev[productId] || 0;
+                const nextIndex = (currentIndex + 1) % images.length;
+                return { ...prev, [productId]: nextIndex };
+            });
+        }
+    };
+
+    const prevCardImage = (productId, e) => {
+        e.stopPropagation();
+        const product = products.find(p => p.id === productId);
+        const images = getProductImages(product);
+
+        if (images.length > 1) {
+            setCardImageIndices(prev => {
+                const currentIndex = prev[productId] || 0;
+                const prevIndex = currentIndex === 0 ? images.length - 1 : currentIndex - 1;
+                return { ...prev, [productId]: prevIndex };
+            });
+        }
+    };
+
+    const getCurrentCardImage = (product) => {
+        const images = getProductImages(product);
+        const currentIndex = cardImageIndices[product.id] || 0;
+        return images[currentIndex] || images[0] || 'https://placehold.co/400x200/e2e8f0/a0aec0?text=No+Image';
+    };
+
+    // Image navigation functions
+    const openImageModal = (product) => {
+        // Create array of all product images based on your backend structure
+        const images = [];
+
+        // Add main product image if exists
+        if (product.image_url || product.image) {
+            images.push(product.image_url || product.image);
+        }
+
+        // Add images from ProductImage model (your backend structure)
+        if (product.product_images && Array.isArray(product.product_images)) {
+            images.push(...product.product_images.map(img => img.image));
+        }
+
+        // Fallback: check for images array (different backend structures)
+        if (product.images && Array.isArray(product.images)) {
+            images.push(...product.images.map(img => img.url || img.image || img));
+        }
+
+        // Additional images field
+        if (product.additional_images && Array.isArray(product.additional_images)) {
+            images.push(...product.additional_images.map(img => img.url || img.image || img));
+        }
+
+        // Remove duplicates and empty values
+        const uniqueImages = [...new Set(images.filter(img => img))];
+
+        setProductImages(uniqueImages);
+        setCurrentImageIndex(0);
+        setSelectedImage(uniqueImages[0] || '');
+        setIsImageModalOpen(true);
+    };
+
+    const nextImage = () => {
+        if (productImages.length > 1) {
+            const nextIndex = (currentImageIndex + 1) % productImages.length;
+            setCurrentImageIndex(nextIndex);
+            setSelectedImage(productImages[nextIndex]);
+        }
+    };
+
+    const prevImage = () => {
+        if (productImages.length > 1) {
+            const prevIndex = currentImageIndex === 0 ? productImages.length - 1 : currentImageIndex - 1;
+            setCurrentImageIndex(prevIndex);
+            setSelectedImage(productImages[prevIndex]);
+        }
+    };
+
+    const goToImage = (index) => {
+        setCurrentImageIndex(index);
+        setSelectedImage(productImages[index]);
     };
 
     useEffect(() => {
@@ -230,12 +420,10 @@ const AdminProductsPage = () => {
         // Category filter
         if (categoryFilter !== 'all' && categoryFilter !== '') {
             filtered = filtered.filter(p => {
-                // Handle both cases: category as ID or as object
                 const productCategoryId = typeof p.category === 'object' ? p.category?.id : p.category;
                 return productCategoryId === parseInt(categoryFilter);
             });
         }
-
 
         // Sorting
         filtered.sort((a, b) => {
@@ -270,7 +458,45 @@ const AdminProductsPage = () => {
         setEditingProduct(product);
         if (product) {
             setProductFormData({ ...product });
-            setImagePreview(product.image_url || '');
+
+            // Handle existing images and create ordered structure
+            const existingImgs = [];
+
+            // Main product image
+            if (product.image_url || product.image) {
+                existingImgs.push(product.image_url || product.image);
+            }
+
+            // Images from ProductImage model (your backend structure)
+            if (product.product_images && Array.isArray(product.product_images)) {
+                existingImgs.push(...product.product_images.map(img => img.image));
+            }
+
+            // Fallback for other image fields
+            if (product.images && Array.isArray(product.images)) {
+                existingImgs.push(...product.images.map(img => img.url || img.image || img));
+            }
+
+            if (product.additional_images && Array.isArray(product.additional_images)) {
+                existingImgs.push(...product.additional_images.map(img => img.url || img.image || img));
+            }
+
+            // Remove duplicates and empty values
+            const uniqueExistingImages = [...new Set(existingImgs.filter(img => img))];
+
+            // Create ordered images structure
+            const orderedImgs = uniqueExistingImages.map((img, index) => ({
+                id: `existing-${index}`,
+                src: img,
+                type: 'existing',
+                order: index,
+                originalIndex: index
+            }));
+
+            setExistingImages(uniqueExistingImages);
+            setImagePreview(uniqueExistingImages[0] || '');
+            setImagePreviews(uniqueExistingImages);
+            setOrderedImages(orderedImgs);
         } else {
             setProductFormData({
                 name: '',
@@ -284,9 +510,13 @@ const AdminProductsPage = () => {
                 is_featured: false,
                 weight: 0,
             });
+            setExistingImages([]);
             setImagePreview('');
+            setImagePreviews([]);
+            setOrderedImages([]);
         }
         setImageFile(null);
+        setImageFiles([]);
         setIsModalOpen(true);
     };
 
@@ -295,7 +525,11 @@ const AdminProductsPage = () => {
         setEditingProduct(null);
         setProductFormData({});
         setImageFile(null);
+        setImageFiles([]);
         setImagePreview('');
+        setImagePreviews([]);
+        setExistingImages([]);
+        setOrderedImages([]);
     };
 
     const handleFormChange = (e) => {
@@ -308,28 +542,106 @@ const AdminProductsPage = () => {
         }));
     };
 
+    const removeOrderedImage = async (imageId) => {
+        const imageToRemove = orderedImages.find(img => img.id === imageId);
+
+        if (imageToRemove.type === 'existing' && editingProduct) {
+            try {
+                // Try to find the image ID if it's a ProductImage
+                let backendImageId = null;
+
+                // Check if this image is from product_images array
+                if (editingProduct.product_images) {
+                    const imageObj = editingProduct.product_images.find(img => img.image === imageToRemove.src);
+                    if (imageObj) {
+                        backendImageId = imageObj.id;
+                    }
+                }
+
+                if (backendImageId) {
+                    // Delete from backend using the endpoint you have
+                    await API.delete(`/admin/products/${editingProduct.id}/remove-image/${backendImageId}/`);
+                }
+
+                // Update local state
+                setExistingImages(prev => prev.filter(img => img !== imageToRemove.src));
+                setImagePreviews(prev => prev.filter(img => img !== imageToRemove.src));
+
+                // Refresh product data
+                fetchProducts();
+            } catch (error) {
+                console.error('Error removing image:', error);
+                setError('خطا در حذف تصویر');
+            }
+        }
+
+        // Remove from ordered images and reorder
+        const newOrderedImages = orderedImages
+            .filter(img => img.id !== imageId)
+            .map((img, index) => ({ ...img, order: index }));
+
+        setOrderedImages(newOrderedImages);
+
+        // Update imageFiles if it's a new image
+        if (imageToRemove.type === 'new') {
+            const newImageFiles = imageFiles.filter((_, i) => imageToRemove.id !== `new-${i}`);
+            setImageFiles(newImageFiles);
+        }
+    };
+
     const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            // Check file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-            const maxSize = 5 * 1024 * 1024; // 5MB
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const maxSize = 5 * 1024 * 1024; // 5MB per file
+        const maxFiles = 5; // Maximum 5 images
+
+        // Validate files
+        const validFiles = [];
+        const previews = [];
+
+        for (let i = 0; i < Math.min(files.length, maxFiles); i++) {
+            const file = files[i];
 
             if (!allowedTypes.includes(file.type)) {
-                setError('فرمت فایل پشتیبانی نمی‌شود. لطفا فایل JPEG، PNG، GIF یا WebP انتخاب کنید.');
-                e.target.value = ''; // Clear the input
-                return;
+                setError(`فایل ${file.name}: فرمت پشتیبانی نمی‌شود. لطفا فایل JPEG، PNG، GIF یا WebP انتخاب کنید.`);
+                continue;
             }
 
             if (file.size > maxSize) {
-                setError('حجم فایل نباید بیشتر از 5 مگابایت باشد.');
-                e.target.value = ''; // Clear the input
-                return;
+                setError(`فایل ${file.name}: حجم نباید بیشتر از 5 مگابایت باشد.`);
+                continue;
             }
 
-            setImageFile(file);
-            setImagePreview(URL.createObjectURL(file));
-            setError(''); // Clear any previous errors
+            validFiles.push(file);
+            previews.push(URL.createObjectURL(file));
+        }
+
+        if (validFiles.length > 0) {
+            if (validFiles.length === 1) {
+                // Single file - maintain backward compatibility
+                setImageFile(validFiles[0]);
+                setImagePreview(previews[0]);
+            }
+
+            // Multiple files - add to ordered images
+            const newOrderedImages = [...orderedImages];
+            const startIndex = newOrderedImages.length;
+
+            validFiles.forEach((file, index) => {
+                newOrderedImages.push({
+                    id: `new-${startIndex + index}`,
+                    src: URL.createObjectURL(file),
+                    type: 'new',
+                    file: file,
+                    order: startIndex + index
+                });
+            });
+
+            setImageFiles([...imageFiles, ...validFiles]);
+            setOrderedImages(newOrderedImages);
+            setError('');
         }
     };
 
@@ -337,13 +649,10 @@ const AdminProductsPage = () => {
         e.preventDefault();
         const formData = new FormData();
 
-        // List of fields to exclude when sending to backend
-        const excludeFields = ['image_url', 'id', 'created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'days_since_created', 'category_name', 'category_details'];
+        const excludeFields = ['image_url', 'images', 'additional_images', 'id', 'created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'days_since_created', 'category_name', 'category_details'];
 
-        // Add only the fields that should be sent to backend
         Object.keys(productFormData).forEach(key => {
             if (!excludeFields.includes(key) && productFormData[key] !== null && productFormData[key] !== undefined) {
-                // Handle category field specially - ensure it's a number or null
                 if (key === 'category') {
                     const categoryValue = productFormData[key];
                     if (categoryValue !== null && categoryValue !== '') {
@@ -355,20 +664,45 @@ const AdminProductsPage = () => {
             }
         });
 
-        // Only append image if a new file was selected
-        if (imageFile) {
-            formData.append('image', imageFile);
+        // Handle images in order
+        const orderedNewImages = orderedImages
+            .filter(img => img.type === 'new')
+            .sort((a, b) => a.order - b.order);
+
+        const orderedExistingImages = orderedImages
+            .filter(img => img.type === 'existing')
+            .sort((a, b) => a.order - b.order)
+            .map(img => img.src);
+
+        // Add new images in the correct order
+        orderedNewImages.forEach((imageObj, index) => {
+            if (imageObj.file) {
+                formData.append(`images`, imageObj.file);
+            }
+        });
+
+        // Send image order information
+        const imageOrderData = orderedImages.map((img, index) => ({
+            type: img.type,
+            src: img.type === 'existing' ? img.src : null,
+            order: index,
+            is_primary: index === 0 // First image is primary
+        }));
+
+        formData.append('image_order', JSON.stringify(imageOrderData));
+
+        // Send existing images that should be kept
+        if (orderedExistingImages.length > 0) {
+            formData.append('existing_images', JSON.stringify(orderedExistingImages));
         }
 
         const url = editingProduct ? `/admin/products/${editingProduct.id}/` : '/admin/products/';
         const method = editingProduct ? 'patch' : 'post';
 
         try {
-
-            const response = await API[method](url, formData, {
+            await API[method](url, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-
             fetchProducts();
             handleCloseModal();
         } catch (err) {
@@ -376,6 +710,8 @@ const AdminProductsPage = () => {
             setError(`خطا در ذخیره محصول: ${JSON.stringify(err.response?.data)}`);
         }
     };
+
+    // ... rest of your existing functions remain the same (handleToggleStatus, handleToggleFeatured, etc.) ...
 
     const handleToggleStatus = async (product) => {
         try {
@@ -488,7 +824,7 @@ const AdminProductsPage = () => {
     ];
 
     const categoryOptions = [
-        { value: 'all', label: 'همه دسته‌ها' }, // Change empty string to 'all'
+        { value: 'all', label: 'همه دسته‌ها' },
         ...categories.map(cat => ({
             value: cat.id,
             label: cat.display_name || cat.name
@@ -505,9 +841,9 @@ const AdminProductsPage = () => {
 
     if (loading) {
         return (
-            <div className="admin-products-page">
-                <div className="loading-container">
-                    <div className="loading-spinner"></div>
+            <div className="admin-products-main">
+                <div className="admin-products-loading">
+                    <div className="admin-products-spinner"></div>
                     <p>در حال بارگیری محصولات...</p>
                 </div>
             </div>
@@ -515,20 +851,20 @@ const AdminProductsPage = () => {
     }
 
     return (
-        <div className="admin-products-page" dir="rtl">
+        <div className="admin-products-main" dir="rtl">
             {/* Header */}
-            <div className="page-header">
-                <div className="header-content">
-                    <div className="title-section">
-                        <h1 className="page-title">
-                            <Package className="title-icon" />
+            <div className="admin-products-header">
+                <div className="admin-products-header-content">
+                    <div className="admin-products-title-section">
+                        <h1 className="admin-products-title">
+                            <Package className="admin-products-title-icon" />
                             مدیریت محصولات
                         </h1>
-                        <p className="page-subtitle">
+                        <p className="admin-products-subtitle">
                             {filteredProducts.length} محصول از مجموع {products.length} محصول
                         </p>
                     </div>
-                    <div className="header-actions">
+                    <div className="admin-products-header-actions">
                         <NeoBrutalistButton
                             text="+ افزودن محصول جدید"
                             color="green-400"
@@ -546,7 +882,7 @@ const AdminProductsPage = () => {
             </div>
 
             {error && (
-                <div className="error-banner">
+                <div className="admin-products-error-banner">
                     <AlertTriangle size={20} />
                     <span>{error}</span>
                     <button onClick={() => setError('')}>×</button>
@@ -554,45 +890,44 @@ const AdminProductsPage = () => {
             )}
 
             {/* Statistics Cards */}
-            <div className="stats-section">
-                <div className="stats-grid">
-                    <NeoBrutalistCard className="stat-card total" onClick={() => { setStatusFilter('all'); setStockFilter('all'); }}>
-                        <div className="stat-content">
-                            <Package className="stat-icon" />
-                            <div className="stat-info">
-                                <span className="stat-number">{productStats.total}</span>
-                                <span className="stat-label">کل محصولات</span>
+            <div className="admin-products-stats-section">
+                <div className="admin-products-stats-grid">
+                    <NeoBrutalistCard className="admin-products-stat-card admin-products-stat-total" onClick={() => { setStatusFilter('all'); setStockFilter('all'); }}>
+                        <div className="admin-products-stat-content">
+                            <Package className="admin-products-stat-icon" />
+                            <div className="admin-products-stat-info">
+                                <span className="admin-products-stat-number">{productStats.total}</span>
+                                <span className="admin-products-stat-label">کل محصولات</span>
                             </div>
                         </div>
                     </NeoBrutalistCard>
 
-                    <NeoBrutalistCard className="stat-card active" onClick={() => setStatusFilter('active')}>
-                        <div className="stat-content">
-                            <CheckCircle className="stat-icon" />
-                            <div className="stat-info">
-                                <span className="stat-number">{productStats.active}</span>
-                                <span className="stat-label">فعال</span>
+                    <NeoBrutalistCard className="admin-products-stat-card admin-products-stat-active" onClick={() => setStatusFilter('active')}>
+                        <div className="admin-products-stat-content">
+                            <CheckCircle className="admin-products-stat-icon" />
+                            <div className="admin-products-stat-info">
+                                <span className="admin-products-stat-number">{productStats.active}</span>
+                                <span className="admin-products-stat-label">فعال</span>
                             </div>
                         </div>
                     </NeoBrutalistCard>
 
-                    <NeoBrutalistCard className="stat-card warning" onClick={() => setStockFilter('low_stock')}>
-                        <div className="stat-content">
-                            <AlertTriangle className="stat-icon" />
-                            <div className="stat-info">
-                                <span className="stat-number">{productStats.lowStock}</span>
-                                <span className="stat-label">موجودی کم</span>
+                    <NeoBrutalistCard className="admin-products-stat-card admin-products-stat-warning" onClick={() => setStockFilter('low_stock')}>
+                        <div className="admin-products-stat-content">
+                            <AlertTriangle className="admin-products-stat-icon" />
+                            <div className="admin-products-stat-info">
+                                <span className="admin-products-stat-number">{productStats.lowStock}</span>
+                                <span className="admin-products-stat-label">موجودی کم</span>
                             </div>
                         </div>
                     </NeoBrutalistCard>
 
-
-                    <NeoBrutalistCard className="stat-card value">
-                        <div className="stat-content">
-                            <DollarSign className="stat-icon" />
-                            <div className="stat-info">
-                                <span className="stat-number">{formatTotalValue(productStats.totalValue)}</span>
-                                <span className="stat-label">ارزش کل موجودی</span>
+                    <NeoBrutalistCard className="admin-products-stat-card admin-products-stat-value">
+                        <div className="admin-products-stat-content">
+                            <DollarSign className="admin-products-stat-icon" />
+                            <div className="admin-products-stat-info">
+                                <span className="admin-products-stat-number">{formatTotalValue(productStats.totalValue)}</span>
+                                <span className="admin-products-stat-label">ارزش کل موجودی</span>
                             </div>
                         </div>
                     </NeoBrutalistCard>
@@ -600,8 +935,8 @@ const AdminProductsPage = () => {
             </div>
 
             {/* Filters Section */}
-            <NeoBrutalistCard className="filters-card">
-                <div className="filters-header">
+            <NeoBrutalistCard className="admin-products-filters-card">
+                <div className="admin-products-filters-header">
                     <h3>
                         <Filter size={20} />
                         فیلترها و جستجو
@@ -614,14 +949,14 @@ const AdminProductsPage = () => {
                     />
                 </div>
 
-                <div className="filters-grid">
-                    <div className="search-wrapper">
-                        <Search className="search-icon" />
+                <div className="admin-products-filters-grid">
+                    <div className="admin-products-search-wrapper">
+                        <Search className="admin-products-search-icon" />
                         <NeoBrutalistInput
                             placeholder="جستجو در نام، توضیحات یا دسته..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="search-input"
+                            className="admin-products-search-input"
                         />
                     </div>
 
@@ -656,9 +991,9 @@ const AdminProductsPage = () => {
 
                 {/* Bulk Actions */}
                 {showBulkActions && (
-                    <div className="bulk-actions">
+                    <div className="admin-products-bulk-actions">
                         <span>{selectedProducts.length} محصول انتخاب شده</span>
-                        <div className="bulk-buttons">
+                        <div className="admin-products-bulk-buttons">
                             <NeoBrutalistButton
                                 text="فعال کردن"
                                 color="green-400"
@@ -683,9 +1018,9 @@ const AdminProductsPage = () => {
             </NeoBrutalistCard>
 
             {/* Products Header */}
-            <NeoBrutalistCard className="table-header">
-                <div className="table-header-content">
-                    <label className="select-all-wrapper">
+            <NeoBrutalistCard className="admin-products-table-header">
+                <div className="admin-products-table-header-content">
+                    <label className="admin-products-select-all-wrapper">
                         <input
                             type="checkbox"
                             checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
@@ -694,7 +1029,7 @@ const AdminProductsPage = () => {
                         انتخاب همه
                     </label>
                     <span>نمایش {filteredProducts.length} محصول</span>
-                    <div className="view-toggles">
+                    <div className="admin-products-view-toggles">
                         <NeoBrutalistButton
                             text="📋 لیست"
                             color="blue-400"
@@ -705,28 +1040,51 @@ const AdminProductsPage = () => {
             </NeoBrutalistCard>
 
             {/* Products Grid */}
-            <div className="products-grid">
+            <div className="admin-products-grid">
                 {filteredProducts.map(product => {
                     const stockStatus = getStockStatus(product.stock);
                     return (
                         <NeoBrutalistCard
-                    key={product.id}
-                    className={`product-card ${!product.is_active ? 'inactive' : ''} ${product.is_featured ? 'featured' : ''}`}
-                >
-                            <div className="card-header">
-                                {/* Product image with overlays */}
-                                <div className="product-image">
+                            key={product.id}
+                            className={`admin-products-card ${!product.is_active ? 'admin-products-card-inactive' : ''} ${product.is_featured ? 'admin-products-card-featured' : ''}`}
+                        >
+                            <div className="admin-products-card-header">
+                                {/* Product image with navigation */}
+                                <div className="admin-products-image-container">
                                     <img
-                                        src={product.image_url || 'https://placehold.co/400x200/e2e8f0/a0aec0?text=No+Image'}
+                                        src={getCurrentCardImage(product)}
                                         alt={product.name}
-                                        onClick={() => {
-                                            setSelectedImage(product.image_url);
-                                            setIsImageModalOpen(true);
-                                        }}
+                                        className="admin-products-image"
+                                        onClick={() => openImageModal(product)}
                                     />
 
+                                    {/* Image Navigation Controls */}
+                                    {getProductImages(product).length > 1 && (
+                                        <>
+                                            <button
+                                                className="admin-products-card-nav-button admin-products-card-prev-button"
+                                                onClick={(e) => prevCardImage(product.id, e)}
+                                                title="تصویر قبلی"
+                                            >
+                                                <ChevronLeft size={20} />
+                                            </button>
+                                            <button
+                                                className="admin-products-card-nav-button admin-products-card-next-button"
+                                                onClick={(e) => nextCardImage(product.id, e)}
+                                                title="تصویر بعدی"
+                                            >
+                                                <ChevronRight size={20} />
+                                            </button>
+
+                                            {/* Image Counter */}
+                                            <div className="admin-products-card-image-counter">
+                                                {(cardImageIndices[product.id] || 0) + 1} / {getProductImages(product).length}
+                                            </div>
+                                        </>
+                                    )}
+
                                     {/* Checkbox overlay - top left */}
-                                    <label className="product-select-overlay">
+                                    <label className="admin-products-select-overlay">
                                         <input
                                             type="checkbox"
                                             checked={selectedProducts.includes(product.id)}
@@ -735,117 +1093,117 @@ const AdminProductsPage = () => {
                                     </label>
 
                                     {/* Status tags overlay - top right */}
-                                    <div className="product-tags-overlay">
-            <span className={`tag status-tag ${product.is_active ? 'active' : 'inactive'}`}>
-                {product.is_active ? (
-                    <><CheckCircle size={12} /> فعال</>
-                ) : (
-                    <><XCircle size={12} /> غیرفعال</>
-                )}
-            </span>
-                                        <span className={`tag stock-tag ${stockStatus.status}`}>
-                {stockStatus.label}
-            </span>
+                                    <div className="admin-products-tags-overlay">
+                                        <span className={`admin-products-tag admin-products-status-tag ${product.is_active ? 'admin-products-active' : 'admin-products-inactive'}`}>
+                                            {product.is_active ? (
+                                                <><CheckCircle size={12} /> فعال</>
+                                            ) : (
+                                                <><XCircle size={12} /> غیرفعال</>
+                                            )}
+                                        </span>
+                                        <span className={`admin-products-tag admin-products-stock-tag ${stockStatus.status}`}>
+                                            {stockStatus.label}
+                                        </span>
                                     </div>
 
                                     {/* Featured badge - bottom right */}
                                     {product.is_featured && (
-                                        <div className="featured-badge">
+                                        <div className="admin-products-featured-badge">
                                             <Star size={16} />
                                         </div>
                                     )}
                                 </div>
                             </div>
 
-                    <div className="product-info">
-                        <h3 className="product-name">{product.name}</h3>
-                        {getCategoryDisplayName(product) && (
-                            <span className={`product-category-tiny ${getCategoryClass(product)}`}>
-                {getCategoryDisplayName(product)}
-            </span>
-                        )}
-                        <p className="product-description">
-                            {product.description ? (
-                                product.description.length > 150
-                                    ? `${product.description.substring(0, 150)}...`
-                                    : product.description
-                            ) : 'توضیحاتی برای این محصول ثبت نشده است.'}
-                        </p>
-                    </div>
-
-                    <div className="product-details">
-                        <div className="detail-row">
-                            <span className="detail-label">قیمت پایه:</span>
-                            <span className="detail-value price">
-                {product.base_price.toLocaleString('fa-IR')} ریال
-            </span>
-                        </div>
-                        <div className="detail-row">
-                            <span className="detail-label">نرخ مالیات:</span>
-                            <span className="detail-value tax-rate">
-                {product.tax_rate ? `${parseFloat(product.tax_rate).toFixed(1)}%` : '0%'}
-            </span>
-                        </div>
-                        {product.tax_rate && product.tax_rate > 0 && (
-                            <div className="detail-row">
-                                <span className="detail-label">قیمت با مالیات:</span>
-                                <span className="detail-value price-with-tax">
-                    {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
-                </span>
+                            <div className="admin-products-info">
+                                <h3 className="admin-products-name">{product.name}</h3>
+                                {getCategoryDisplayName(product) && (
+                                    <span className={`admin-products-category-tag ${getCategoryClass(product)}`}>
+                                        {getCategoryDisplayName(product)}
+                                    </span>
+                                )}
+                                <p className="admin-products-description">
+                                    {product.description ? (
+                                        product.description.length > 150
+                                            ? `${product.description.substring(0, 150)}...`
+                                            : product.description
+                                    ) : 'توضیحاتی برای این محصول ثبت نشده است.'}
+                                </p>
                             </div>
-                        )}
-                        <div className="detail-row">
-                            <span className="detail-label">موجودی:</span>
-                            <span className="detail-value price">
-                {product.stock.toLocaleString()}
-            </span>
-                        </div>
-                        {product.origin && (
-                            <div className="detail-row">
-                                <span className="detail-label">مبدا:</span>
-                                <span className="detail-value">{product.origin}</span>
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="product-actions">
-                        <div className="toggle-actions">
-                            <NeoBrutalistToggle
-                                checked={product.is_active}
-                                onChange={() => handleToggleStatus(product)}
-                                label="فعال"
-                            />
-                            <NeoBrutalistToggle
-                                checked={product.is_featured}
-                                onChange={() => handleToggleFeatured(product)}
-                                label="ویژه"
-                            />
-                        </div>
-                        <div className="action-buttons-container">
-                            <NeoBrutalistButton
-                                text="ویرایش"
-                                color="blue-400"
-                                textColor="white"
-                                onClick={() => handleOpenModal(product)}
-                            />
-                            <NeoBrutalistButton
-                                text="حذف"
-                                color="red-400"
-                                textColor="white"
-                                onClick={() => handleDeleteProduct(product.id)}
-                            />
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
+                            <div className="admin-products-details">
+                                <div className="admin-products-detail-row">
+                                    <span className="admin-products-detail-label">قیمت پایه:</span>
+                                    <span className="admin-products-detail-value admin-products-price">
+                                        {product.base_price.toLocaleString('fa-IR')} ریال
+                                    </span>
+                                </div>
+                                <div className="admin-products-detail-row">
+                                    <span className="admin-products-detail-label">نرخ مالیات:</span>
+                                    <span className="admin-products-detail-value admin-products-tax-rate">
+                                        {product.tax_rate ? `${parseFloat(product.tax_rate).toFixed(1)}%` : '0%'}
+                                    </span>
+                                </div>
+                                {product.tax_rate && product.tax_rate > 0 && (
+                                    <div className="admin-products-detail-row">
+                                        <span className="admin-products-detail-label">قیمت با مالیات:</span>
+                                        <span className="admin-products-detail-value admin-products-price-with-tax">
+                                            {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="admin-products-detail-row">
+                                    <span className="admin-products-detail-label">موجودی:</span>
+                                    <span className="admin-products-detail-value admin-products-stock-value">
+                                        {product.stock.toLocaleString()}
+                                    </span>
+                                </div>
+                                {product.origin && (
+                                    <div className="admin-products-detail-row">
+                                        <span className="admin-products-detail-label">مبدا:</span>
+                                        <span className="admin-products-detail-value">{product.origin}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="admin-products-actions">
+                                <div className="admin-products-toggle-actions">
+                                    <NeoBrutalistToggle
+                                        checked={product.is_active}
+                                        onChange={() => handleToggleStatus(product)}
+                                        label="فعال"
+                                    />
+                                    <NeoBrutalistToggle
+                                        checked={product.is_featured}
+                                        onChange={() => handleToggleFeatured(product)}
+                                        label="ویژه"
+                                    />
+                                </div>
+                                <div className="admin-products-action-buttons">
+                                    <NeoBrutalistButton
+                                        text={<><Edit size={16} /> ویرایش</>}
+                                        color="blue-400"
+                                        textColor="white"
+                                        onClick={() => handleOpenModal(product)}
+                                    />
+                                    <NeoBrutalistButton
+                                        text={<><Trash2 size={16} /> حذف</>}
+                                        color="red-400"
+                                        textColor="white"
+                                        onClick={() => handleDeleteProduct(product.id)}
+                                    />
+                                </div>
+                            </div>
+                        </NeoBrutalistCard>
                     );
                 })}
             </div>
 
             {/* Empty State */}
             {filteredProducts.length === 0 && !loading && (
-                <NeoBrutalistCard className="empty-state-card">
-                    <div className="empty-content">
-                        <Package size={48} className="empty-icon" />
+                <NeoBrutalistCard className="admin-products-empty-state">
+                    <div className="admin-products-empty-content">
+                        <Package size={48} className="admin-products-empty-icon" />
                         <h3>محصولی یافت نشد</h3>
                         <p>
                             {products.length === 0
@@ -865,16 +1223,16 @@ const AdminProductsPage = () => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Product Modal */}
+            {/* Enhanced Product Modal with Drag & Drop */}
             <NeoBrutalistModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
                 title={editingProduct ? 'ویرایش محصول' : 'افزودن محصول جدید'}
                 size="large"
             >
-                <form onSubmit={handleFormSubmit} className="product-form">
-                    <div className="form-row">
-                        <div className="form-group">
+                <form onSubmit={handleFormSubmit} className="admin-products-form">
+                    <div className="admin-products-form-row">
+                        <div className="admin-products-form-group">
                             <label>نام محصول</label>
                             <NeoBrutalistInput
                                 name="name"
@@ -883,7 +1241,7 @@ const AdminProductsPage = () => {
                                 required
                             />
                         </div>
-                        <div className="form-group">
+                        <div className="admin-products-form-group">
                             <label>دسته‌بندی</label>
                             <NeoBrutalistDropdown
                                 label=""
@@ -897,20 +1255,20 @@ const AdminProductsPage = () => {
                         </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className="admin-products-form-group">
                         <label>توضیحات</label>
                         <textarea
                             name="description"
                             value={productFormData.description || ''}
                             onChange={handleFormChange}
                             rows="4"
-                            className="form-textarea"
+                            className="admin-products-form-textarea"
                             placeholder="توضیحات کامل محصول..."
                         ></textarea>
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
+                    <div className="admin-products-form-row">
+                        <div className="admin-products-form-group">
                             <label>موجودی اولیه</label>
                             <NeoBrutalistInput
                                 type="number"
@@ -920,7 +1278,7 @@ const AdminProductsPage = () => {
                                 required
                             />
                         </div>
-                        <div className="form-group">
+                        <div className="admin-products-form-group">
                             <label>قیمت پایه (ریال)</label>
                             <NeoBrutalistInput
                                 type="number"
@@ -932,9 +1290,8 @@ const AdminProductsPage = () => {
                         </div>
                     </div>
 
-
-                    <div className="form-row">
-                        <div className="form-group">
+                    <div className="admin-products-form-row">
+                        <div className="admin-products-form-group">
                             <label>مبدا</label>
                             <NeoBrutalistInput
                                 name="origin"
@@ -942,7 +1299,7 @@ const AdminProductsPage = () => {
                                 onChange={handleFormChange}
                             />
                         </div>
-                        <div className="form-group">
+                        <div className="admin-products-form-group">
                             <label>وزن (کیلوگرم)</label>
                             <NeoBrutalistInput
                                 type="number"
@@ -953,8 +1310,9 @@ const AdminProductsPage = () => {
                             />
                         </div>
                     </div>
-                    <div className="form-row">
-                        <div className="form-group">
+
+                    <div className="admin-products-form-row">
+                        <div className="admin-products-form-group">
                             <label>نرخ مالیات (%)</label>
                             <NeoBrutalistInput
                                 type="number"
@@ -966,51 +1324,288 @@ const AdminProductsPage = () => {
                                 onChange={handleFormChange}
                                 placeholder="9.00"
                             />
-                            <small className="form-help-text">
-                                نرخ مالیات این محصول به درصد (مثال: 10.00 برای 10٪)
+                            <small className="admin-products-form-help">
+                                نرخ مالیات این محصول به درصد (مثال: 10.00 برای 10%)
                             </small>
                         </div>
 
                         {productFormData.base_price > 0 && productFormData.tax_rate > 0 && (
-                            <div className="form-group">
+                            <div className="admin-products-form-group">
                                 <label>پیش‌نمایش قیمت با مالیات</label>
-                                <div className="price-preview">
-                                    <span className="preview-base">قیمت پایه: {formatPrice(productFormData.base_price)}</span>
-                                    <span className="preview-tax">
+                                <div className="admin-products-price-preview">
+                                    <span className="admin-products-preview-base">قیمت پایه: {formatPrice(productFormData.base_price)}</span>
+                                    <span className="admin-products-preview-tax">
                                         مالیات ({productFormData.tax_rate}%): {formatPrice(productFormData.base_price * productFormData.tax_rate / 100)}
                                     </span>
-                                    <span className="preview-total">
-                    قیمت نهایی:                  {formatPrice(productFormData.base_price * (1 + productFormData.tax_rate / 100))}
+                                    <span className="admin-products-preview-total">
+                                        قیمت نهایی: {formatPrice(productFormData.base_price * (1 + productFormData.tax_rate / 100))}
                                     </span>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <div className="form-group">
-                        <label>تصویر محصول</label>
+                    {/* Enhanced Image Management Section */}
+                    <div className="admin-products-form-group">
+                        <label>تصاویر محصول</label>
                         <input
                             type="file"
                             onChange={handleFileChange}
                             accept="image/*"
-                            className="file-input"
+                            multiple
+                            className="admin-products-file-input"
                         />
-                        {imagePreview && (
-                            <div className="image-preview-container">
-                                <img src={imagePreview} alt="Preview" className="image-preview" />
+                        <small className="admin-products-form-help">
+                            می‌توانید حداکثر 5 تصویر انتخاب کنید. هر تصویر حداکثر 5 مگابایت باشد.
+                            <br />
+                            <strong>تصویر اول به عنوان تصویر اصلی نمایش داده می‌شود.</strong> برای تغییر ترتیب، تصاویر را بکشید و رها کنید.
+                        </small>
+
+                        {/* Drag & Drop Image Ordering Section */}
+                        {orderedImages.length > 0 && (
+                            <div className="admin-products-image-ordering">
+                                <h4 style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    margin: '20px 0 12px 0',
+                                    fontSize: '1rem',
+                                    fontWeight: '700',
+                                    color: '#374151'
+                                }}>
+                                    <Move size={16} />
+                                    ترتیب نمایش تصاویر (تصویر اول = تصویر اصلی)
+                                </h4>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                    gap: '16px',
+                                    marginBottom: '16px',
+                                    padding: '16px',
+                                    background: '#f8fafc',
+                                    border: '3px solid #000',
+                                    borderRadius: '8px'
+                                }}>
+                                    {orderedImages.map((imageObj, index) => (
+                                        <div
+                                            key={imageObj.id}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, index)}
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={handleDragOver}
+                                            onDragEnter={(e) => handleDragEnter(e, index)}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={(e) => handleDrop(e, index)}
+                                            style={{
+                                                position: 'relative',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                padding: '12px',
+                                                background: index === 0 ? '#dbeafe' : '#ffffff',
+                                                border: `4px solid ${
+                                                    index === 0 ? '#3b82f6' :
+                                                        draggedOver === index ? '#10b981' : '#000'
+                                                }`,
+                                                borderRadius: '8px',
+                                                cursor: 'move',
+                                                transition: 'all 0.3s ease',
+                                                transform: draggedIndex === index ? 'scale(0.95) rotate(5deg)' : 'scale(1)',
+                                                boxShadow: draggedIndex === index ? '8px 8px 0px rgba(0,0,0,0.3)' : '4px 4px 0px rgba(0,0,0,0.2)',
+                                                opacity: draggedIndex === index ? 0.7 : 1
+                                            }}
+                                        >
+                                            {/* Image Order Badge */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-8px',
+                                                left: '-8px',
+                                                width: '28px',
+                                                height: '28px',
+                                                background: index === 0 ? '#3b82f6' : '#64748b',
+                                                color: 'white',
+                                                borderRadius: '50%',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '900',
+                                                border: '3px solid #000',
+                                                zIndex: 10
+                                            }}>
+                                                {index + 1}
+                                            </div>
+
+                                            {/* Primary Badge */}
+                                            {index === 0 && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '-8px',
+                                                    right: '-8px',
+                                                    background: '#f59e0b',
+                                                    color: 'white',
+                                                    padding: '4px 8px',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: '800',
+                                                    border: '2px solid #000',
+                                                    borderRadius: '4px',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '1px',
+                                                    zIndex: 10
+                                                }}>
+                                                    اصلی
+                                                </div>
+                                            )}
+
+                                            {/* Drag Handle */}
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '8px',
+                                                right: '8px',
+                                                color: '#64748b',
+                                                cursor: 'move',
+                                                padding: '4px',
+                                                background: 'rgba(255, 255, 255, 0.9)',
+                                                borderRadius: '4px',
+                                                zIndex: 9
+                                            }}>
+                                                <GripVertical size={16} />
+                                            </div>
+
+                                            {/* Image */}
+                                            <img
+                                                src={imageObj.src}
+                                                alt={`Product ${index + 1}`}
+                                                style={{
+                                                    width: '120px',
+                                                    height: '120px',
+                                                    objectFit: 'cover',
+                                                    borderRadius: '4px',
+                                                    marginBottom: '8px',
+                                                    pointerEvents: 'none'
+                                                }}
+                                            />
+
+                                            {/* Image Controls */}
+                                            <div style={{
+                                                display: 'flex',
+                                                gap: '8px',
+                                                alignItems: 'center',
+                                                marginTop: '8px'
+                                            }}>
+                                                {/* Move Up Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveImageUp(index)}
+                                                    disabled={index === 0}
+                                                    style={{
+                                                        padding: '4px',
+                                                        background: index === 0 ? '#e5e7eb' : '#3b82f6',
+                                                        color: index === 0 ? '#9ca3af' : 'white',
+                                                        border: '2px solid #000',
+                                                        borderRadius: '4px',
+                                                        cursor: index === 0 ? 'not-allowed' : 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '12px',
+                                                        fontWeight: '600'
+                                                    }}
+                                                    title="انتقال به بالا"
+                                                >
+                                                    <ArrowUp size={12} />
+                                                </button>
+
+                                                {/* Move Down Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => moveImageDown(index)}
+                                                    disabled={index === orderedImages.length - 1}
+                                                    style={{
+                                                        padding: '4px',
+                                                        background: index === orderedImages.length - 1 ? '#e5e7eb' : '#3b82f6',
+                                                        color: index === orderedImages.length - 1 ? '#9ca3af' : 'white',
+                                                        border: '2px solid #000',
+                                                        borderRadius: '4px',
+                                                        cursor: index === orderedImages.length - 1 ? 'not-allowed' : 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '12px',
+                                                        fontWeight: '600'
+                                                    }}
+                                                    title="انتقال به پایین"
+                                                >
+                                                    <ArrowDown size={12} />
+                                                </button>
+
+                                                {/* Remove Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeOrderedImage(imageObj.id)}
+                                                    style={{
+                                                        padding: '4px 6px',
+                                                        background: '#ef4444',
+                                                        color: 'white',
+                                                        border: '2px solid #000',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '14px',
+                                                        fontWeight: '900',
+                                                        lineHeight: 1
+                                                    }}
+                                                    title="حذف تصویر"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+
+                                            {/* Image Type Label */}
+                                            <span style={{
+                                                fontSize: '0.7rem',
+                                                color: '#64748b',
+                                                fontWeight: '600',
+                                                textAlign: 'center',
+                                                marginTop: '4px',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.5px'
+                                            }}>
+                                                {imageObj.type === 'existing' ? 'موجود' : 'جدید'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Drag & Drop Instructions */}
+                                <div style={{
+                                    padding: '12px 16px',
+                                    background: '#f0f9ff',
+                                    border: '3px solid #3b82f6',
+                                    borderRadius: '8px',
+                                    fontSize: '0.85rem',
+                                    color: '#1e40af',
+                                    fontWeight: '600',
+                                    textAlign: 'center',
+                                    margin: '16px 0'
+                                }}>
+                                    💡 برای تغییر ترتیب: تصاویر را بگیرید و بکشید | دکمه‌های بالا/پایین را استفاده کنید | تصویر اول همیشه تصویر اصلی محصول است
+                                </div>
                             </div>
                         )}
                     </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
+                    <div className="admin-products-form-row">
+                        <div className="admin-products-form-group">
                             <NeoBrutalistToggle
                                 checked={productFormData.is_active || false}
                                 onChange={(e) => setProductFormData(prev => ({ ...prev, is_active: e.target.checked }))}
                                 label="محصول فعال باشد"
                             />
                         </div>
-                        <div className="form-group">
+                        <div className="admin-products-form-group">
                             <NeoBrutalistToggle
                                 checked={productFormData.is_featured || false}
                                 onChange={(e) => setProductFormData(prev => ({ ...prev, is_featured: e.target.checked }))}
@@ -1019,7 +1614,7 @@ const AdminProductsPage = () => {
                         </div>
                     </div>
 
-                    <div className="form-actions">
+                    <div className="admin-products-form-actions">
                         <NeoBrutalistButton
                             text="لغو"
                             color="gray-400"
@@ -1037,15 +1632,63 @@ const AdminProductsPage = () => {
                 </form>
             </NeoBrutalistModal>
 
-            {/* Image Modal */}
+            {/* Enhanced Image Modal with Navigation */}
             <NeoBrutalistModal
                 isOpen={isImageModalOpen}
                 onClose={() => setIsImageModalOpen(false)}
-                title="نمایش تصویر"
-                size="medium"
+                title="نمایش تصاویر محصول"
+                size="large"
             >
-                <div className="image-modal-content">
-                    <img src={selectedImage} alt="Product" className="modal-image" />
+                <div className="admin-products-image-modal">
+                    <div className="admin-products-image-gallery">
+                        <div className="admin-products-main-image-container">
+                            {productImages.length > 1 && (
+                                <button
+                                    className="admin-products-nav-button admin-products-prev-button"
+                                    onClick={prevImage}
+                                    disabled={productImages.length <= 1}
+                                >
+                                    <ChevronLeft size={24} />
+                                </button>
+                            )}
+
+                            <img
+                                src={selectedImage}
+                                alt="Product"
+                                className="admin-products-modal-image"
+                            />
+
+                            {productImages.length > 1 && (
+                                <button
+                                    className="admin-products-nav-button admin-products-next-button"
+                                    onClick={nextImage}
+                                    disabled={productImages.length <= 1}
+                                >
+                                    <ChevronRight size={24} />
+                                </button>
+                            )}
+                        </div>
+
+                        {productImages.length > 1 && (
+                            <div className="admin-products-image-counter">
+                                {currentImageIndex + 1} از {productImages.length}
+                            </div>
+                        )}
+
+                        {productImages.length > 1 && (
+                            <div className="admin-products-thumbnails">
+                                {productImages.map((img, index) => (
+                                    <img
+                                        key={index}
+                                        src={img}
+                                        alt={`Product ${index + 1}`}
+                                        className={`admin-products-thumbnail ${index === currentImageIndex ? 'admin-products-thumbnail-active' : ''}`}
+                                        onClick={() => goToImage(index)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </NeoBrutalistModal>
         </div>

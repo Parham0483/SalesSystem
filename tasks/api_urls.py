@@ -1,9 +1,3 @@
-# To check your current URL patterns, run this command:
-# python manage.py show_urls
-
-# But based on the error, I think your api_urls.py needs to be updated
-# Update your api_urls.py file with this corrected version:
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
@@ -12,7 +6,8 @@ from tasks.views.orders import OrderViewSet, OrderItemViewSet, view_payment_rece
 from tasks.views.invoices import InvoiceViewSet, BulkPDFGenerationView, CustomerInfoUpdateView
 from tasks.views.dealers import DealerViewSet
 from tasks.views.auth import get_csrf_token, customer_register, customer_login, customer_logout
-from tasks.views.products import ShipmentAnnouncementViewSet, ProductCategoryViewSet, ProductViewSet
+from tasks.views.products import ShipmentAnnouncementViewSet, ProductCategoryViewSet, ProductViewSet, \
+    ProductImageViewSet
 from tasks.views.admin import (
     AdminDashboardViewSet, AdminProductViewSet, AdminOrderViewSet,
     AdminCustomerViewSet, AdminDealerViewSet, AdminAnnouncementViewSet,
@@ -36,6 +31,9 @@ router.register(r'invoices', InvoiceViewSet, basename='invoice')
 router.register(r'dealers', DealerViewSet, basename='dealer')
 router.register(r'shipment-announcements', ShipmentAnnouncementViewSet, basename='shipmentannouncement')
 router.register(r'categories', ProductCategoryViewSet, basename='categories')
+
+# ADD: Register ProductImageViewSet for image management
+router.register(r'product-images', ProductImageViewSet, basename='product-images')
 
 # Admin-specific routes
 router.register(r'admin/dashboard', AdminDashboardViewSet, basename='admin-dashboard')
@@ -79,6 +77,32 @@ urlpatterns = [
     path('auth/password-reset/request/', request_password_reset, name='password_reset_request'),
     path('auth/password-reset/verify/', verify_reset_otp, name='password_reset_verify'),
     path('auth/password-reset/complete/', reset_password, name='password_reset_complete'),
+
+    # ADD: Additional endpoints for multiple product images
+    path('products/<int:pk>/add-images/',
+         ProductViewSet.as_view({'post': 'add_images'}),
+         name='product-add-images'),
+
+    path('products/<int:pk>/remove-image/<int:image_id>/',
+         ProductViewSet.as_view({'delete': 'remove_image'}),
+         name='product-remove-image'),
+
+    path('products/<int:pk>/reorder-images/',
+         ProductViewSet.as_view({'post': 'reorder_images'}),
+         name='product-reorder-images'),
+
+# In your existing urlpatterns, add:
+    path('admin/products/<int:pk>/remove-image/<int:image_id>/',
+        AdminProductViewSet.as_view({'delete': 'remove_image'}),
+        name='admin-product-remove-image'),
+
+    path('admin/products/<int:pk>/reorder-images/',
+        AdminProductViewSet.as_view({'post': 'reorder_images'}),
+        name='admin-product-reorder-images'),
+
+    path('admin/products/<int:pk>/set-primary-image/<int:image_id>/',
+        AdminProductViewSet.as_view({'post': 'set_primary_image'}),
+        name='admin-product-set-primary-image'),
 
     # API endpoints from the router
     path('', include(router.urls)),

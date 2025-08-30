@@ -25,23 +25,37 @@ DATABASES = {
     }
 }
 
-# CORS settings for production
+USE_HTTPS = os.environ.get('USE_HTTPS', 'True').lower() == 'true'
+
+if USE_HTTPS or not DEBUG:
+    # HTTPS configuration
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    USE_TLS = True
+
+    # Update session and CSRF cookies for HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HSTS settings for security
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
 CORS_ALLOWED_ORIGINS = [
     "https://gtc.market",
     "https://www.gtc.market",
-    "http://gtc.market",  # If you allow HTTP redirects
+    "http://gtc.market",  # Fallback for redirects
     "http://www.gtc.market",
     "http://localhost",
     "http://127.0.0.1",
     "http://localhost:80",
     "http://127.0.0.1:80",
-    "http://localhost:3000",  # For development
+    "http://localhost:3000",  # Development
     "http://127.0.0.1:3000",
 ]
 
-CORS_ALLOW_CREDENTIALS = True
-
-# Update CSRF settings for production
+# Update CSRF for HTTPS priority
 CSRF_TRUSTED_ORIGINS = [
     "https://gtc.market",
     "https://www.gtc.market",
@@ -52,6 +66,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:80",
     "http://127.0.0.1:80",
 ]
+
+CORS_ALLOW_CREDENTIALS = True
+
 
 # Enhanced CORS headers for production
 CORS_ALLOW_HEADERS = [
@@ -80,7 +97,11 @@ CORS_ALLOW_METHODS = [
 
 # Static files for Docker
 STATIC_ROOT = '/app/staticfiles'
-MEDIA_ROOT = '/app/media'
+if USE_HTTPS or not DEBUG:
+    MEDIA_URL = 'https://gtc.market/media/'
+else:
+    MEDIA_URL = '/media/'
+
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True

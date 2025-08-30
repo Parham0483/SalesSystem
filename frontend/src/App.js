@@ -91,7 +91,6 @@ function App() {
                     <AdminRoute><AdminOrdersPage /></AdminRoute>
                 } />
 
-                {/* You already have this for viewing a single order, maybe as a direct link */}
                 <Route path="/admin/orders/:orderId" element={
                     <AdminRoute><AdminOrderDetailPage /></AdminRoute>
                 } />
@@ -108,7 +107,7 @@ function App() {
                     <AdminRoute><div>Reports Page (To be built)</div></AdminRoute>
                 } />
 
-                {/* DEALER ROUTES - Put these BEFORE customer routes */}
+                {/* DEALER ROUTES*/}
                 <Route
                     path="/dealer"
                     element={
@@ -118,7 +117,7 @@ function App() {
                     }
                 />
 
-                {/* CUSTOMER ROUTES - Put these AFTER specific routes */}
+                {/* CUSTOMER ROUTES*/}
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/orders/create" element={<CreateOrderPage />} />
                 <Route path="/orders/:orderId" element={<OrderDetailPage />} />

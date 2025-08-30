@@ -353,19 +353,7 @@ class ProductCategory(models.Model):
         ordering = ['order', 'name']
 
 
-class ProductImage(models.Model):
-    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='additional_images')
-    image = models.ImageField(upload_to='products/additional/')
-    alt_text = models.CharField(max_length=200, blank=True)
-    order = models.IntegerField(default=0)
-    is_primary = models.BooleanField(default=False)
 
-    def __str__(self):
-        return f"Image for {self.product.name}"
-
-    class Meta:
-        db_table = 'product_images'
-        ordering = ['order']
 
 
 class Product(models.Model):
@@ -378,7 +366,7 @@ class Product(models.Model):
         help_text="Base price for reference"
     )
     stock = models.IntegerField(default=0)
-    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Primary product image")
+    image = models.ImageField(upload_to='products/', blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -463,8 +451,31 @@ class Product(models.Model):
         price = base_price or self.base_price
         return price + self.get_tax_amount_for_price(price)
 
+    def get_primary_image_url(self):
+        if self.image:
+            return self.image.url  # Fallback to single image field
+        primary_image = self.images.filter(is_primary=True).first()  # Generic primary image logic
+        if primary_image:
+            return primary_image.image.url
+        return None  # Fallback if no images at all
+
     class Meta:
         db_table = 'products'
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
+    image = models.ImageField(upload_to='products/')  # Note: different upload path
+    alt_text = models.CharField(max_length=255, blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)
+    is_primary = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"Image {self.order + 1} for {self.product.name}"
 
 
 class ShipmentAnnouncement(models.Model):

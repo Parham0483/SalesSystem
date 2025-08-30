@@ -194,7 +194,7 @@ const NewArrivalsPage = () => {
                                             {getDaysAgo(announcement.created_at)}
                                         </span>
                                         {announcement.is_featured && (
-                                            <span className="featured-badge">ویژه</span>
+                                            <span className="featured-badge-C">ویژه</span>
                                         )}
                                         {announcement.created_by_name && (
                                             <span className="author-badge">
@@ -411,14 +411,6 @@ const NewArrivalsPage = () => {
                             }}
                             className="quick-action-btn"
                         />
-
-                        {!isDealer && (<NeoBrutalistButton
-                            text="📨 سفارشات "
-                            color="purple-400"
-                            textColor="white"
-                            onClick={() => navigate('/orders')}
-                            className="quick-action-btn"
-                        />)}
                     </div>
                 </NeoBrutalistCard>
             </div>

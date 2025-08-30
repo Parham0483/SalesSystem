@@ -119,6 +119,7 @@
     font-weight: bold;
     font-size: 1rem;
     margin-top: 1rem;
+    align-content: center;
 }
 
 .success-message {

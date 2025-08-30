@@ -1171,7 +1171,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 available_pdfs.append({
                     'type': 'pre_invoice',
                     'name': 'پیش فاکتور',
-                    'description': 'معتبر تا ۴۸ ساعت'
+                    'description': 'معتبر تا انتها روز کاری'
                 })
 
             if order.status in ['confirmed', 'payment_uploaded', 'completed']:

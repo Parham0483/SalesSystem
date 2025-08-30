@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
+
+from mysite import settings
 from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer, OrderPaymentReceipt
 from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
@@ -506,11 +508,18 @@ class PaymentReceiptSerializer(serializers.ModelSerializer):
                   'is_verified', 'file_url', 'download_url', 'admin_notes']
 
     def get_file_url(self, obj):
-        """Return direct media URL without authentication"""
+        """Return direct media URL with HTTPS in production"""
         if obj.receipt_file:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.receipt_file.url)
+                url = request.build_absolute_uri(obj.receipt_file.url)
+                # Force HTTPS in production
+                if not settings.DEBUG and url.startswith('http://'):
+                    url = url.replace('http://', 'https://')
+                return url
+            # Fallback to media URL
+            if hasattr(settings, 'MEDIA_URL') and settings.MEDIA_URL.startswith('https://'):
+                return settings.MEDIA_URL.rstrip('/') + obj.receipt_file.url
             return obj.receipt_file.url
         return None
 

@@ -1,3 +1,4 @@
+// Enhanced DealerDashboard.js - Add commission tracking to order cards
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../component/api';
@@ -7,6 +8,8 @@ import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton'
 import DealerOrderDetailPage from '../../component/DealerOrderDetailPage';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
 import ProfilePage from '../../component/ProfilePage';
+
+import "../../styles/component/DealerComponent/DealerDashboard.css"
 
 const DealerDashboard = () => {
     const [orders, setOrders] = useState([]);
@@ -19,6 +22,11 @@ const DealerDashboard = () => {
     const [dealerStats, setDealerStats] = useState(null);
     const [recentProducts, setRecentProducts] = useState([]);
     const [recentAnnouncements, setRecentAnnouncements] = useState([]);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // NEW: Commission data state
+    const [commissionData, setCommissionData] = useState({});
+    const [loadingCommission, setLoadingCommission] = useState(false);
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState(1);
@@ -39,12 +47,31 @@ const DealerDashboard = () => {
         fetchDealerStats();
         fetchRecentProducts();
         fetchRecentAnnouncements();
-    }, [navigate]);
+    }, [navigate, refreshKey]);
 
     // Reset to first page when tab changes
     useEffect(() => {
         setCurrentPage(1);
     }, [activeTab]);
+
+    // NEW: Fetch commission data when orders are loaded
+    useEffect(() => {
+        if (orders.length > 0) {
+            fetchCommissionData();
+        }
+    }, [orders]);
+
+    // Auto-refresh with modal awareness
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (activeTab === 'active' && !loading && !selectedOrder && !showProfileModal) {
+                console.log('Auto-refreshing orders (no modals open)');
+                fetchAssignedOrders();
+            }
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [activeTab, loading, selectedOrder, showProfileModal]);
 
     const fetchAssignedOrders = async () => {
         setLoading(true);
@@ -52,11 +79,10 @@ const DealerDashboard = () => {
 
         try {
             const response = await API.get('/orders/my-assigned-orders/');
+            console.log('📦 Assigned orders response:', response.data);
             setOrders(response.data.orders || []);
-            if (response.data.summary) {
-                // Handle summary if needed
-            }
         } catch (err) {
+            console.error('❌ Error fetching assigned orders:', err);
             if (err.response?.status === 403) {
                 setError('دسترسی رد شد. لطفاً مجدداً وارد شوید.');
                 setTimeout(() => navigate('/login'), 2000);
@@ -68,6 +94,41 @@ const DealerDashboard = () => {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    // NEW: Fetch commission data for all orders
+    const fetchCommissionData = async () => {
+        setLoadingCommission(true);
+        try {
+            const orderIds = orders.map(order => order.id).join(',');
+            const response = await API.get(`/orders/dealer-commission-bulk/?order_ids=${orderIds}`);
+
+            // Transform response to object with order_id as key
+            const commissionMap = {};
+            response.data.forEach(commission => {
+                commissionMap[commission.order_id] = commission;
+            });
+            setCommissionData(commissionMap);
+        } catch (err) {
+            console.error('Error fetching bulk commission data:', err);
+            // Fallback: use existing commission data from orders
+            const fallbackCommissionData = {};
+            orders.forEach(order => {
+                if (order.effective_commission_rate || order.dealer_commission_amount) {
+                    fallbackCommissionData[order.id] = {
+                        order_id: order.id,
+                        default_commission_rate: order.default_commission_rate || 0,
+                        effective_commission_rate: order.effective_commission_rate || 0,
+                        dealer_commission_amount: order.dealer_commission_amount || 0,
+                        commission_paid: order.commission_paid || false,
+                        commission_status: order.commission_status || 'pending'
+                    };
+                }
+            });
+            setCommissionData(fallbackCommissionData);
+        } finally {
+            setLoadingCommission(false);
         }
     };
 
@@ -106,7 +167,7 @@ const DealerDashboard = () => {
         navigate('/');
     };
 
-    // filter function with new statuses
+    // Updated filter function with new statuses
     const getFilteredOrders = () => {
         switch (activeTab) {
             case 'active':
@@ -150,13 +211,62 @@ const DealerDashboard = () => {
         return statusMap[status] || status;
     };
 
+    // FIXED: Better order click handler with validation
     const handleOrderClick = (order) => {
+        console.log('🎯 Order clicked:', order);
+        console.log('Order ID:', order?.id, 'Type:', typeof order?.id);
+
+        if (!order || !order.id) {
+            console.error('❌ Invalid order object:', order);
+            alert('خطا: اطلاعات سفارش معتبر نیست');
+            return;
+        }
+
+        // Ensure the order ID is a valid number/string
+        const orderId = order.id;
+        if (!orderId || orderId === 'undefined' || orderId === undefined) {
+            console.error('❌ Invalid order ID:', orderId);
+            alert('خطا: شناسه سفارش معتبر نیست');
+            return;
+        }
+
+        console.log('✅ Setting selected order with ID:', orderId);
         setSelectedOrder(order);
+    };
+
+    const handleOrderUpdated = () => {
+        console.log('Order updated, refreshing data...');
+        setSelectedOrder(null);
+        setRefreshKey(prev => prev + 1);
+        fetchAssignedOrders();
+        fetchDealerStats();
     };
 
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
+    // NEW: Get commission status display
+    const getCommissionStatusDisplay = (status) => {
+        const statusMap = {
+            'pending': 'در انتظار',
+            'calculated': 'محاسبه شده',
+            'paid': 'پرداخت شده',
+            'cancelled': 'لغو شده'
+        };
+        return statusMap[status] || status;
+    };
+
+    // NEW: Get commission status color
+    const getCommissionStatusColor = (status) => {
+        switch (status) {
+            case 'pending': return '#f59e0b';
+            case 'calculated': return '#3b82f6';
+            case 'paid': return '#059669';
+            case 'cancelled': return '#dc2626';
+            default: return '#6b7280';
+        }
     };
 
     // Get current filtered orders
@@ -173,40 +283,13 @@ const DealerDashboard = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Generate page numbers for pagination
-    const getPageNumbers = () => {
-        const delta = 2;
-        const range = [];
-        const rangeWithDots = [];
-
-        for (let i = Math.max(2, currentPage - delta); i <= Math.min(totalPages - 1, currentPage + delta); i++) {
-            range.push(i);
-        }
-
-        if (currentPage - delta > 2) {
-            rangeWithDots.push(1, '...');
-        } else {
-            rangeWithDots.push(1);
-        }
-
-        rangeWithDots.push(...range);
-
-        if (currentPage + delta < totalPages - 1) {
-            rangeWithDots.push('...', totalPages);
-        } else {
-            rangeWithDots.push(totalPages);
-        }
-
-        return rangeWithDots.filter((item, index, array) => array.indexOf(item) === index && item !== 1 || index === 0);
-    };
-
     if (loading) {
         return (
             <div className="dealer-dashboard" style={{ padding: '2rem', textAlign: 'center' }}>
                 <div className="dashboard-header">
                     <h1>در حال بارگیری...</h1>
                     <div style={{ marginTop: '1rem', color: '#666' }}>
-                        🔄 در حال دریافت سفارشات تخصیص داده شده...
+                        📄 در حال دریافت سفارشات تخصیص داده شده...
                     </div>
                 </div>
             </div>
@@ -231,16 +314,18 @@ const DealerDashboard = () => {
                     <span className="welcome-text" style={{ color: '#666' }}>
                         {dealerStats?.dealer && `${dealerStats.dealer.name} - `}
                         مشاهده سفارشات و محصولات
-                        {totalPages > 1 && ` - صفحه ${currentPage} از ${totalPages}`}
+                        <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.5rem' }}>
+                            تعداد سفارشات: {orders.length} | فعال: {orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(o.status)).length}
+                        </div>
                     </span>
                 </div>
                 <div className="header-actions">
                     <NeoBrutalistButton
-                        text="خروج"
-                        color="red-400"
-                        textColor="white"
-                        onClick={handleLogout}
-                        className="logout-btn"
+                        text="پروفایل"
+                        color="yellow-400"
+                        textColor="black"
+                        onClick={() => setShowProfileModal(true)}
+                        className="profile-btn"
                     />
                     <NeoBrutalistButton
                         text="محموله‌های جدید"
@@ -257,48 +342,14 @@ const DealerDashboard = () => {
                         className="products-btn"
                     />
                     <NeoBrutalistButton
-                        text="پروفایل"
-                        color="yellow-400"
-                        textColor="black"
-                        onClick={() => setShowProfileModal(true)}
-                        className="profile-btn"
+                        text="خروج"
+                        color="red-400"
+                        textColor="white"
+                        onClick={handleLogout}
+                        className="logout-btn"
                     />
                 </div>
             </div>
-
-            {/* Enhanced Stats Cards */}
-            {dealerStats?.stats && (
-                <div className="stats-grid" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '1rem',
-                    marginBottom: '2rem'
-                }}>
-                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#e3f2fd' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#1976d2' }}>مجموع سفارشات</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.total_orders}</div>
-                    </NeoBrutalistCard>
-
-                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#f3e5f5' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#7b1fa2' }}>فعال</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>
-                            {orders.filter(o => ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded'].includes(o.status)).length}
-                        </div>
-                    </NeoBrutalistCard>
-
-                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#e8f5e8' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#388e3c' }}>تکمیل شده</h3>
-                        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{dealerStats.stats.completed_orders}</div>
-                    </NeoBrutalistCard>
-
-                    <NeoBrutalistCard style={{ textAlign: 'center', backgroundColor: '#fff3e0' }}>
-                        <h3 style={{ margin: '0 0 0.5rem 0', color: '#f57c00' }}>کمیسیون کل</h3>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
-                            {dealerStats.stats.total_commission_earned.toLocaleString('fa-IR')} ریال
-                        </div>
-                    </NeoBrutalistCard>
-                </div>
-            )}
 
             {error && (
                 <div className="error-banner" style={{
@@ -310,68 +361,6 @@ const DealerDashboard = () => {
                     fontWeight: 'bold'
                 }}>
                     <span>⚠️ {error}</span>
-                </div>
-            )}
-
-            {/* Recent Announcements Section */}
-            {recentAnnouncements.length > 0 && (
-                <div className="recent-announcements-section" style={{ marginBottom: '2rem' }}>
-                    <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>🚢 آخرین محموله‌ها</h2>
-                        <NeoBrutalistButton
-                            text="مشاهده همه"
-                            color="blue-400"
-                            textColor="white"
-                            onClick={() => navigate('/product/newarrivals')}
-                            className="view-all-btn"
-                        />
-                    </div>
-                    <div className="announcements-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-                        {recentAnnouncements.slice(0, 2).map(announcement => (
-                            <NeoBrutalistCard
-                                key={announcement.id}
-                                className="announcement-preview-card"
-                                onClick={() => navigate('/product/newarrivals')}
-                                style={{ cursor: 'pointer' }}
-                            >
-                                <div className="announcement-preview-header">
-                                    <h3 style={{ fontSize: '1.1rem', margin: '0 0 0.5rem 0' }}>{announcement.title}</h3>
-                                    {announcement.is_featured && (
-                                        <span style={{
-                                            backgroundColor: '#fbbf24',
-                                            color: '#000',
-                                            padding: '0.25rem 0.5rem',
-                                            borderRadius: '4px',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            ویژه
-                                        </span>
-                                    )}
-                                </div>
-                                <p style={{ fontSize: '0.9rem', color: '#666', margin: '0 0 1rem 0' }}>
-                                    {announcement.description.substring(0, 100)}...
-                                </p>
-                                {announcement.images && announcement.images.length > 0 && (
-                                    <div style={{ marginBottom: '1rem' }}>
-                                        <img
-                                            src={announcement.images[0].image}
-                                            alt={announcement.title}
-                                            style={{
-                                                width: '100%',
-                                                height: '120px',
-                                                objectFit: 'cover',
-                                                borderRadius: '8px'
-                                            }}
-                                        />
-                                    </div>
-                                )}
-                                <div style={{ fontSize: '0.8rem', color: '#888' }}>
-                                    {new Date(announcement.created_at).toLocaleDateString('fa-IR')}
-                                </div>
-                            </NeoBrutalistCard>
-                        ))}
-                    </div>
                 </div>
             )}
 
@@ -399,231 +388,193 @@ const DealerDashboard = () => {
                     className="tab-btn"
                 />
                 <NeoBrutalistButton
-                    text="🔄 بروزرسانی"
+                    text="بروزرسانی"
                     color="blue-400"
                     textColor="white"
-                    onClick={fetchAssignedOrders}
+                    onClick={() => {
+                        console.log('Manual refresh triggered');
+                        setRefreshKey(prev => prev + 1);
+                        fetchAssignedOrders();
+                        fetchDealerStats();
+                    }}
                     className="refresh-btn"
+                    disabled={selectedOrder || showProfileModal}
                 />
             </div>
 
-            {/* Orders Grid with Pagination */}
+            {/* Orders Grid */}
             <div className="orders-grid" style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
                 gap: '2rem',
                 marginBottom: '2rem'
             }}>
-                {currentOrders.map((order) => (
-                    <NeoBrutalistCard
-                        key={order.id}
-                        className="order-card"
-                        onClick={() => handleOrderClick(order)}
-                        style={{ cursor: 'pointer' }}
-                    >
-                        <div className="order-card-header" style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '1rem'
-                        }}>
-                            <h3 style={{ margin: 0 }}>سفارش #{order.id}</h3>
-                            <NeoBrutalistButton
-                                text={formatStatus(order.status)}
-                                color={getStatusColor(order.status)}
-                                textColor="black"
-                                className="status-badge"
-                                style={{
-                                    padding: '6px 12px',
-                                    fontSize: '12px',
-                                    minWidth: 'auto'
-                                }}
-                            />
-                        </div>
+                {currentOrders.map((order) => {
+                    // FIXED: Validate each order before rendering
+                    if (!order || !order.id) {
+                        console.warn('⚠️ Invalid order in list:', order);
+                        return null;
+                    }
 
-                        <div className="order-card-info" style={{ marginBottom: '1rem' }}>
-                            <p><strong>مشتری:</strong> {order.customer_name}</p>
-                            <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
+                    // Get commission data for this order
+                    const orderCommission = commissionData[order.id] || {};
 
-                            {/* Show who priced the order */}
-                            {order.priced_by_name && (
-                                <div style={{
-                                    backgroundColor: '#e0f2fe',
-                                    border: '1px solid #0284c7',
-                                    padding: '0.5rem',
-                                    marginTop: '0.5rem',
-                                    fontSize: '0.9rem',
-                                    borderRadius: '4px'
-                                }}>
-                                    <div style={{ color: '#0369a1', fontWeight: 'bold' }}>
-                                        💼 قیمت‌گذاری توسط: {order.priced_by_name}
-                                    </div>
-                                    {order.pricing_date && (
-                                        <div style={{ fontSize: '0.8rem', color: '#0284c7' }}>
-                                            تاریخ: {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {order.quoted_total > 0 && (
-                                <p><strong>مبلغ:</strong> {order.quoted_total.toLocaleString('fa-IR')} ریال</p>
-                            )}
-                            {order.dealer_assigned_at && (
-                                <p><strong>تاریخ تخصیص:</strong> {new Date(order.dealer_assigned_at).toLocaleDateString('fa-IR')}</p>
-                            )}
-
-                            {/* Show payment upload status */}
-                            {order.status === 'payment_uploaded' && order.has_payment_receipts && (
-                                <div style={{
-                                    backgroundColor: '#f3e8ff',
-                                    border: '1px solid #8b5cf6',
-                                    padding: '0.5rem',
-                                    marginTop: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    borderRadius: '4px'
-                                }}>
-                                    <div style={{ color: '#7c3aed', fontWeight: 'bold' }}>
-                                        📄 رسید پرداخت آپلود شده
-                                    </div>
-                                    <div style={{ fontSize: '0.8rem', color: '#6b21a8' }}>
-                                        در انتظار بررسی مدیر
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Show completion date for completed orders */}
-                            {order.status === 'completed' && order.completion_date && (
-                                <div style={{
-                                    backgroundColor: '#f0fdf4',
-                                    border: '1px solid #16a34a',
-                                    padding: '0.5rem',
-                                    marginTop: '0.5rem',
-                                    fontSize: '0.85rem',
-                                    borderRadius: '4px'
-                                }}>
-                                    <div style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                                        ✅ تاریخ تکمیل: {new Date(order.completion_date).toLocaleDateString('fa-IR')}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Enhanced commission info */}
-                            {order.effective_commission_rate > 0 && (
-                                <div style={{
-                                    backgroundColor: '#f0f9ff',
-                                    border: '1px solid #0284c7',
-                                    padding: '0.5rem',
-                                    marginTop: '0.5rem',
-                                    fontSize: '0.9rem'
-                                }}>
-                                    <div style={{ color: '#0369a1', fontWeight: 'bold' }}>
-                                        💰 اطلاعات کمیسیون:
-                                    </div>
-                                    <div>
-                                        <strong>نرخ:</strong> {order.effective_commission_rate}%
-                                        {order.has_custom_commission && (
-                                            <span style={{ color: '#dc2626', fontSize: '0.8rem' }}> (سفارشی)</span>
-                                        )}
-                                    </div>
-                                    {order.dealer_commission_amount > 0 && (
-                                        <div style={{ color: '#16a34a', fontWeight: 'bold' }}>
-                                            <strong>مبلغ کمیسیون:</strong> {order.dealer_commission_amount.toLocaleString('fa-IR')} ریال
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="order-card-footer">
-                            <NeoBrutalistButton
-                                text="مشاهده جزئیات"
-                                color="blue-400"
-                                textColor="white"
-                                className="view-details-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOrderClick(order);
-                                }}
-                            />
-                        </div>
-                    </NeoBrutalistCard>
-                ))}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <NeoBrutalistCard className="pagination-card" style={{ marginBottom: '2rem' }}>
-                    <div className="pagination-container" style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: '1rem',
-                        padding: '1rem'
-                    }}>
-                        <div className="pagination-info">
-                            <span>صفحه {currentPage} از {totalPages}</span>
-                            <span> ({filteredOrders.length} سفارش)</span>
-                        </div>
-
-                        <div className="pagination-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <NeoBrutalistButton
-                                text="قبلی"
-                                color="gray-400"
-                                textColor="black"
-                                onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 1}
-                                className="pagination-btn"
-                            />
-
-                            <div className="page-numbers" style={{ display: 'flex', gap: '0.25rem' }}>
-                                {getPageNumbers().map((pageNumber, index) => (
-                                    pageNumber === '...' ? (
-                                        <span key={index} style={{ padding: '0.5rem' }}>...</span>
-                                    ) : (
-                                        <NeoBrutalistButton
-                                            key={index}
-                                            text={pageNumber.toString()}
-                                            color={currentPage === pageNumber ? "blue-400" : "gray-200"}
-                                            textColor={currentPage === pageNumber ? "white" : "black"}
-                                            onClick={() => handlePageChange(pageNumber)}
-                                            className="page-number-btn"
-                                            style={{ minWidth: '40px', padding: '0.5rem' }}
-                                        />
-                                    )
-                                ))}
+                    return (
+                        <NeoBrutalistCard
+                            key={`${order.id}-${refreshKey}`}
+                            className="order-card"
+                            onClick={() => handleOrderClick(order)}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <div className="order-card-header" style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '1rem'
+                            }}>
+                                <h3 style={{ margin: 0 }}>سفارش #{order.id}</h3>
+                                <NeoBrutalistButton
+                                    text={formatStatus(order.status)}
+                                    color={getStatusColor(order.status)}
+                                    textColor="black"
+                                    className="status-badge"
+                                    style={{
+                                        padding: '6px 12px',
+                                        fontSize: '12px',
+                                        minWidth: 'auto'
+                                    }}
+                                />
                             </div>
 
-                            <NeoBrutalistButton
-                                text="بعدی"
-                                color="gray-400"
-                                textColor="black"
-                                onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                                className="pagination-btn"
-                            />
-                        </div>
+                            <div className="order-card-info" style={{ marginBottom: '1rem' }}>
+                                <p><strong>مشتری:</strong> {order.customer_name}</p>
+                                <p><strong>تاریخ ایجاد:</strong> {new Date(order.created_at).toLocaleDateString('fa-IR')}</p>
 
-                        <div className="pagination-jump" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span>برو به صفحه:</span>
-                            <select
-                                value={currentPage}
-                                onChange={(e) => handlePageChange(parseInt(e.target.value))}
-                                style={{
-                                    padding: '0.5rem',
-                                    border: '2px solid #000',
-                                    borderRadius: '4px',
-                                    backgroundColor: '#fff'
-                                }}
-                            >
-                                {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
-                                    <option key={page} value={page}>صفحه {page}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
+                                {/* ADDED: Invoice Type Display */}
+                                <p><strong>نوع فاکتور:</strong>
+                                    <span className={`invoice-type-badge ${order.business_invoice_type === 'official' ? 'official' : 'unofficial'}`}>
+                                        {order.business_invoice_type === 'official' ? 'رسمی (با مالیات)' : 'شخصی (بدون مالیات)'}
+                                    </span>
+                                </p>
+
+                                {order.quoted_total > 0 && (
+                                    <p><strong>مبلغ:</strong> {order.quoted_total.toLocaleString('fa-IR')} ریال</p>
+                                )}
+                            </div>
+
+                            {/* NEW: Enhanced Commission Information */}
+                            <div className="commission-info-section" style={{
+                                backgroundColor: '#f8fafc',
+                                border: '2px solid #e2e8f0',
+                                borderRadius: '6px',
+                                padding: '0.75rem',
+                                marginBottom: '1rem',
+                                fontSize: '0.85rem'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '0.5rem'
+                                }}>
+                                    <h4 style={{ margin: 0, color: '#374151', fontSize: '0.9rem' }}>اطلاعات کمیسیون</h4>
+                                    <span
+                                        style={{
+                                            backgroundColor: getCommissionStatusColor(orderCommission.commission_status),
+                                            color: 'white',
+                                            padding: '2px 6px',
+                                            borderRadius: '3px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {getCommissionStatusDisplay(orderCommission.commission_status)}
+                                    </span>
+                                </div>
+
+                                <div className="commission-details" style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr 1fr',
+                                    gap: '0.5rem',
+                                    fontSize: '0.8rem'
+                                }}>
+                                    <div>
+                                        <span style={{ color: '#6b7280' }}>نرخ پیش‌فرض:</span>
+                                        <div style={{ fontWeight: 'bold', color: '#374151' }}>
+                                            {orderCommission.default_commission_rate || 0}%
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style={{ color: '#6b7280' }}>نرخ فعال:</span>
+                                        <div style={{ fontWeight: 'bold', color: '#3b82f6' }}>
+                                            {orderCommission.effective_commission_rate || 0}%
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style={{ color: '#6b7280' }}>مبلغ کمیسیون:</span>
+                                        <div style={{ fontWeight: 'bold', color: '#059669' }}>
+                                            {orderCommission.dealer_commission_amount > 0
+                                                ? `${orderCommission.dealer_commission_amount.toLocaleString('fa-IR')} ریال`
+                                                : 'محاسبه نشده'}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span style={{ color: '#6b7280' }}>وضعیت پرداخت:</span>
+                                        <div style={{
+                                            fontWeight: 'bold',
+                                            color: orderCommission.commission_paid ? '#059669' : '#f59e0b'
+                                        }}>
+                                            {orderCommission.commission_paid ? 'پرداخت شده' : 'پرداخت نشده'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Commission calculation preview */}
+                                {order.quoted_total > 0 && orderCommission.effective_commission_rate > 0 && (
+                                    <div style={{
+                                        marginTop: '0.5rem',
+                                        padding: '0.4rem',
+                                        backgroundColor: '#e0f2fe',
+                                        borderRadius: '4px',
+                                        fontSize: '0.75rem',
+                                        color: '#0369a1',
+                                        textAlign: 'center'
+                                    }}>
+                                        {order.quoted_total.toLocaleString('fa-IR')} × {orderCommission.effective_commission_rate}% = {(order.quoted_total * orderCommission.effective_commission_rate / 100).toLocaleString('fa-IR')} ریال
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="order-card-footer">
+                                <NeoBrutalistButton
+                                    text="مشاهده جزئیات"
+                                    color="blue-400"
+                                    textColor="white"
+                                    className="view-details-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOrderClick(order);
+                                    }}
+                                />
+                            </div>
+                        </NeoBrutalistCard>
+                    );
+                })}
+            </div>
+
+            {/* Loading Commission Data Indicator */}
+            {loadingCommission && (
+                <div style={{
+                    textAlign: 'center',
+                    padding: '1rem',
+                    backgroundColor: '#fef3c7',
+                    border: '2px solid #f59e0b',
+                    borderRadius: '6px',
+                    marginBottom: '2rem',
+                    color: '#92400e'
+                }}>
+                    در حال بارگیری اطلاعات کمیسیون...
+                </div>
             )}
 
             {/* Empty State */}
@@ -639,16 +590,8 @@ const DealerDashboard = () => {
                         maxWidth: '500px',
                         cursor: 'default'
                     }}>
-                        <h3>
-                            {activeTab === 'active' && 'هیچ سفارش فعالی ندارید'}
-                            {activeTab === 'completed' && 'هیچ سفارش تکمیل شده‌ای ندارید'}
-                            {activeTab === 'rejected' && 'هیچ سفارش رد شده‌ای ندارید'}
-                        </h3>
-                        <p>
-                            {activeTab === 'active' && 'سفارشات تخصیص داده شده در اینجا نمایش داده می‌شود.'}
-                            {activeTab === 'completed' && 'سفارشات تکمیل شده شما در اینجا نمایش داده می‌شود.'}
-                            {activeTab === 'rejected' && 'سفارشات رد شده یا لغو شده شما در اینجا نمایش داده می‌شود.'}
-                        </p>
+                        <h3>هیچ سفارشی در این بخش وجود ندارد</h3>
+                        <p>سفارشات تخصیص داده شده در اینجا نمایش داده می‌شود.</p>
                         <div style={{ marginTop: '1rem' }}>
                             <NeoBrutalistButton
                                 text="بروزرسانی"
@@ -668,53 +611,41 @@ const DealerDashboard = () => {
                 </div>
             )}
 
-            {/* Quick Actions */}
-            <div className="quick-actions-section" style={{ marginTop: '2rem' }}>
-                <NeoBrutalistCard className="quick-actions-card">
-                    <h3 className="actions-title">خدمات سریع</h3>
-                    <div className="actions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="pagination" style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    marginTop: '2rem'
+                }}>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                         <NeoBrutalistButton
-                            text="📦 کاتالوگ کامل"
-                            color="purple-400"
-                            textColor="white"
-                            onClick={() => navigate('/product')}
-                            className="quick-action-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="🚢 محموله‌های جدید"
-                            color="blue-400"
-                            textColor="white"
-                            onClick={() => navigate('/product/newarrivals')}
-                            className="quick-action-btn"
-                        />
-                        <NeoBrutalistButton
-                            text="📞 تماس برای پشتیبانی"
-                            color="yellow-400"
-                            textColor="black"
-                            onClick={() => {
-                                window.open('tel:+989123456789', '_self');
+                            key={page}
+                            text={page.toString()}
+                            color={currentPage === page ? 'blue-400' : 'gray-300'}
+                            textColor={currentPage === page ? 'white' : 'black'}
+                            onClick={() => handlePageChange(page)}
+                            style={{
+                                minWidth: '40px',
+                                padding: '0.5rem'
                             }}
-                            className="quick-action-btn"
                         />
-                        <NeoBrutalistButton
-                            text="🔄 بروزرسانی سفارشات"
-                            color="green-400"
-                            textColor="black"
-                            onClick={fetchAssignedOrders}
-                            className="quick-action-btn"
-                        />
-                    </div>
-                </NeoBrutalistCard>
-            </div>
+                    ))}
+                </div>
+            )}
 
-            {/* Order Detail Modal */}
+            {/* Order Detail Modal - FIXED with better validation */}
             <NeoBrutalistModal
-                isOpen={!!selectedOrder}
-                onClose={() => setSelectedOrder(null)}
-                title={selectedOrder ? `جزئیات سفارش #${selectedOrder.id}` : ""}
+                isOpen={!!selectedOrder && !!selectedOrder?.id}
+                onClose={() => {
+                    console.log('🔒 Closing order detail modal');
+                    setSelectedOrder(null);
+                }}
+                title={selectedOrder?.id ? `جزئیات سفارش #${selectedOrder.id}` : "جزئیات سفارش"}
                 size="large"
             >
-                {selectedOrder && (
+                {selectedOrder?.id ? (
                     <div style={{ direction: 'rtl' }}>
                         <div style={{
                             backgroundColor: '#e3f2fd',
@@ -723,19 +654,26 @@ const DealerDashboard = () => {
                             border: '2px solid #1976d2'
                         }}>
                             <h4 style={{ margin: 0, color: '#1976d2' }}>
-                                🏢 نمایش نماینده فروش
+                                نماینده فروش
                             </h4>
                             <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
-                                جزئیات کامل سفارش با اطلاعات کمیسیون و قیمت‌گذار
+                                سفارش #{selectedOrder.id} - {selectedOrder.customer_name}
                             </p>
                         </div>
 
                         <DealerOrderDetailPage
                             orderId={selectedOrder.id}
-                            onOrderUpdated={() => {
-                                fetchAssignedOrders();
-                                setSelectedOrder(null);
-                            }}
+                            onOrderUpdated={handleOrderUpdated}
+                        />
+                    </div>
+                ) : (
+                    <div style={{ padding: '2rem', textAlign: 'center' }}>
+                        <p>خطا: اطلاعات سفارش معتبر نیست</p>
+                        <NeoBrutalistButton
+                            text="بستن"
+                            color="red-400"
+                            textColor="white"
+                            onClick={() => setSelectedOrder(null)}
                         />
                     </div>
                 )}

@@ -348,9 +348,7 @@
     color: #dc2626;
 }
 
-/* --- Other styles remain the same --- */
 
-/* === MODIFIED: RESPONSIVE MOBILE TABLE === */
 @media (max-width: 768px) {
     .admin-order-detail {
         padding: 1rem;
