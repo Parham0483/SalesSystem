@@ -469,7 +469,7 @@ class ProductImage(models.Model):
     alt_text = models.CharField(max_length=255, blank=True, null=True)
     order = models.PositiveIntegerField(default=0)
     is_primary = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         ordering = ['order', 'id']

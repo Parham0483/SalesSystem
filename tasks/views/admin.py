@@ -461,7 +461,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 'existing_images_kept': len(existing_images_to_keep) if existing_images_to_keep else 0
             }
         }, status=status.HTTP_200_OK)
-    
+
     @action(detail=True, methods=['DELETE'], url_path='remove-image/(?P<image_id>[^/.]+)')
     def remove_image(self, request, pk=None, image_id=None):
         """Remove a specific image from a product"""
