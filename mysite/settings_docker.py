@@ -107,7 +107,12 @@ CORS_ALLOW_METHODS = [
 
 # Static files for Docker
 STATIC_ROOT = '/app/staticfiles'
-MEDIA_URL = 'https://gtc.market/media/' if USE_HTTPS else '/media/'
+MEDIA_URL =  '/media/'
+MEDIA_ROOT = '/app/media'
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024   # 50MB
+ALLOWED_UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True

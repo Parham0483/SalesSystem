@@ -24,7 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app/
 
 # Create directories for static and media files
-RUN mkdir -p /app/staticfiles /app/media
+RUN mkdir -p /app/staticfiles /app/media && \
+    chmod 755 /app/staticfiles /app/media && \
+    chown -R root:root /app/media
 
 # Collect static files
 RUN python manage.py collectstatic --noinput
