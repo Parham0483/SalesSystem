@@ -591,6 +591,8 @@ const AdminProductsPage = () => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
+        console.log('Files selected:', files); // Debug line
+
         if (files.length === 0) return;
 
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -599,7 +601,6 @@ const AdminProductsPage = () => {
 
         // Validate files
         const validFiles = [];
-        const previews = [];
 
         for (let i = 0; i < Math.min(files.length, maxFiles); i++) {
             const file = files[i];
@@ -615,17 +616,15 @@ const AdminProductsPage = () => {
             }
 
             validFiles.push(file);
-            previews.push(URL.createObjectURL(file));
         }
 
         if (validFiles.length > 0) {
-            if (validFiles.length === 1) {
-                // Single file - maintain backward compatibility
-                setImageFile(validFiles[0]);
-                setImagePreview(previews[0]);
-            }
+            console.log('Valid files:', validFiles.length); // Debug line
 
-            // Multiple files - add to ordered images
+            // FIXED: Set imageFiles properly
+            setImageFiles(validFiles); // Replace, don't append
+
+            // Create ordered images structure
             const newOrderedImages = [...orderedImages];
             const startIndex = newOrderedImages.length;
 
@@ -634,19 +633,32 @@ const AdminProductsPage = () => {
                     id: `new-${startIndex + index}`,
                     src: URL.createObjectURL(file),
                     type: 'new',
-                    file: file,
+                    file: file, // Make sure file is stored
                     order: startIndex + index
                 });
             });
 
-            setImageFiles([...imageFiles, ...validFiles]);
             setOrderedImages(newOrderedImages);
+
+            // Backward compatibility
+            if (validFiles.length === 1) {
+                setImageFile(validFiles[0]);
+                setImagePreview(URL.createObjectURL(validFiles[0]));
+            }
+
             setError('');
         }
     };
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
+
+        // Debug logging - ADD THIS
+        console.log('=== FORM SUBMIT DEBUG ===');
+        console.log('imageFiles:', imageFiles);
+        console.log('orderedImages:', orderedImages);
+        console.log('Selected files count:', imageFiles.length);
+
         const formData = new FormData();
 
         const excludeFields = ['image_url', 'images', 'additional_images', 'id', 'created_at', 'updated_at', 'stock_status', 'is_out_of_stock', 'days_since_created', 'category_name', 'category_details'];
@@ -664,36 +676,64 @@ const AdminProductsPage = () => {
             }
         });
 
-        // Handle images in order
-        const orderedNewImages = orderedImages
-            .filter(img => img.type === 'new')
-            .sort((a, b) => a.order - b.order);
+        // Check both imageFiles and orderedImages for files
+        let hasFiles = false;
 
-        const orderedExistingImages = orderedImages
-            .filter(img => img.type === 'existing')
-            .sort((a, b) => a.order - b.order)
-            .map(img => img.src);
+        // Method 1: Use imageFiles directly (more reliable)
+        if (imageFiles && imageFiles.length > 0) {
+            console.log('Using imageFiles directly:', imageFiles.length, 'files');
+            imageFiles.forEach((file, index) => {
+                formData.append('images', file);
+                console.log(`Added file ${index}:`, file.name);
+                hasFiles = true;
+            });
+        } else {
+            // Method 2: Fallback to orderedImages
+            const orderedNewImages = orderedImages
+                .filter(img => img.type === 'new' && img.file)
+                .sort((a, b) => a.order - b.order);
 
-        // Add new images in the correct order
-        orderedNewImages.forEach((imageObj, index) => {
-            if (imageObj.file) {
-                formData.append(`images`, imageObj.file);
-            }
-        });
+            console.log('Using orderedImages:', orderedNewImages.length, 'files');
+            orderedNewImages.forEach((imageObj, index) => {
+                formData.append('images', imageObj.file);
+                console.log(`Added ordered file ${index}:`, imageObj.file.name);
+                hasFiles = true;
+            });
+        }
+
+        //Don't submit if no files for new products
+        if (!editingProduct && !hasFiles) {
+            console.log('ERROR: No files selected for new product');
+            setError('لطفا حداقل یک تصویر انتخاب کنید');
+            return;
+        }
 
         // Send image order information
         const imageOrderData = orderedImages.map((img, index) => ({
             type: img.type,
             src: img.type === 'existing' ? img.src : null,
             order: index,
-            is_primary: index === 0 // First image is primary
+            is_primary: index === 0
         }));
 
-        formData.append('image_order', JSON.stringify(imageOrderData));
+        if (imageOrderData.length > 0) {
+            formData.append('image_order', JSON.stringify(imageOrderData));
+        }
 
         // Send existing images that should be kept
+        const orderedExistingImages = orderedImages
+            .filter(img => img.type === 'existing')
+            .sort((a, b) => a.order - b.order)
+            .map(img => img.src);
+
         if (orderedExistingImages.length > 0) {
             formData.append('existing_images', JSON.stringify(orderedExistingImages));
+        }
+
+        // Debug FormData contents
+        console.log('FormData entries:');
+        for (let [key, value] of formData.entries()) {
+            console.log(key, value);
         }
 
         const url = editingProduct ? `/admin/products/${editingProduct.id}/` : '/admin/products/';
@@ -710,8 +750,6 @@ const AdminProductsPage = () => {
             setError(`خطا در ذخیره محصول: ${JSON.stringify(err.response?.data)}`);
         }
     };
-
-    // ... rest of your existing functions remain the same (handleToggleStatus, handleToggleFeatured, etc.) ...
 
     const handleToggleStatus = async (product) => {
         try {
