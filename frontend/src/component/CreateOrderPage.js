@@ -7,9 +7,17 @@ import NeoBrutalistDropdown from './NeoBrutalist/NeoBrutalistDropdown';
 import '../styles/component/CustomerComponent/CreateOrder.css';
 
 const CreateOrderPage = ({ onOrderCreated }) => {
+    // Product and Category states
+    const [categories, setCategories] = useState([]);
     const [products, setProducts] = useState([]);
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [filteredProducts, setFilteredProducts] = useState([]);
+    const [loadingCategories, setLoadingCategories] = useState(false);
+    const [loadingProducts, setLoadingProducts] = useState(false);
+
+    // Other existing states
     const [customerComment, setCustomerComment] = useState('');
-    const [orderItems, setOrderItems] = useState([{ product: '', requested_quantity: 1, customer_notes: '' }]);
+    const [orderItems, setOrderItems] = useState([{ category: '', product: '', requested_quantity: 1, customer_notes: '' }]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -33,9 +41,23 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
 
     useEffect(() => {
+        fetchCategories();
         fetchProducts();
         loadCustomerInfo();
     }, []);
+
+    // Filter products when category changes
+    useEffect(() => {
+        if (selectedCategory && products.length > 0) {
+            const filtered = products.filter(product =>
+                product.category_id?.toString() === selectedCategory ||
+                product.category?.toString() === selectedCategory
+            );
+            setFilteredProducts(filtered);
+        } else {
+            setFilteredProducts([]);
+        }
+    }, [selectedCategory, products]);
 
     // Show customer form when official invoice is requested
     useEffect(() => {
@@ -48,12 +70,122 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         }
     }, [needsOfficialInvoice, customerInfo, customerInfoLoaded]);
 
-    const fetchProducts = async () => {
+    const fetchCategories = async () => {
+        setLoadingCategories(true);
         try {
-            const response = await API.get('/products/');
-            setProducts(response.data);
+            console.log('Starting to fetch categories...');
+            console.log('API object:', API);
+
+            // Check if API.get is available
+            if (!API || typeof API.get !== 'function') {
+                throw new Error('API object or API.get method is not available');
+            }
+
+            console.log('Making API call to /categories/...');
+            const response = await API.get('/categories/');
+            console.log('Raw categories response:', response);
+            console.log('Response status:', response?.status);
+            console.log('Response data:', response?.data);
+            console.log('Data type:', typeof response?.data);
+            console.log('Is data an array?', Array.isArray(response?.data));
+
+            if (response && response.data) {
+                if (Array.isArray(response.data)) {
+                    setCategories(response.data);
+                    console.log('✅ Categories successfully loaded:', response.data.length, 'categories');
+                    // Log category structure to verify farsi_name field
+                    if (response.data.length > 0) {
+                        console.log('Sample category structure:', response.data[0]);
+                        console.log('Available fields:', Object.keys(response.data[0]));
+                    }
+                } else if (response.data.results && Array.isArray(response.data.results)) {
+                    // Handle paginated response
+                    setCategories(response.data.results);
+                    console.log('✅ Categories loaded from paginated response:', response.data.results.length, 'categories');
+                } else {
+                    console.error('❌ Categories response is not an array:', response.data);
+                    setCategories([]);
+                    setError('خطا در بارگیری دسته‌بندی‌ها - فرمت داده نادرست');
+                }
+            } else {
+                console.error('❌ No response or response.data:', response);
+                setCategories([]);
+                setError('خطا در دریافت پاسخ از سرور');
+            }
         } catch (err) {
-            setError('خطا در بارگیری محصولات');
+            console.error('❌ Error fetching categories:', err);
+            console.error('Error type:', err.constructor.name);
+            console.error('Error message:', err.message);
+            console.error('Error stack:', err.stack);
+
+            if (err.response) {
+                console.error('Error response status:', err.response.status);
+                console.error('Error response data:', err.response.data);
+                console.error('Error response headers:', err.response.headers);
+            } else if (err.request) {
+                console.error('No response received. Request:', err.request);
+            }
+
+            setCategories([]);
+
+            // More descriptive error messages
+            let errorMessage = 'خطا در بارگیری دسته‌بندی‌ها';
+            if (err.response?.status === 404) {
+                errorMessage += ': آدرس API پیدا نشد (404)';
+            } else if (err.response?.status === 403) {
+                errorMessage += ': دسترسی غیرمجاز (403)';
+            } else if (err.response?.status === 401) {
+                errorMessage += ': نیاز به احراز هویت (401)';
+            } else if (err.response?.status >= 500) {
+                errorMessage += ': خطای سرور (' + err.response.status + ')';
+            } else if (!err.response) {
+                errorMessage += ': عدم اتصال به سرور';
+            } else {
+                errorMessage += ': ' + (err.response?.data?.message || err.message);
+            }
+
+            setError(errorMessage);
+        } finally {
+            setLoadingCategories(false);
+            console.log('Categories fetch completed');
+        }
+    };
+
+    const fetchProducts = async () => {
+        setLoadingProducts(true);
+        try {
+            console.log('Starting to fetch products...');
+            const response = await API.get('/products/');
+            console.log('Raw products response:', response);
+
+            if (response && response.data) {
+                // Handle paginated response (which is what you're getting)
+                if (response.data.results && Array.isArray(response.data.results)) {
+                    setProducts(response.data.results);
+                    console.log('✅ Products loaded from paginated response:', response.data.results.length, 'products');
+                }
+                // Handle direct array response
+                else if (Array.isArray(response.data)) {
+                    setProducts(response.data);
+                    console.log('✅ Products loaded directly:', response.data.length, 'products');
+                }
+                // Handle unexpected format
+                else {
+                    console.error('❌ Unexpected response format:', response.data);
+                    setProducts([]);
+                    setError('خطا در بارگیری محصولات - فرمت داده نادرست');
+                }
+            } else {
+                console.error('❌ No response or response.data');
+                setProducts([]);
+                setError('خطا در دریافت پاسخ از سرور');
+            }
+        } catch (err) {
+            console.error('❌ Error fetching products:', err);
+            setProducts([]);
+            setError('خطا در بارگیری محصولات: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setLoadingProducts(false);
         }
     };
 
@@ -144,7 +276,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     };
 
     const addOrderItem = () => {
-        setOrderItems([...orderItems, { product: '', requested_quantity: 1, customer_notes: '' }]);
+        setOrderItems([...orderItems, { category: '', product: '', requested_quantity: 1, customer_notes: '' }]);
     };
 
     const removeOrderItem = (index) => {
@@ -154,10 +286,27 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     };
 
     const updateOrderItem = (index, field, value) => {
-        const updatedItems = orderItems.map((item, i) =>
-            i === index ? { ...item, [field]: value } : item
-        );
+        const updatedItems = orderItems.map((item, i) => {
+            if (i === index) {
+                // If category changes, reset product selection
+                if (field === 'category') {
+                    return { ...item, [field]: value, product: '' };
+                }
+                return { ...item, [field]: value };
+            }
+            return item;
+        });
         setOrderItems(updatedItems);
+    };
+
+    // Get filtered products for a specific order item
+    const getFilteredProductsForItem = (categoryId) => {
+        if (!categoryId || !products.length) return [];
+
+        return products.filter(product =>
+            product.category_id?.toString() === categoryId ||
+            product.category?.toString() === categoryId
+        );
     };
 
     const handleSubmit = async () => {
@@ -167,7 +316,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         try {
             // Validate items
             const validItems = orderItems.filter(item =>
-                item.product && item.requested_quantity > 0
+                item.category && item.product && item.requested_quantity > 0
             );
 
             if (validItems.length === 0) {
@@ -208,7 +357,6 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 };
             }
 
-
             const response = await API.post('orders/', orderData);
 
             if (response.status === 201) {
@@ -226,10 +374,11 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         }
     };
 
-    const productOptions = products.map(product => ({
-        value: product.id.toString(),
-        label: `${product.name} - ${product.base_price} تومان`
-    }));
+    // Create category options - use name_fa for Persian names
+    const categoryOptions = Array.isArray(categories) ? categories.map(category => ({
+        value: category.id.toString(),
+        label: category.name_fa || category.display_name || category.name || `دسته‌بندی ${category.id}`
+    })) : [];
 
     const getUserInfo = () => {
         const userDataString = localStorage.getItem('userData');
@@ -259,12 +408,24 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 </NeoBrutalistCard>
             )}
 
+            {/* Debug Information */}
+            {(loadingCategories || loadingProducts) && (
+                <NeoBrutalistCard className="neo-loading-card">
+                    <div className="neo-loading-content">
+                        <span>🔄</span>
+                        <span>
+                            {loadingCategories && 'در حال بارگیری دسته‌بندی‌ها... '}
+                            {loadingProducts && 'در حال بارگیری محصولات... '}
+                        </span>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
             <div className="neo-order-form">
                 {/* Invoice Type Selection - Single Checkbox */}
                 <NeoBrutalistCard className="neo-invoice-type-section">
                     <h3>نوع فاکتور</h3>
                     <div className="neo-invoice-type-selection">
-
                         <div className="neo-checkbox-group">
                             <label className="neo-checkbox-label">
                                 <input
@@ -419,57 +580,96 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                     </div>
 
                     <div className="neo-items-list">
-                        {orderItems.map((item, index) => (
-                            <NeoBrutalistCard key={index} className="neo-item-card">
-                                <div className="neo-item-header">
-                                    <h3 className="neo-item-number">محصول #{index + 1}</h3>
-                                    {orderItems.length > 1 && (
-                                        <NeoBrutalistButton
-                                            text="حذف"
-                                            color="red-400"
-                                            textColor="white"
-                                            onClick={() => removeOrderItem(index)}
-                                            type="button"
-                                            className="neo-remove-btn"
-                                        />
-                                    )}
-                                </div>
+                        {orderItems.map((item, index) => {
+                            const itemFilteredProducts = getFilteredProductsForItem(item.category);
+                            const productOptions = itemFilteredProducts.map(product => ({
+                                value: product.id.toString(),
+                                label: `${product.name}`
+                            }));
 
-                                <div className="neo-item-fields">
-                                    <div className="neo-field-group">
-                                        <NeoBrutalistDropdown
-                                            label="محصول"
-                                            options={productOptions}
-                                            value={item.product}
-                                            onChange={(value) => updateOrderItem(index, 'product', value)}
-                                            placeholder="محصول مورد نظر را انتخاب کنید..."
-                                            required
-                                        />
+                            return (
+                                <NeoBrutalistCard key={index} className="neo-item-card">
+                                    <div className="neo-item-header">
+                                        <h3 className="neo-item-number">محصول #{index + 1}</h3>
+                                        {orderItems.length > 1 && (
+                                            <NeoBrutalistButton
+                                                text="حذف"
+                                                color="red-400"
+                                                textColor="white"
+                                                onClick={() => removeOrderItem(index)}
+                                                type="button"
+                                                className="neo-remove-btn"
+                                            />
+                                        )}
                                     </div>
 
-                                    <div className="neo-field-group">
-                                        <NeoBrutalistInput
-                                            label="تعداد"
-                                            type="number"
-                                            value={item.requested_quantity}
-                                            onChange={(e) => updateOrderItem(index, 'requested_quantity', e.target.value)}
-                                            min="1"
-                                            required
-                                        />
-                                    </div>
+                                    <div className="neo-item-fields">
+                                        {/* Category Selection */}
+                                        <div className="neo-field-group">
+                                            <NeoBrutalistDropdown
+                                                label="دسته‌بندی"
+                                                options={categoryOptions}
+                                                value={item.category}
+                                                onChange={(value) => updateOrderItem(index, 'category', value)}
+                                                placeholder="ابتدا دسته‌بندی را انتخاب کنید..."
+                                                required
+                                                disabled={loadingCategories}
+                                            />
+                                            {loadingCategories && (
+                                                <small style={{color: '#666', fontSize: '12px'}}>
+                                                    در حال بارگیری دسته‌بندی‌ها...
+                                                </small>
+                                            )}
+                                        </div>
 
-                                    <div className="neo-field-group">
-                                        <NeoBrutalistInput
-                                            label="وزن درخواستی (اختیاری)"
-                                            type="text"
-                                            value={item.customer_notes}
-                                            onChange={(e) => updateOrderItem(index, 'customer_notes', e.target.value)}
-                                            placeholder="مثال: 500 گرم"
-                                        />
+                                        {/* Product Selection */}
+                                        <div className="neo-field-group">
+                                            <NeoBrutalistDropdown
+                                                label="محصول"
+                                                options={productOptions}
+                                                value={item.product}
+                                                onChange={(value) => updateOrderItem(index, 'product', value)}
+                                                placeholder={
+                                                    !item.category
+                                                        ? "ابتدا دسته‌بندی را انتخاب کنید"
+                                                        : itemFilteredProducts.length === 0
+                                                            ? "محصولی در این دسته‌بندی یافت نشد"
+                                                            : "محصول مورد نظر را انتخاب کنید..."
+                                                }
+                                                required
+                                                disabled={!item.category || loadingProducts || itemFilteredProducts.length === 0}
+                                            />
+                                            {item.category && itemFilteredProducts.length === 0 && !loadingProducts && (
+                                                <small style={{color: '#f59e0b', fontSize: '12px'}}>
+                                                    هیچ محصولی در این دسته‌بندی یافت نشد
+                                                </small>
+                                            )}
+                                        </div>
+
+                                        <div className="neo-field-group">
+                                            <NeoBrutalistInput
+                                                label="تعداد"
+                                                type="number"
+                                                value={item.requested_quantity}
+                                                onChange={(e) => updateOrderItem(index, 'requested_quantity', e.target.value)}
+                                                min="1"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="neo-field-group">
+                                            <NeoBrutalistInput
+                                                label="وزن درخواستی (اختیاری)"
+                                                type="text"
+                                                value={item.customer_notes}
+                                                onChange={(e) => updateOrderItem(index, 'customer_notes', e.target.value)}
+                                                placeholder="مثال: 500 گرم"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
-                            </NeoBrutalistCard>
-                        ))}
+                                </NeoBrutalistCard>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -488,11 +688,11 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 {/* Submit Button */}
                 <div className="neo-form-actions">
                     <NeoBrutalistButton
-                        text={loading ? "" : "ثبت سفارش"}
+                        text={loading ? "در حال ثبت..." : "ثبت سفارش"}
                         color="yellow-400"
                         textColor="black"
                         onClick={handleSubmit}
-                        disabled={loading}
+                        disabled={loading || loadingCategories || loadingProducts}
                         className="neo-submit-btn"
                     />
                 </div>

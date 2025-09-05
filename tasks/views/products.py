@@ -11,13 +11,18 @@ from ..serializers.products import (
     ProductSerializer, ProductCategorySerializer, ProductImageSerializer, ProductStockUpdateSerializer,
     ProductSearchSerializer, ProductBulkUpdateSerializer, ShipmentAnnouncementSerializer
 )
-
 from ..models import Product, ShipmentAnnouncement, ProductCategory, ProductImage
+from rest_framework.pagination import PageNumberPagination
 
+class ProductPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'limit'
+    max_page_size = 50
 
 class ProductViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     serializer_class = ProductSerializer
+    pagination_class = ProductPagination
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'new_arrivals', 'categories', 'search']:
@@ -29,11 +34,12 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff:
-            # Admin sees all products including inactive ones
-            return Product.objects.all().order_by('-created_at')
+            queryset = Product.objects.all()
         else:
-            # Regular users see only active products
-            return Product.objects.filter(is_active=True).order_by('-created_at')
+            queryset = Product.objects.filter(is_active=True)
+
+        # ADD THIS LINE:
+        return queryset.prefetch_related('images').order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         """Admin creates a new product with images upload support"""
@@ -434,6 +440,90 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'error': 'Invalid tax rate value'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=False, methods=['GET'], url_path='thumbnails-only')
+    def thumbnails_only(self, request):
+        """Endpoint to get just thumbnail data for initial load"""
+        products = self.get_queryset()
+
+        # Apply filters
+        search = request.query_params.get('search', '')
+        category = request.query_params.get('category', '')
+        status = request.query_params.get('status', '')
+
+        if search:
+            products = products.filter(
+                Q(name__icontains=search) |
+                Q(description__icontains=search)
+            )
+
+        if category and category != 'all':
+            products = products.filter(category_id=category)
+
+        if status and status != 'all':
+            if status == 'in_stock':
+                products = products.filter(stock__gt=0)
+            elif status == 'out_of_stock':
+                products = products.filter(stock=0)
+
+        # Paginate
+        page = self.paginate_queryset(products)
+        if page is not None:
+            thumbnail_data = []
+            for product in page:
+                thumbnail_data.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'primary_image_url': self.get_serializer(product).get_primary_image_url(product),
+                    'thumbnail_url': self.get_serializer(product).get_thumbnail_url(product),
+                    'stock_status': product.stock_status,
+                    'created_at': product.created_at,
+                    'category_name': product.category_name
+                })
+            return self.get_paginated_response(thumbnail_data)
+
+        return Response([])
+
+    # Add this to your ProductViewSet in tasks/views/products.py
+
+    @action(detail=True, methods=['GET'], url_path='debug-images')
+    def debug_images(self, request, pk=None):
+        """Debug endpoint to see what image URLs are being generated"""
+        product = self.get_object()
+
+        debug_data = {
+            'product_id': product.id,
+            'product_name': product.name,
+            'product_images_in_db': [],
+            'serializer_urls': {}
+        }
+
+        # Check what's in the database
+        for img in product.images.all():
+            debug_data['product_images_in_db'].append({
+                'id': img.id,
+                'order': img.order,
+                'is_primary': img.is_primary,
+                'original_image_field': str(img.image) if img.image else None,
+                'compressed_image_field': str(img.compressed_image) if img.compressed_image else None,
+                'thumbnail_field': str(img.thumbnail) if img.thumbnail else None,
+                'original_image_url': img.image.url if img.image else None,
+                'compressed_image_url': img.compressed_image.url if img.compressed_image else None,
+                'thumbnail_url': img.thumbnail.url if img.thumbnail else None,
+                'get_display_url()': img.get_display_url(),
+                'get_thumbnail_url()': img.get_thumbnail_url(),
+            })
+
+        # Check what the serializer returns
+        serializer = ProductSerializer(product, context={'request': request})
+        debug_data['serializer_urls'] = {
+            'primary_image_url': serializer.get_primary_image_url(product),
+            'thumbnail_url': serializer.get_thumbnail_url(product),
+            'images': serializer.get_images(product),
+            'product_images': serializer.get_product_images(product),
+        }
+
+        return Response(debug_data)
+
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
     """Fixed ViewSet for shipment announcements"""
@@ -455,6 +545,51 @@ class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
             return ShipmentAnnouncement.objects.filter(
                 is_active=True
             ).select_related('created_by').prefetch_related('additional_images').order_by('-is_featured', '-created_at')
+
+    # Add this to your ProductViewSet for debugging
+    @action(detail=True, methods=['GET'], url_path='debug')
+    def debug_product(self, request, pk=None):
+        """Debug endpoint to check product image structure"""
+        product = self.get_object()
+
+        # Get all images for this product
+        product_images = product.images.all().order_by('order', 'id')
+
+        debug_info = {
+            'product_id': product.id,
+            'product_name': product.name,
+            'total_images_in_db': product_images.count(),
+            'images_data': []
+        }
+
+        for img in product_images:
+            # Set request context
+            if request:
+                img._request = request
+
+            image_info = {
+                'id': img.id,
+                'order': img.order,
+                'is_primary': img.is_primary,
+                'alt_text': img.alt_text,
+                'original_image': img.image.url if img.image else None,
+                'compressed_image': img.compressed_image.url if img.compressed_image else None,
+                'thumbnail': img.thumbnail.url if img.thumbnail else None,
+                'get_display_url': img.get_display_url(),
+                'get_thumbnail_url': img.get_thumbnail_url(),
+            }
+            debug_info['images_data'].append(image_info)
+
+        # Also test the serializer output
+        serializer = ProductSerializer(product, context={'request': request})
+        debug_info['serializer_output'] = {
+            'primary_image_url': serializer.get_primary_image_url(product),
+            'thumbnail_url': serializer.get_thumbnail_url(product),
+            'images': serializer.get_images(product),
+            'product_images': serializer.get_product_images(product),
+        }
+
+        return Response(debug_info)
 
     def create(self, request, *args, **kwargs):
         """Create announcement without using DRF serializer for files"""

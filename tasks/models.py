@@ -5,7 +5,6 @@ from django.contrib.auth.models import PermissionsMixin
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django.core.files.base import ContentFile
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
@@ -463,19 +462,164 @@ class Product(models.Model):
         db_table = 'products'
 
 
+# Add this to your ProductImage model (in models.py)
+
+from django.db import models
+from django.core.files.storage import default_storage
+from .utils.image_optimizer import ImageOptimizer
+
+# Simplified version that works with existing database structure
+from django.db import models
+from django.core.files.storage import default_storage
+from .utils.image_optimizer import ImageOptimizer
+import os
+
+# Simplified version that works with existing database structure
+from django.db import models
+from django.core.files.storage import default_storage
+from .utils.image_optimizer import ImageOptimizer
+import os
+
+
 class ProductImage(models.Model):
-    product = models.ForeignKey(Product, related_name='images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='products/')  # Note: different upload path
-    alt_text = models.CharField(max_length=255, blank=True, null=True)
-    order = models.PositiveIntegerField(default=0)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='products/', null=True, blank=True)
+    compressed_image = models.ImageField(upload_to='products/compressed/', null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='products/thumbnails/', null=True, blank=True)
+
+    # These fields should already exist in your model
     is_primary = models.BooleanField(default=False)
+    alt_text = models.CharField(max_length=200, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    # Keep existing timestamp fields if you have them
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['order', 'id']
 
+    def save(self, *args, **kwargs):
+        """Override save - only handle primary image logic"""
+        if self.is_primary:
+            ProductImage.objects.filter(
+                product=self.product,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+
+        # Call parent save first
+        super().save(*args, **kwargs)
+
+        # Generate compressed versions AFTER saving, only if image exists and no compressed version
+        if self.image and not self.compressed_image:
+            try:
+                self.generate_compressed_versions()
+                # Update only the image fields to avoid recursion
+                ProductImage.objects.filter(id=self.pk).update(
+                    compressed_image=self.compressed_image,
+                    thumbnail=self.thumbnail
+                )
+            except Exception as e:
+                print(f"Error generating compressed versions: {e}")
+
+    def generate_compressed_versions(self):
+        """Generate compressed and thumbnail versions"""
+        if not self.image:
+            return
+
+        try:
+            print(f"Generating compressed versions for ProductImage: {self.pk or 'new'}")
+
+            # Create optimized versions using the working optimizer
+            from .utils.image_optimizer import ImageOptimizer
+            optimized = ImageOptimizer.create_optimized_versions(self.image)
+
+            if optimized:
+                # IMPORTANT: Save files WITHOUT calling save() to avoid recursion
+                # Django will automatically prepend the upload_to path
+
+                # For thumbnail
+                if optimized['thumbnail']:
+                    self.thumbnail.save(
+                        optimized['thumbnail'].name,  # Just the filename
+                        optimized['thumbnail'],
+                        save=False  # Don't call save() - prevents recursion
+                    )
+
+                # For compressed image
+                if optimized['compressed']:
+                    self.compressed_image.save(
+                        optimized['compressed'].name,  # Just the filename
+                        optimized['compressed'],
+                        save=False  # Don't call save() - prevents recursion
+                    )
+
+                print(f"Generated optimized versions - Original: {optimized['original_size']}b, "
+                      f"Compressed: {optimized['compressed_size']}b")
+            else:
+                print("Failed to generate optimized versions")
+
+        except Exception as e:
+            print(f"Error generating compressed versions: {e}")
+
+    def get_display_url(self):
+        """Get the URL for main display"""
+        request = getattr(self, '_request', None)
+
+        if self.compressed_image:
+            url = self.compressed_image.url
+        elif self.image:
+            url = self.image.url
+        else:
+            return None
+
+        if request and not url.startswith('http'):
+            return request.build_absolute_uri(url)
+
+        return url
+
+    def get_thumbnail_url(self):
+        """Get the URL for thumbnail"""
+        request = getattr(self, '_request', None)
+
+        if self.thumbnail:
+            url = self.thumbnail.url
+        elif self.compressed_image:
+            url = self.compressed_image.url
+        elif self.image:
+            url = self.image.url
+        else:
+            return None
+
+        if request and not url.startswith('http'):
+            return request.build_absolute_uri(url)
+
+        return url
+
+    def delete(self, *args, **kwargs):
+        """Delete associated files when model is deleted"""
+        from django.core.files.storage import default_storage
+
+        if self.image:
+            try:
+                default_storage.delete(self.image.name)
+            except:
+                pass
+        if self.compressed_image:
+            try:
+                default_storage.delete(self.compressed_image.name)
+            except:
+                pass
+        if self.thumbnail:
+            try:
+                default_storage.delete(self.thumbnail.name)
+            except:
+                pass
+
+        super().delete(*args, **kwargs)
+
     def __str__(self):
-        return f"Image {self.order + 1} for {self.product.name}"
+        return f"Image {self.order} for {self.product.name} ({'Primary' if self.is_primary else 'Secondary'})"
 
 
 class ShipmentAnnouncement(models.Model):

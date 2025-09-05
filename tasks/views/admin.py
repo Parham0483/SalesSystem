@@ -16,12 +16,17 @@ from ..serializers.customers import CustomerSerializer
 from ..serializers.products import ProductSerializer, ShipmentAnnouncementSerializer
 from ..serializers.orders import OrderDetailSerializer
 from ..serializers.dealers import DealerSerializer, DealerCommissionSerializer
-
+from rest_framework.pagination import PageNumberPagination
 from ..services.notification_service import NotificationService
 import logging
 from ..serializers.customers import CustomerInvoiceInfoSerializer
 
 logger = logging.getLogger(__name__)
+
+class ProductPagination(PageNumberPagination):
+    page_size = 12
+    page_size_query_param = 'limit'
+    max_page_size = 100
 
 class AdminDashboardViewSet(viewsets.ViewSet):
     """Admin dashboard statistics and overview"""
@@ -167,91 +172,125 @@ class AdminDashboardViewSet(viewsets.ViewSet):
 
 
 class AdminProductViewSet(viewsets.ModelViewSet):
-    """Admin product management"""
+    """Admin product management with pagination and server-side filtering"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     serializer_class = ProductSerializer
+    pagination_class = ProductPagination
 
     def get_queryset(self):
-        return Product.objects.all().order_by('-created_at')
+        queryset = Product.objects.all()
+
+        # Apply server-side filters
+        search = self.request.query_params.get('search')
+        status = self.request.query_params.get('status')
+        stock_filter = self.request.query_params.get('stock_filter')
+        category = self.request.query_params.get('category')
+        ordering = self.request.query_params.get('ordering')
+
+        # Search filter
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(description__icontains=search) |
+                Q(category__name__icontains=search) |
+                Q(category__display_name__icontains=search)
+            )
+
+        # Status filter
+        if status and status != 'all':
+            if status == 'active':
+                queryset = queryset.filter(is_active=True)
+            elif status == 'inactive':
+                queryset = queryset.filter(is_active=False)
+
+        # Stock filter
+        if stock_filter and stock_filter != 'all':
+            if stock_filter == 'out_of_stock':
+                queryset = queryset.filter(stock=0)
+            elif stock_filter == 'low_stock':
+                queryset = queryset.filter(stock__gt=0, stock__lte=50)
+            elif stock_filter == 'in_stock':
+                queryset = queryset.filter(stock__gt=10)
+
+        # Category filter
+        if category and category != 'all':
+            try:
+                category_id = int(category)
+                queryset = queryset.filter(category_id=category_id)
+            except (ValueError, TypeError):
+                pass
+
+        # Ordering
+        if ordering:
+            if ordering == 'newest':
+                queryset = queryset.order_by('-created_at')
+            elif ordering == 'oldest':
+                queryset = queryset.order_by('created_at')
+            elif ordering == 'name':
+                queryset = queryset.order_by('name')
+            elif ordering == 'price':
+                queryset = queryset.order_by('-base_price')
+            elif ordering == 'stock':
+                queryset = queryset.order_by('-stock')
+            else:
+                queryset = queryset.order_by('-created_at')
+        else:
+            queryset = queryset.order_by('-created_at')
+
+        return queryset
+
 
     def create(self, request, *args, **kwargs):
         """Create new product with multiple images support"""
-        print("=== ADMIN CREATE PRODUCT DEBUG START ===")
-        print(f"POST data keys: {list(request.data.keys())}")
-        print(f"FILES keys: {list(request.FILES.keys())}")
-        print(f"Content-Type: {request.content_type}")
 
-        # Handle images from both FILES and data
+        # Get images from request
         images = []
-
-        # First, try to get images from request.FILES (multipart/form-data)
+        seen_names = set()
         images_from_files = request.FILES.getlist('images')
+
         if images_from_files:
-            images.extend(images_from_files)
-            print(f"Found {len(images_from_files)} images in request.FILES")
-
-        # Then, check request.data for images (in case they come as file objects)
-        if 'images' in request.data:
-            data_images = request.data.get('images')
-            print(f"Found 'images' in request.data: {type(data_images)}")
-
-            if isinstance(data_images, list):
-                for item in data_images:
-                    if hasattr(item, 'read'):  # It's a file-like object
-                        images.append(item)
-                        print(f"Added file object: {getattr(item, 'name', 'unnamed')}")
-            elif hasattr(data_images, 'read'):
-                images.append(data_images)
-                print(f"Added single file object: {getattr(data_images, 'name', 'unnamed')}")
-
-        print(f"Total images collected: {len(images)}")
+            for image_file in images_from_files:
+                file_name = getattr(image_file, 'name', 'unnamed')
+                if file_name not in seen_names:
+                    images.append(image_file)
+                    seen_names.add(file_name)
 
         if not images:
-            print("ERROR: No images found")
             return Response({
-                'error': 'حداقل یک تصویر الزامی است',
-                'debug': {
-                    'files_keys': list(request.FILES.keys()),
-                    'data_keys': list(request.data.keys()),
-                    'data_images_type': str(type(request.data.get('images', 'not found'))),
-                    'content_type': request.content_type,
-                    'request_method': request.method
-                }
+                'error': 'حداقل یک تصویر الزامی است'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Validate image files
+        # Validate images
         allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
         max_size = 5 * 1024 * 1024  # 5MB
 
-        for i, image_file in enumerate(images):
+        for image_file in images:
             if hasattr(image_file, 'content_type') and image_file.content_type:
                 if image_file.content_type.lower() not in allowed_types:
                     return Response({
-                        'error': f'فرمت فایل {getattr(image_file, "name", f"image_{i}")} پشتیبانی نمی‌شود'
+                        'error': f'فرمت فایل {getattr(image_file, "name", "image")} پشتیبانی نمی‌شود'
                     }, status=status.HTTP_400_BAD_REQUEST)
 
             if hasattr(image_file, 'size') and image_file.size > max_size:
                 return Response({
-                    'error': f'حجم فایل {getattr(image_file, "name", f"image_{i}")} بیش از 5MB است'
+                    'error': f'حجم فایل {getattr(image_file, "name", "image")} نباید بیشتر از 5MB باشد'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create product first (WITHOUT images in serializer)
-        product_data = request.data.copy()
-
-        # Remove images from product data since we'll handle them separately
-        product_data.pop('images', None)
-        product_data.pop('image_order', None)  # Remove image_order too
+        # Create product data - EXCLUDE image field completely
+        product_data = {}
+        for key, value in request.data.items():
+            if key not in ['images', 'image_order', 'image']:
+                product_data[key] = value
 
         serializer = self.get_serializer(data=product_data)
         if not serializer.is_valid():
-            print(f"Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        # Create product WITHOUT setting product.image
         product = serializer.save()
-        print(f"Product created: {product.id} - {product.name}")
 
-        # Handle image ordering from frontend
+        # Handle image ordering
         image_order_data = None
         if 'image_order' in request.data:
             try:
@@ -259,32 +298,26 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 if isinstance(image_order_str, str):
                     import json
                     image_order_data = json.loads(image_order_str)
-                    print(f"Image order data: {image_order_data}")
-            except Exception as e:
-                print(f"Error parsing image_order: {e}")
+            except Exception:
+                pass  # Ignore parsing errors
 
-        # NOW handle images separately
-        from tasks.models import ProductImage
-
+        # Create ProductImage objects ONLY
         created_images = []
         for i, image_file in enumerate(images):
             try:
-                print(f"Creating ProductImage {i}: {getattr(image_file, 'name', f'image_{i}')}")
-
-                # Determine order and primary status
                 order = i
-                is_primary = (i == 0)  # Default: first image is primary
+                is_primary = (i == 0)  # First image is primary
 
-                # If we have image_order data, use it
+                # Use image order data if available
                 if image_order_data:
                     for order_item in image_order_data:
-                        if order_item.get('type') == 'new':
-                            # Match by index or other identifier
-                            if order_item.get('order', 0) == i:
-                                order = order_item.get('order', i)
-                                is_primary = order_item.get('is_primary', i == 0)
-                                break
+                        if order_item.get('type') == 'new' and order_item.get('order', 0) == i:
+                            order = order_item.get('order', i)
+                            is_primary = order_item.get('is_primary', i == 0)
+                            break
 
+                # Create ONLY ProductImage - DON'T touch Product.image
+                from tasks.models import ProductImage
                 product_image = ProductImage.objects.create(
                     product=product,
                     image=image_file,
@@ -293,38 +326,19 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                     alt_text=f"تصویر {i + 1} برای {product.name}"
                 )
                 created_images.append(product_image)
-                print(f"SUCCESS: Created ProductImage {product_image.id} with order={order}, primary={is_primary}")
-            except Exception as e:
-                print(f"ERROR creating image {i}: {str(e)}")
-                import traceback
-                traceback.print_exc()
 
-        print(f"Total ProductImage objects created: {len(created_images)}")
-
-        # Refresh product from database to include new images
-        product.refresh_from_db()
+            except Exception:
+                continue  # Skip failed images
 
         return Response({
             'message': 'Product created successfully',
-            'product': ProductSerializer(product, context={'request': request}).data,
-            'debug': {
-                'images_uploaded': len(images),
-                'images_created': len(created_images),
-                'created_image_ids': [img.id for img in created_images],
-                'content_type_received': request.content_type,
-                'request_method': request.method
-            }
+            'product': ProductSerializer(product, context={'request': request}).data
         }, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         """Update product with multiple images support"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
-
-        print("=== ADMIN UPDATE PRODUCT DEBUG START ===")
-        print(f"Updating product: {instance.id} - {instance.name}")
-        print(f"POST data keys: {list(request.data.keys())}")
-        print(f"FILES keys: {list(request.FILES.keys())}")
 
         # Handle existing images to keep
         existing_images_to_keep = request.data.get('existing_images')
@@ -333,8 +347,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 if isinstance(existing_images_to_keep, str):
                     import json
                     existing_images_to_keep = json.loads(existing_images_to_keep)
-                print(f"Existing images to keep: {existing_images_to_keep}")
-            except:
+            except Exception:
                 existing_images_to_keep = []
 
         # Handle new images if provided
@@ -342,44 +355,59 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         images_from_files = request.FILES.getlist('images')
         if images_from_files:
             new_images.extend(images_from_files)
-            print(f"Found {len(images_from_files)} new images")
 
         # Update product fields (excluding images)
         product_data = request.data.copy()
         product_data.pop('images', None)
         product_data.pop('existing_images', None)
-        product_data.pop('image_order', None)  # Remove image_order from product data
+        product_data.pop('image_order', None)
 
         serializer = self.get_serializer(instance, data=product_data, partial=partial)
         if not serializer.is_valid():
-            print(f"Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         product = serializer.save()
-        print(f"Product updated: {product.id} - {product.name}")
 
         # Handle images if new images provided or existing images management
         if new_images or existing_images_to_keep is not None:
             from tasks.models import ProductImage
+            import os
+
+            def extract_base_filename(url):
+                """Extract base filename for matching, removing _comp suffix and normalizing case"""
+                if not url:
+                    return None
+                filename = os.path.basename(url)
+                # Remove _comp suffix if present
+                if '_comp.' in filename:
+                    base, ext = filename.rsplit('_comp.', 1)
+                    filename = f"{base}.{ext}"
+                # Remove file extension and normalize
+                base_name = os.path.splitext(filename)[0].lower()
+                return base_name
 
             # If we have existing images to keep, remove others
             if existing_images_to_keep is not None:
-                # Normalize existing_images_to_keep to relative paths
-                normalized_keep_list = []
+                # Extract base filenames from URLs that should be kept
+                keep_filenames = set()
                 for url in existing_images_to_keep:
-                    if url.startswith('http'):
-                        # Extract just the path from full URL
-                        from urllib.parse import urlparse
-                        normalized_keep_list.append(urlparse(url).path)
-                    else:
-                        normalized_keep_list.append(url)
+                    base_filename = extract_base_filename(url)
+                    if base_filename:
+                        keep_filenames.add(base_filename)
 
-                # Remove images not in the keep list
+                # Find images to keep and delete others
                 current_images = product.images.all()
+                images_to_delete = []
+
                 for img in current_images:
-                    if img.image.url not in normalized_keep_list:
-                        print(f"Removing image: {img.image.url}")
-                        img.delete()
+                    if img.image:
+                        img_base_filename = extract_base_filename(img.image.url)
+                        if img_base_filename not in keep_filenames:
+                            images_to_delete.append(img)
+
+                # Delete marked images
+                for img in images_to_delete:
+                    img.delete()
 
             # Handle image ordering if provided
             if 'image_order' in request.data:
@@ -389,78 +417,55 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                         import json
                         image_order_data = json.loads(image_order_data)
 
-                    print(f"Processing image_order: {image_order_data}")
-
                     # Reset all images to not primary first
                     product.images.update(is_primary=False)
 
-                    # Update order and primary status based on the order data
+                    # Update order and primary status based on filenames
                     for order_item in image_order_data:
                         if order_item.get('type') == 'existing' and order_item.get('src'):
-                            # Normalize the URL for comparison
-                            src_url = order_item['src']
-                            if src_url.startswith('http'):
-                                from urllib.parse import urlparse
-                                src_path = urlparse(src_url).path
-                            else:
-                                src_path = src_url
+                            target_base_filename = extract_base_filename(order_item['src'])
 
-                            # Find the ProductImage by matching the image filename
-                            filename = src_path.split('/')[-1]
-                            product_image = product.images.filter(image__icontains=filename).first()
+                            # Find ProductImage by filename match
+                            for img in product.images.all():
+                                if img.image:
+                                    img_base_filename = extract_base_filename(img.image.url)
+                                    if img_base_filename == target_base_filename:
+                                        img.order = order_item.get('order', 0)
+                                        img.is_primary = order_item.get('is_primary', False)
+                                        img.save()
+                                        break
 
-                            if product_image:
-                                product_image.order = order_item.get('order', 0)
-                                product_image.is_primary = order_item.get('is_primary', False)
-                                product_image.save()
-                                print(
-                                    f"Updated image {product_image.id}: order={product_image.order}, primary={product_image.is_primary}")
-                            else:
-                                print(f"Could not find image for filename: {filename}")
-
-                except Exception as e:
-                    print(f"Error processing image_order: {e}")
-                    import traceback
-                    traceback.print_exc()
+                except Exception:
+                    pass  # Ignore ordering errors
 
             # Add new images if provided
             if new_images:
                 # Get current max order
+                from django.db.models import Max
                 current_max_order = product.images.aggregate(
                     max_order=Max('order')
                 )['max_order'] or -1
 
-                created_images = []
                 for i, image_file in enumerate(new_images):
                     try:
-                        print(f"Adding new ProductImage {i}: {getattr(image_file, 'name', f'image_{i}')}")
-                        product_image = ProductImage.objects.create(
+                        ProductImage.objects.create(
                             product=product,
                             image=image_file,
                             order=current_max_order + i + 1,
                             is_primary=False,  # Don't auto-set as primary for updates
                             alt_text=f"تصویر {current_max_order + i + 2} برای {product.name}"
                         )
-                        created_images.append(product_image)
-                        print(f"SUCCESS: Created ProductImage {product_image.id}")
-                    except Exception as e:
-                        print(f"ERROR creating image {i}: {str(e)}")
-                        import traceback
-                        traceback.print_exc()
-
-                print(f"Total new ProductImage objects created: {len(created_images)}")
+                    except Exception:
+                        continue  # Skip failed images
 
         # Refresh product from database
         product.refresh_from_db()
 
         return Response({
             'message': 'Product updated successfully',
-            'product': ProductSerializer(product, context={'request': request}).data,
-            'debug': {
-                'new_images_added': len(new_images) if new_images else 0,
-                'existing_images_kept': len(existing_images_to_keep) if existing_images_to_keep else 0
-            }
+            'product': ProductSerializer(product, context={'request': request}).data
         }, status=status.HTTP_200_OK)
+
 
     @action(detail=True, methods=['DELETE'], url_path='remove-image/(?P<image_id>[^/.]+)')
     def remove_image(self, request, pk=None, image_id=None):
@@ -582,9 +587,9 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 'error': 'Invalid stock value'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['POST'], url_path='bulk-actions')
+    @action(detail=False, methods=['POST'],url_path='bulk-actions')
     def bulk_actions(self, request):
-        """Perform bulk actions on products"""
+        """Perform bulk actions on products - FIXED endpoint name"""
         product_ids = request.data.get('product_ids', [])
         action = request.data.get('action')
 
@@ -611,6 +616,37 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({'message': message})
+
+    # Add stats endpoint for the statistics cards
+    @action(detail=False, methods=['GET'], url_path='stats')
+    def get_stats(self, request):
+        """Get product statistics for the dashboard"""
+        queryset = self.get_queryset()
+
+        # Get filtered stats based on current filters
+        total = queryset.count()
+        active = queryset.filter(is_active=True).count()
+        inactive = queryset.filter(is_active=False).count()
+        low_stock = queryset.filter(stock__gt=0, stock__lte=50).count()
+        out_of_stock = queryset.filter(stock=0).count()
+        featured = queryset.filter(is_featured=True).count()
+
+        # Calculate total value
+        total_value = sum(
+            (product.base_price or 0) * (product.stock or 0)
+            for product in queryset
+        )
+
+        return Response({
+            'total': total,
+            'active': active,
+            'inactive': inactive,
+            'low_stock': low_stock,
+            'out_of_stock': out_of_stock,
+            'featured': featured,
+            'total_value': total_value
+        })
+
 
     @action(detail=False, methods=['GET'], url_path='categories')
     def get_categories(self, request):
@@ -726,7 +762,68 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(orders, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['GET'], url_path='details')
+    def order_details(self, request, pk=None):
+        """Get detailed order information"""
+        try:
+            # pk is already an integer, so just get the order directly
+            order = self.get_object()
+        except Order.DoesNotExist:
+            return Response({
+                'error': 'Order not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
+        commission = DealerCommission.objects.filter(order=order).first()
+
+        # FIXED: Use correct field names
+        order_amount = 0
+        if hasattr(order, 'quoted_total') and order.quoted_total:
+            order_amount = float(order.quoted_total)
+        elif hasattr(order, 'total') and order.total:
+            order_amount = float(order.total)
+        elif hasattr(order, 'get_total'):
+            order_amount = float(order.get_total())
+
+        # FIXED: Handle OrderItem attributes properly
+        items_data = []
+        for item in order.items.all():
+            quantity = 1  # fallback
+            if hasattr(item, 'final_quantity') and item.final_quantity:
+                quantity = item.final_quantity
+            elif hasattr(item, 'requested_quantity') and item.requested_quantity:
+                quantity = item.requested_quantity
+
+            unit_price = 0
+            if hasattr(item, 'quoted_unit_price') and item.quoted_unit_price:
+                unit_price = float(item.quoted_unit_price)
+            elif hasattr(item, 'unit_price') and item.unit_price:
+                unit_price = float(item.unit_price)
+            elif hasattr(item, 'price') and item.price:
+                unit_price = float(item.price)
+
+            items_data.append({
+                'product_name': item.product.name,
+                'quantity': quantity,
+                'unit_price': unit_price,
+                'total_price': float(unit_price * quantity)
+            })
+
+        return Response({
+            'id': order.order_code if hasattr(order, 'order_code') else f"ORD-{order.id}",
+            'customer': {
+                'name': order.customer.name,
+                'email': order.customer.email
+            },
+            'date': order.created_at.date(),
+            'total_amount': order_amount,
+            'status': order.status,
+            'items': items_data,
+            'commission': {
+                'rate': float(commission.commission_rate) if commission else 0,
+                'amount': float(commission.commission_amount) if commission else 0,
+                'is_paid': commission.is_paid if commission else False
+            } if commission else None
+        })
 
 class AdminCustomerViewSet(viewsets.ModelViewSet):
     """Admin customer management"""
@@ -898,48 +995,67 @@ class AdminCustomerViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['GET'], url_path='orders')
     def customer_orders(self, request, pk=None):
-        """Get all orders for a specific customer"""
+        """Get specific customer's orders for a dealer"""
         customer = self.get_object()
-        orders = Order.objects.filter(customer=customer).order_by('-created_at')
+        dealer_id = request.query_params.get('dealer_id')
 
-        # Apply pagination if needed
-        page = request.query_params.get('page', 1)
-        limit = request.query_params.get('limit', 20)
+        orders = Order.objects.filter(customer=customer)
+        if dealer_id:
+            orders = orders.filter(assigned_dealer_id=dealer_id)
 
-        try:
-            page = int(page)
-            limit = int(limit)
-            start = (page - 1) * limit
-            end = start + limit
-            orders_page = orders[start:end]
-        except (ValueError, TypeError):
-            orders_page = orders[:20]
+        orders = orders.order_by('-created_at')
 
-        orders_data = []
-        for order in orders_page:
-            orders_data.append({
-                'id': order.id,
-                'created_at': order.created_at.isoformat(),
+        order_data = []
+        for order in orders:
+            # FIXED: Use correct field names
+            order_amount = 0
+            if hasattr(order, 'quoted_total') and order.quoted_total:
+                order_amount = float(order.quoted_total)
+            elif hasattr(order, 'total') and order.total:
+                order_amount = float(order.total)
+            elif hasattr(order, 'get_total'):
+                order_amount = float(order.get_total())
+
+            # FIXED: Handle OrderItem attributes properly - check what fields actually exist
+            items_data = []
+            for item in order.items.all():
+                # Debug: Print available attributes
+                print(f"OrderItem attributes: {[attr for attr in dir(item) if not attr.startswith('_')]}")
+
+                # Try different possible quantity field names
+                quantity = 1  # fallback
+                if hasattr(item, 'final_quantity') and item.final_quantity:
+                    quantity = item.final_quantity
+                elif hasattr(item, 'requested_quantity') and item.requested_quantity:
+                    quantity = item.requested_quantity
+                # Remove the problematic 'quantity' check since it doesn't exist
+
+                # Try different possible price field names
+                unit_price = 0
+                if hasattr(item, 'quoted_unit_price') and item.quoted_unit_price:
+                    unit_price = float(item.quoted_unit_price)
+                elif hasattr(item, 'unit_price') and item.unit_price:
+                    unit_price = float(item.unit_price)
+                elif hasattr(item, 'price') and item.price:
+                    unit_price = float(item.price)
+
+                items_data.append({
+                    'product_name': item.product.name,
+                    'quantity': quantity,
+                    'unit_price': unit_price,
+                    'total_price': float(unit_price * quantity)
+                })
+
+            order_data.append({
+                'id': order.order_code if hasattr(order, 'order_code') else f"ORD-{order.id}",
+                'date': order.created_at.date(),
+                'total_amount': order_amount,
                 'status': order.status,
-                'total': float(order.quoted_total) if order.quoted_total else 0,
-                'items_count': order.items.count(),
-                'dealer': order.assigned_dealer.name if order.assigned_dealer else None
+                'items': items_data
             })
 
-        total_spent = orders.filter(status='completed').aggregate(
-            total=Sum('quoted_total')
-        )['total'] or Decimal('0.00')
-
         return Response({
-            'customer': CustomerSerializer(customer, context={'request': request}).data,
-            'orders': orders_data,
-            'pagination': {
-                'total_orders': orders.count(),
-                'page': page,
-                'limit': limit,
-                'has_more': orders.count() > end
-            },
-            'total_spent': float(total_spent)
+            'results': order_data
         })
 
     @action(detail=False, methods=['POST'], url_path='convert-to-dealer')
@@ -1003,6 +1119,8 @@ class AdminCustomerViewSet(viewsets.ModelViewSet):
         }
 
         return Response(stats)
+
+
 
 class AdminDealerViewSet(viewsets.ModelViewSet):
     """Admin dealer management"""
@@ -1080,45 +1198,7 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
                 'error': 'Invalid commission rate'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['GET'], url_path='performance')
-    def dealer_performance(self, request, pk=None):
-        """Get dealer performance metrics"""
-        dealer = self.get_object()
 
-        orders = Order.objects.filter(assigned_dealer=dealer)
-        completed_orders = orders.filter(status='completed')
-
-        total_sales = completed_orders.aggregate(
-            total=Sum('quoted_total')
-        )['total'] or Decimal('0.00')
-
-        total_commission = sum(
-            order.dealer_commission_amount for order in completed_orders
-        )
-
-        commissions = DealerCommission.objects.filter(dealer=dealer)
-        paid_commission = commissions.filter(is_paid=True).aggregate(
-            total=Sum('commission_amount')
-        )['total'] or Decimal('0.00')
-
-        return Response({
-            'dealer': DealerSerializer(dealer).data,
-            'performance': {
-                'total_orders': orders.count(),
-                'completed_orders': completed_orders.count(),
-                'pending_orders': orders.filter(
-                    status__in=['pending_pricing', 'waiting_customer_approval', 'confirmed']
-                ).count(),
-                'total_sales': float(total_sales),
-                'total_commission_earned': float(total_commission),
-                'paid_commission': float(paid_commission),
-                'pending_commission': float(total_commission - paid_commission),
-                'conversion_rate': round(
-                    (completed_orders.count() / orders.count() * 100) if orders.count() > 0 else 0,
-                    2
-                )
-            }
-        })
 
     @action(detail=False, methods=['GET'], url_path='commissions')
     def all_commissions(self, request):
@@ -1292,6 +1372,240 @@ class AdminDealerViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Error paying dealer commissions: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Add these imports at the top of your admin.py file
+    from datetime import datetime
+    from django.db.models import Avg
+
+    # Add these methods to your existing AdminDealerViewSet class:
+
+    @action(detail=True, methods=['GET'], url_path='performance')
+    def performance(self, request, pk=None):
+        """Get comprehensive dealer performance data"""
+        dealer = self.get_object()
+
+        # Calculate performance metrics
+        orders = Order.objects.filter(assigned_dealer=dealer)
+        completed_orders = orders.filter(status='completed')
+
+        # FIXED: Use the correct field name for order total
+        total_sales = completed_orders.aggregate(
+            total=Sum('quoted_total')
+        )['total'] or Decimal('0.00')
+
+        commissions = DealerCommission.objects.filter(dealer=dealer)
+        total_commission = commissions.aggregate(
+            total=Sum('commission_amount')
+        )['total'] or Decimal('0.00')
+
+        paid_commission = commissions.filter(is_paid=True).aggregate(
+            total=Sum('commission_amount')
+        )['total'] or Decimal('0.00')
+
+        pending_commission = commissions.filter(is_paid=False).aggregate(
+            total=Sum('commission_amount')
+        )['total'] or Decimal('0.00')
+
+        # Calculate conversion rate
+        conversion_rate = 0
+        if orders.count() > 0:
+            conversion_rate = (completed_orders.count() / orders.count()) * 100
+
+        # Calculate average order value
+        avg_order_value = 0
+        if completed_orders.count() > 0:
+            avg_order_value = total_sales / completed_orders.count()
+
+        # Calculate customer retention (simplified - you may want to refine this logic)
+        unique_customers = orders.values('customer').distinct().count()
+        repeat_customers = orders.values('customer').annotate(
+            order_count=Count('id')
+        ).filter(order_count__gt=1).count()
+
+        customer_retention = 0
+        if unique_customers > 0:
+            customer_retention = (repeat_customers / unique_customers) * 100
+
+        return Response({
+            'dealer': {
+                'id': dealer.id,
+                'name': dealer.name,
+                'email': dealer.email,
+                'phone': dealer.phone,
+                'company_name': dealer.company_name,
+                'date_joined': dealer.date_joined,
+                'dealer_commission_rate': float(dealer.dealer_commission_rate)
+            },
+            'overview': {
+                'total_orders': orders.count(),
+                'completed_orders': completed_orders.count(),
+                'conversion_rate': round(conversion_rate, 1),
+                'total_sales': float(total_sales),
+                'total_commission_earned': float(total_commission),
+                'paid_commission': float(paid_commission),
+                'pending_commission': float(pending_commission),
+                'avg_order_value': float(avg_order_value),
+                'customer_retention_rate': round(customer_retention, 1)
+            }
+        })
+
+    @action(detail=True, methods=['GET'], url_path='customers')
+    def top_customers(self, request, pk=None):
+        """Get dealer's top customers with search and sort"""
+        dealer = self.get_object()
+        search = request.query_params.get('search', '')
+        sort_by = request.query_params.get('sort_by', 'total_spent')
+        order = request.query_params.get('order', 'desc')
+
+        # FIXED: Use the correct relationship field name
+        # Get customers who have orders with this dealer
+        customer_stats = []
+
+        # Get all orders for this dealer and extract unique customers
+        dealer_orders = Order.objects.filter(assigned_dealer=dealer)
+        customer_ids = dealer_orders.values_list('customer_id', flat=True).distinct()
+        customers = Customer.objects.filter(id__in=customer_ids)
+
+        if search:
+            customers = customers.filter(
+                Q(name__icontains=search) | Q(email__icontains=search)
+            )
+
+        for customer in customers:
+            customer_orders = Order.objects.filter(
+                customer=customer,
+                assigned_dealer=dealer
+            )
+            completed_orders = customer_orders.filter(status='completed')
+
+            # FIXED: Use the correct field name for order total
+            total_spent = completed_orders.aggregate(
+                total=Sum('quoted_total')
+            )['total'] or Decimal('0.00')
+
+            last_order = customer_orders.order_by('-created_at').first()
+
+            customer_stats.append({
+                'id': customer.id,
+                'name': customer.name,
+                'email': customer.email,
+                'phone': customer.phone,
+                'total_orders': customer_orders.count(),
+                'total_spent': float(total_spent),
+                'last_order_date': last_order.created_at.date() if last_order else None,
+                'status': 'active' if customer.is_active else 'inactive'
+            })
+
+        # Sort results
+        reverse = order == 'desc'
+        if sort_by == 'total_spent':
+            customer_stats.sort(key=lambda x: x['total_spent'], reverse=reverse)
+        elif sort_by == 'total_orders':
+            customer_stats.sort(key=lambda x: x['total_orders'], reverse=reverse)
+        elif sort_by == 'last_order_date':
+            customer_stats.sort(key=lambda x: x['last_order_date'] or '', reverse=reverse)
+        elif sort_by == 'name':
+            customer_stats.sort(key=lambda x: x['name'], reverse=reverse)
+
+        return Response({
+            'results': customer_stats
+        })
+
+    @action(detail=True, methods=['GET'], url_path='recent-orders')
+    def recent_orders(self, request, pk=None):
+        """Get dealer's recent orders"""
+        dealer = self.get_object()
+        limit = int(request.query_params.get('limit', 10))
+
+        orders = Order.objects.filter(
+            assigned_dealer=dealer
+        ).order_by('-created_at')[:limit]
+
+        order_data = []
+        for order in orders:
+            commission = DealerCommission.objects.filter(
+                dealer=dealer, order=order
+            ).first()
+
+            # FIXED: Use the correct field names for order amount
+            order_amount = 0
+            if hasattr(order, 'quoted_total') and order.quoted_total:
+                order_amount = float(order.quoted_total)
+            elif hasattr(order, 'total') and order.total:
+                order_amount = float(order.total)
+            elif hasattr(order, 'get_total'):
+                order_amount = float(order.get_total())
+
+            order_data.append({
+                'id': order.order_code if hasattr(order, 'order_code') else f"ORD-{order.id}",
+                'customer_name': order.customer.name,
+                'amount': order_amount,
+                'commission': float(commission.commission_amount) if commission else 0,
+                'date': order.created_at.date(),
+                'status': order.status,
+                'items_count': order.items.count()
+            })
+
+        return Response({
+            'results': order_data
+        })
+
+    @action(detail=True, methods=['GET'], url_path='monthly-stats')
+    def monthly_stats(self, request, pk=None):
+        """Get dealer's monthly statistics"""
+        dealer = self.get_object()
+        year = int(request.query_params.get('year', 2024))
+
+        # Get last 6 months of data
+        monthly_data = []
+        persian_months = [
+            'فروردین', 'اردیبهشت', 'خرداد', 'تیر',
+            'مرداد', 'شهریور', 'مهر', 'آبان',
+            'آذر', 'دی', 'بهمن', 'اسفند'
+        ]
+
+        # Calculate for last 6 months from current date
+        current_date = timezone.now()
+        for i in range(6):
+            # Calculate month boundaries
+            if current_date.month - i > 0:
+                target_month = current_date.month - i
+                target_year = current_date.year
+            else:
+                target_month = 12 + (current_date.month - i)
+                target_year = current_date.year - 1
+
+            # Get orders for this month
+            month_orders = Order.objects.filter(
+                assigned_dealer=dealer,
+                status='completed',
+                created_at__year=target_year,
+                created_at__month=target_month
+            )
+
+            month_sales = month_orders.aggregate(
+                total=Sum('quoted_total')
+            )['total'] or Decimal('0.00')
+
+            month_commissions = DealerCommission.objects.filter(
+                dealer=dealer,
+                order__in=month_orders
+            )
+
+            month_commission = month_commissions.aggregate(
+                total=Sum('commission_amount')
+            )['total'] or Decimal('0.00')
+
+            monthly_data.insert(0, {  # Insert at beginning to maintain chronological order
+                'month': persian_months[(target_month - 1) % 12],
+                'orders': month_orders.count(),
+                'sales': float(month_sales),
+                'commission': float(month_commission)
+            })
+
+        return Response({
+            'monthly_stats': monthly_data
+        })
 
 
 class AdminAnnouncementViewSet(viewsets.ModelViewSet):

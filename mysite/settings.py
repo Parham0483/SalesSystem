@@ -1,3 +1,4 @@
+import json
 import os
 import ssl
 import certifi
@@ -231,19 +232,45 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 #EMAIL SETTINGS
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+DEFAULT_FROM_EMAIL = 'sale@gtc.market'
+EMAIL_BACKEND = 'tasks.services.oauth2_email_backend.OAuth2EmailBackend'
+FALLBACK_EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+GOOGLE_SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, 'gtc-market-key.json')
+
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
-EMAIL_HOST_USER = 'parham.g1383@gmail.com'
-EMAIL_HOST_PASSWORD = 'hxhabmcfltseioto'
-DEFAULT_FROM_EMAIL = 'parham.g1383@gmail.com'
+EMAIL_HOST_USER = 'sale@gtc.market'
+EMAIL_HOST_PASSWORD = 'bfrkzibjjawkuify'  # Keep as fallback
+DEFAULT_FROM_EMAIL = 'sale@gtc.market'
+
+# OAuth2 Email settings
+OAUTH2_EMAIL_SETTINGS = {
+    'TIMEOUT': 30,  # Request timeout in seconds
+    'RETRY_ATTEMPTS': 3,  # Number of retry attempts for failed requests
+    'RETRY_DELAY': 1,  # Delay between retries in seconds
+    'USE_FALLBACK_ON_ERROR': True,  # Use fallback backend if OAuth2 fails
+    'LOG_FAILED_ATTEMPTS': True,  # Log failed email attempts
+}
+
+if not DEBUG:
+    import json
+    try:
+        GOOGLE_SERVICE_ACCOUNT_INFO = json.loads(os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '{}'))
+        if not GOOGLE_SERVICE_ACCOUNT_INFO:
+            # If no environment variable, fall back to file
+            GOOGLE_SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, 'gtc-market-key.json')
+    except:
+        # If JSON parsing fails, use file path
+        GOOGLE_SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, 'gtc-market-key.json')
 
 # Email Configuration
-ADMIN_EMAIL_LIST = ['parham.g1383@gmail.com']
+ADMIN_EMAIL_LIST = ['sale@gtc.market']
 FRONTEND_URL = 'http://localhost:3000'
-SUPPORT_EMAIL = 'parham.g1383@gmail.com'
+SUPPORT_EMAIL = 'sale@gtc.market'
 
 # For development - disable SSL certificate verification
 import ssl

@@ -1,4 +1,4 @@
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives, send_mail, get_connection
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils.html import strip_tags
@@ -16,7 +16,8 @@ class NotificationService:
     @staticmethod
     def send_email_with_tracking(order=None, email_type=None, recipient_email=None, subject=None, html_content=None,
                                  attachment=None, announcement=None, dealer=None):
-        """Enhanced send email method that can track orders, announcements, and dealer notifications"""
+        """Enhanced send email method with OAuth2 support and automatic fallback"""
+
         notification = EmailNotification.objects.create(
             order=order,
             email_type=email_type,
@@ -28,11 +29,56 @@ class NotificationService:
         )
 
         try:
-            # For development - use simple send_mail for better compatibility
+            # Try OAuth2 first if configured
+            if hasattr(settings, 'EMAIL_BACKEND') and 'oauth2' in settings.EMAIL_BACKEND.lower():
+                logger.info("🔐 Attempting OAuth2 email send")
+                try:
+                    # Use OAuth2 backend
+                    connection = get_connection(backend=settings.EMAIL_BACKEND)
+
+                    if html_content:
+                        # HTML email with OAuth2
+                        plain_text = strip_tags(html_content)
+                        msg = EmailMultiAlternatives(
+                            subject=subject,
+                            body=plain_text,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            to=[recipient_email],
+                            connection=connection
+                        )
+                        msg.attach_alternative(html_content, "text/html")
+
+                        # Add PDF attachment if provided
+                        if attachment:
+                            msg.attach(attachment['filename'], attachment['content'], attachment['mimetype'])
+
+                        msg.send()
+                    else:
+                        # Plain text email with OAuth2
+                        send_mail(
+                            subject=subject,
+                            message=strip_tags(html_content) if html_content else "Email content",
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[recipient_email],
+                            connection=connection,
+                            fail_silently=False,
+                        )
+
+                    notification.is_successful = True
+                    notification.save()
+                    logger.info(f"✅ OAuth2 email sent successfully: {email_type} to {recipient_email}")
+                    return True
+
+                except Exception as oauth_error:
+                    logger.warning(f"⚠️ OAuth2 failed: {oauth_error}, trying SMTP fallback")
+                    # Fall through to SMTP fallback below
+
+            # SMTP Fallback (your original logic)
+            logger.info("📧 Using SMTP fallback")
+
             if settings.DEBUG:
                 # Simple text email for development
-                plain_text = strip_tags(html_content)
-                from django.core.mail import send_mail
+                plain_text = strip_tags(html_content) if html_content else "Email content"
 
                 send_mail(
                     subject=subject,
@@ -41,17 +87,18 @@ class NotificationService:
                     recipient_list=[recipient_email],
                     fail_silently=False,
                 )
-
                 logger.info(f"✅ Simple email sent successfully: {email_type} to {recipient_email}")
             else:
                 # Full HTML email for production
                 msg = EmailMultiAlternatives(
                     subject=subject,
-                    body=strip_tags(html_content),
+                    body=strip_tags(html_content) if html_content else "Email content",
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[recipient_email]
                 )
-                msg.attach_alternative(html_content, "text/html")
+
+                if html_content:
+                    msg.attach_alternative(html_content, "text/html")
 
                 # Add PDF attachment if provided
                 if attachment:
@@ -1009,13 +1056,22 @@ class NotificationService:
         try:
             subject = f"رسید پرداخت آپلود شد - سفارش #{order.id}"
 
+            # Safe timestamp handling
+            upload_time = "نامشخص"
+            if order.payment_receipt_uploaded_at:
+                upload_time = order.payment_receipt_uploaded_at.strftime('%Y/%m/%d %H:%M')
+            else:
+                # Fallback to current time
+                from django.utils import timezone
+                upload_time = timezone.now().strftime('%Y/%m/%d %H:%M')
+
             message = f"""
     رسید پرداخت برای سفارش جدیدی آپلود شده است:
 
     شماره سفارش: #{order.id}
     نام مشتری: {order.customer.name}
     مبلغ سفارش: {order.quoted_total:,.0f} ریال
-    تاریخ آپلود: {order.payment_receipt_uploaded_at.strftime('%Y/%m/%d %H:%M')}
+    تاریخ آپلود: {upload_time}
 
     لطفاً وارد پنل مدیریت شوید و رسید پرداخت را بررسی کنید.
     پنل مدیریت: {settings.FRONTEND_URL}/admin/orders/{order.id}
@@ -1034,6 +1090,7 @@ class NotificationService:
                         fail_silently=False,
                     )
                     success_count += 1
+                    logger.info(f"✅ Payment upload notification sent to admin: {admin_email}")
                 except Exception as e:
                     logger.error(f"❌ Failed to send payment upload notification to {admin_email}: {e}")
 
@@ -1042,6 +1099,161 @@ class NotificationService:
         except Exception as e:
             logger.error(f"❌ Failed to send payment upload notification: {e}")
             return False
+
+    @staticmethod
+    def notify_admin_payment_uploaded(order):
+        """Notify admin when customer uploads payment receipt"""
+        try:
+            subject = f"رسید پرداخت آپلود شد - سفارش #{order.id}"
+
+            # Safe timestamp handling
+            upload_time = "نامشخص"
+            if order.payment_receipt_uploaded_at:
+                upload_time = order.payment_receipt_uploaded_at.strftime('%Y/%m/%d %H:%M')
+            else:
+                # Fallback to current time
+                from django.utils import timezone
+                upload_time = timezone.now().strftime('%Y/%m/%d %H:%M')
+
+            message = f"""
+    رسید پرداخت برای سفارش جدیدی آپلود شده است:
+
+    شماره سفارش: #{order.id}
+    نام مشتری: {order.customer.name}
+    مبلغ سفارش: {order.quoted_total:,.0f} ریال
+    تاریخ آپلود: {upload_time}
+
+    لطفاً وارد پنل مدیریت شوید و رسید پرداخت را بررسی کنید.
+    پنل مدیریت: {settings.FRONTEND_URL}/admin/orders/{order.id}
+            """.strip()
+
+            admin_emails = getattr(settings, 'ADMIN_EMAIL_LIST', ['admin@company.com'])
+
+            success_count = 0
+            for admin_email in admin_emails:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[admin_email],
+                        fail_silently=False,
+                    )
+                    success_count += 1
+                    logger.info(f"✅ Payment upload notification sent to admin: {admin_email}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send payment upload notification to {admin_email}: {e}")
+
+            return success_count > 0
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send payment upload notification: {e}")
+            return False
+
+    @staticmethod
+    def notify_customer_order_completed(order, include_invoice=True):
+        """NEW: Notify customer when order is completed + invoice"""
+        try:
+            subject = f"سفارش #{order.id} تکمیل شد - آماده تحویل"
+
+            message = f"""
+    {order.customer.name} عزیز،
+
+    خبر خوش! سفارش شماره #{order.id} با موفقیت تکمیل شد و آماده تحویل است.
+
+    📦 جزئیات سفارش:
+    - شماره سفارش: #{order.id}
+    - مبلغ نهایی: {order.quoted_total:,.0f} ریال
+    - تعداد اقلام: {order.items.count()} محصول
+    - تاریخ تکمیل: {order.updated_at.strftime('%Y/%m/%d %H:%M')}
+
+    🚚 مراحل بعدی:
+    1. کالاهای شما بسته‌بندی و آماده ارسال شده‌اند
+    2. برای هماهنگی نحوه تحویل با شما تماس خواهیم گرفت
+    3. فاکتور نهایی به این ایمیل ضمیمه شده است
+
+    📄 مدارک ضمیمه:
+    - فاکتور رسمی سفارش
+    - لیست کالاهای ارسالی
+
+    📞 اطلاعات تماس:
+    تلفن: {getattr(settings, 'BUSINESS_PHONE', '035-91007711')}
+    ایمیل: {getattr(settings, 'SUPPORT_EMAIL', 'sales@gtc.market')}
+
+    از اعتماد شما سپاسگزاریم و امیدواریم از خرید خود راضی باشید.
+
+    با تشکر،
+    تیم فروش کیان تجارت پویا کویر
+            """.strip()
+
+            # Generate invoice attachment if requested
+            attachment = None
+            if include_invoice:
+                try:
+                    # Check if order is official or unofficial and use appropriate service
+                    if getattr(order, 'business_invoice_type', 'unofficial') == 'official':
+                        # Use official enhanced Persian PDF
+                        from ..services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
+                        generator = EnhancedPersianInvoicePDFGenerator(order.invoice)
+                        invoice_pdf = generator.generate_pdf()
+                        filename = f'official_invoice_order_{order.id}.pdf'
+                    else:
+                        # Use unofficial invoice PDF - FIXED IMPORT
+                        from ..services.unofficial_invoice_pdf import UnofficialInvoicePDFGenerator
+                        generator = UnofficialInvoicePDFGenerator(order, getattr(order, 'invoice', None))
+                        invoice_pdf = generator.generate_pdf()
+                        filename = f'unofficial_invoice_order_{order.id}.pdf'
+
+                    if invoice_pdf:
+                        attachment = {
+                            'filename': filename,
+                            'content': invoice_pdf.getvalue(),  # Get bytes from BytesIO
+                            'mimetype': 'application/pdf'
+                        }
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not generate invoice for order {order.id}: {e}")
+
+            # Send email using the enhanced method
+            email_sent = NotificationService.send_email_with_tracking(
+                order=order,
+                email_type='order_completed',
+                recipient_email=order.customer.email,
+                subject=subject,
+                html_content=message.replace('\n', '<br>'),
+                attachment=attachment
+            )
+
+            # Also send SMS notification
+            if order.customer.phone:
+                sms_message = f"""سلام {order.customer.name}
+    سفارش #{order.id} تکمیل شد!
+    از خرید شما متشکریم.
+    کیان تجارت پویا کویر"""
+
+                NotificationService.send_sms_notification(
+                    phone=order.customer.phone,
+                    message=sms_message,
+                    order=order,
+                    sms_type='order_completed'
+                )
+
+            logger.info(f"📧 Order completed notification sent to {order.customer.email}")
+            return email_sent
+
+        except Exception as e:
+            logger.error(f"❌ Failed to send order completed notification: {e}")
+            EmailNotification.objects.create(
+                order=order,
+                email_type='order_completed',
+                recipient_email=order.customer.email,
+                subject=subject if 'subject' in locals() else f"سفارش #{order.id} تکمیل شد",
+                is_successful=False,
+                error_message=str(e)
+            )
+            return False
+
+
+
 
 
 

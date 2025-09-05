@@ -446,16 +446,6 @@ const LoginPage = () => {
 
                     </p>
 
-                    <div className="google-login-section">
-                        <div className="login-divider">
-                            <span>ورود سریع با گوگل</span>
-                        </div>
-                        <GoogleLoginButton
-                            onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            className="google-login-button"
-                        />
-                    </div>
 
                     <NeoBrutalistButton
                         text="برگشت به صفحه اصلی"

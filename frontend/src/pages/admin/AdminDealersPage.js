@@ -1,11 +1,12 @@
-// frontend/src/pages/admin/AdminDealersPage.js - Complete Dealer Management
+// frontend/src/pages/admin/AdminDealersPage.js - Updated with Enhanced Performance Modal
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users, Search, Filter, Eye, Edit, UserCheck, UserX, Mail, Phone, Building,
     Star, TrendingUp, AlertCircle, CheckCircle, XCircle, Plus, Download,
     Calendar, CreditCard, Package, MoreVertical, UserPlus, DollarSign,
-    Shield, Crown, Settings, PieChart, BarChart3, Handshake
+    Shield, Crown, Settings, PieChart, BarChart3, Handshake, ArrowLeft,
+    Activity, Clock, SortAsc, SortDesc, ExternalLink, User
 } from 'lucide-react';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
@@ -29,7 +30,29 @@ const AdminDealersPage = () => {
     const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
     const [isPerformanceModalOpen, setIsPerformanceModalOpen] = useState(false);
     const [selectedDealer, setSelectedDealer] = useState(null);
-    const [dealerPerformance, setDealerPerformance] = useState(null);
+
+    // Enhanced Performance Modal States
+    const [dealerPerformanceData, setDealerPerformanceData] = useState(null);
+    const [performanceCurrentView, setPerformanceCurrentView] = useState('overview');
+    const [performanceLoading, setPerformanceLoading] = useState(false);
+    const [topCustomers, setTopCustomers] = useState([]);
+    const [recentOrders, setRecentOrders] = useState([]);
+    const [monthlyStats, setMonthlyStats] = useState([]);
+
+    // Customer Orders Modal States
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerOrdersOpen, setCustomerOrdersOpen] = useState(false);
+    const [customerOrders, setCustomerOrders] = useState([]);
+
+    // Order Details Modal States
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+    const [orderDetails, setOrderDetails] = useState(null);
+
+    // Search and Filter States for Performance Modal
+    const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+    const [customerSortBy, setCustomerSortBy] = useState('total_spent');
+    const [customerSortOrder, setCustomerSortOrder] = useState('desc');
 
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
@@ -128,6 +151,71 @@ const AdminDealersPage = () => {
         }
     }, []);
 
+    // Enhanced Performance Data Fetching
+    const fetchDealerPerformance = async (dealerId) => {
+        setPerformanceLoading(true);
+        try {
+            const response = await API.get(`/admin/dealers/${dealerId}/performance/`);
+            setDealerPerformanceData(response.data);
+        } catch (err) {
+            console.error('Error fetching dealer performance:', err);
+            setError('خطا در بارگیری آمار عملکرد');
+        } finally {
+            setPerformanceLoading(false);
+        }
+    };
+
+    const fetchTopCustomers = async (dealerId) => {
+        try {
+            const params = new URLSearchParams({
+                search: customerSearchTerm,
+                sort_by: customerSortBy,
+                order: customerSortOrder
+            });
+            const response = await API.get(`/admin/dealers/${dealerId}/customers/?${params}`);
+            setTopCustomers(response.data.results);
+        } catch (err) {
+            console.error('Error fetching top customers:', err);
+        }
+    };
+
+    const fetchRecentOrders = async (dealerId) => {
+        try {
+            const response = await API.get(`/admin/dealers/${dealerId}/recent-orders/?limit=10`);
+            setRecentOrders(response.data.results);
+        } catch (err) {
+            console.error('Error fetching recent orders:', err);
+        }
+    };
+
+    const fetchMonthlyStats = async (dealerId) => {
+        try {
+            const response = await API.get(`/admin/dealers/${dealerId}/monthly-stats/?year=2024`);
+            setMonthlyStats(response.data.monthly_stats);
+        } catch (err) {
+            console.error('Error fetching monthly stats:', err);
+        }
+    };
+
+    const fetchCustomerOrders = async (customerId, dealerId) => {
+        try {
+            const params = dealerId ? `?dealer_id=${dealerId}` : '';
+            const response = await API.get(`/admin/customers/${customerId}/orders/${params}`);
+            setCustomerOrders(response.data.results);
+        } catch (err) {
+            console.error('Error fetching customer orders:', err);
+        }
+    };
+
+    const fetchOrderDetails = async (orderId) => {
+        try {
+            const response = await API.get(`/admin/orders/${orderId}/details/`);
+            setOrderDetails(response.data);
+        } catch (err) {
+            console.error('Error fetching order details:', err);
+        }
+    };
+
     useEffect(() => {
         fetchDealers();
         fetchCommissions();
@@ -137,6 +225,43 @@ const AdminDealersPage = () => {
     useEffect(() => {
         filterAndSortDealers();
     }, [dealers, searchTerm, statusFilter, sortBy]);
+
+    // Enhanced Performance Modal Effects
+    useEffect(() => {
+        if (selectedDealer && isPerformanceModalOpen) {
+            fetchDealerPerformance(selectedDealer.id);
+            if (performanceCurrentView === 'customers') {
+                fetchTopCustomers(selectedDealer.id);
+            } else if (performanceCurrentView === 'orders') {
+                fetchRecentOrders(selectedDealer.id);
+            } else if (performanceCurrentView === 'analytics') {
+                fetchMonthlyStats(selectedDealer.id);
+            }
+        }
+    }, [selectedDealer, isPerformanceModalOpen, performanceCurrentView]);
+
+    useEffect(() => {
+        if (selectedDealer && performanceCurrentView === 'customers') {
+            fetchTopCustomers(selectedDealer.id);
+        }
+    }, [customerSearchTerm, customerSortBy, customerSortOrder, selectedDealer, performanceCurrentView]);
+
+    useEffect(() => {
+        // Prevent body scroll when modal is open
+        if (isPerformanceModalOpen) {
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = 'unset';
+        }
+
+        // Cleanup on unmount
+        return () => {
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = 'unset';
+        };
+    }, [isPerformanceModalOpen]);
 
     const filterAndSortDealers = () => {
         let filtered = [...dealers];
@@ -254,16 +379,33 @@ const AdminDealersPage = () => {
         }
     };
 
-    const handleViewPerformance = async (dealer) => {
+    const handleViewPerformance = (dealer) => {
         setSelectedDealer(dealer);
+        setPerformanceCurrentView('overview');
+        setDealerPerformanceData(null);
+        setTopCustomers([]);
+        setRecentOrders([]);
+        setMonthlyStats([]);
         setIsPerformanceModalOpen(true);
-        try {
-            const response = await API.get(`/admin/dealers/${dealer.id}/performance/`);
-            setDealerPerformance(response.data);
-        } catch (err) {
-            console.error('Error fetching dealer performance:', err);
-            setError('خطا در بارگیری آمار عملکرد');
+    };
+
+    const handleCustomerClick = (customer) => {
+        setSelectedCustomer(customer);
+        setCustomerOrders([]);
+        setCustomerOrdersOpen(true);
+        fetchCustomerOrders(customer.id, selectedDealer?.id);
+    };
+
+    const handleOrderClick = (order) => {
+        let orderId = order.id;
+        if (typeof orderId === 'string' && orderId.startsWith('ORD-')) {
+            orderId = orderId.replace('ORD-', '');
         }
+
+        setSelectedOrder(order);
+        setOrderDetails(null);
+        setOrderDetailsOpen(true);
+        fetchOrderDetails(orderId);
     };
 
     const handlePayCommissions = async (commissionIds) => {
@@ -623,7 +765,6 @@ const AdminDealersPage = () => {
                                     color="blue-400"
                                     textColor="white"
                                     onClick={() => {
-                                        // Navigate to detailed sales report
                                         navigate('/admin/reports/dealer-sales');
                                     }}
                                 />
@@ -642,7 +783,6 @@ const AdminDealersPage = () => {
                                     color="purple-400"
                                     textColor="white"
                                     onClick={() => {
-                                        // Navigate to commission analysis
                                         navigate('/admin/reports/commission-analysis');
                                     }}
                                 />
@@ -661,7 +801,6 @@ const AdminDealersPage = () => {
                                     color="green-400"
                                     textColor="black"
                                     onClick={() => {
-                                        // Export to Excel
                                         window.open('/api/admin/dealers/export/', '_blank');
                                     }}
                                 />
@@ -925,103 +1064,540 @@ const AdminDealersPage = () => {
                 </form>
             </NeoBrutalistModal>
 
-            {/* Dealer Performance Modal */}
+            {/* Enhanced Dealer Performance Modal */}
             <NeoBrutalistModal
                 isOpen={isPerformanceModalOpen}
-                onClose={() => setIsPerformanceModalOpen(false)}
-                title={selectedDealer ? `آمار عملکرد: ${selectedDealer.name}` : ''}
-                size="large"
+                onClose={() => {
+                    setIsPerformanceModalOpen(false);
+                    // Reset scroll position when closing
+                    document.body.style.overflow = 'unset';
+                }}
+                title=""
+                size="fullscreen"
+                className="enhanced-performance-modal"
             >
-                {dealerPerformance ? (
-                    <div className="performance-modal">
-                        <NeoBrutalistCard className="performance-summary">
-                            <h4>خلاصه عملکرد</h4>
-                            <div className="performance-stats-grid">
-                                <div className="performance-stat">
-                                    <span className="stat-number">{dealerPerformance.performance.total_orders}</span>
-                                    <span className="stat-label">کل سفارشات تخصیص یافته</span>
+                <div className="enhanced-performance-content">
+                    {selectedDealer && (
+                        <>
+                            {/* Header */}
+                            <div className="performance-header">
+                                <div className="header-info">
+                                    <h2>آمار عملکرد: {selectedDealer.name}</h2>
+                                    <div className="dealer-meta">
+                                        <span>شرکت: {selectedDealer.company_name || 'نامشخص'}</span>
+                                        <span>عضویت: {new Date(selectedDealer.date_joined).toLocaleDateString('fa-IR')}</span>
+                                        <span>نرخ کمیسیون: {selectedDealer.dealer_commission_rate}%</span>
+                                    </div>
                                 </div>
-                                <div className="performance-stat">
-                                    <span className="stat-number">{dealerPerformance.performance.completed_orders}</span>
-                                    <span className="stat-label">سفارشات تکمیل شده</span>
-                                </div>
-                                <div className="performance-stat">
-                                    <span className="stat-number">{dealerPerformance.performance.conversion_rate}%</span>
-                                    <span className="stat-label">نرخ تبدیل</span>
-                                </div>
-                                <div className="performance-stat">
-                                    <span className="stat-number">{(dealerPerformance.performance.total_sales / 1000).toFixed(0)}K</span>
-                                    <span className="stat-label">فروش کل (هزار تومان)</span>
-                                </div>
-                            </div>
-                        </NeoBrutalistCard>
-
-                        <NeoBrutalistCard className="commission-details">
-                            <h4>جزئیات کمیسیون</h4>
-                            <div className="commission-breakdown">
-                                <div className="commission-item">
-                                    <span>کل کمیسیون کسب شده:</span>
-                                    <span className="amount">{dealerPerformance.performance.total_commission_earned.toLocaleString('fa-IR')} تومان</span>
-                                </div>
-                                <div className="commission-item">
-                                    <span>کمیسیون پرداخت شده:</span>
-                                    <span className="amount paid">{dealerPerformance.performance.paid_commission.toLocaleString('fa-IR')} تومان</span>
-                                </div>
-                                <div className="commission-item">
-                                    <span>کمیسیون در انتظار پرداخت:</span>
-                                    <span className="amount pending">{dealerPerformance.performance.pending_commission.toLocaleString('fa-IR')} تومان</span>
-                                </div>
-                            </div>
-                        </NeoBrutalistCard>
-
-                        <NeoBrutalistCard className="performance-actions">
-                            <h4>عملیات</h4>
-                            <div className="action-buttons">
                                 <NeoBrutalistButton
-                                    text="مشاهده سفارشات تخصیص یافته"
-                                    color="blue-400"
+                                    text="بازگشت"
+                                    color="red-400"
                                     textColor="white"
                                     onClick={() => {
-                                        navigate(`/admin/orders?dealer=${selectedDealer.name}`);
-                                    }}
-                                />
-                                <NeoBrutalistButton
-                                    text="پرداخت کمیسیون‌های معوق"
-                                    color="green-400"
-                                    textColor="black"
-                                    onClick={() => {
-                                        // Handle commission payment
-                                        const unpaidCommissions = commissions.filter(
-                                            c => c.dealer_name === selectedDealer.name && !c.is_paid
-                                        );
-                                        if (unpaidCommissions.length > 0) {
-                                            handlePayCommissions(unpaidCommissions.map(c => c.id));
-                                        }
-                                    }}
-                                />
-                                <NeoBrutalistButton
-                                    text="ویرایش نرخ کمیسیون"
-                                    color="yellow-400"
-                                    textColor="black"
-                                    onClick={() => {
-                                        const newRate = prompt('نرخ کمیسیون جدید (درصد):', selectedDealer.dealer_commission_rate);
-                                        if (newRate && !isNaN(newRate)) {
-                                            handleUpdateCommission(selectedDealer.id, parseFloat(newRate));
-                                        }
+                                        setIsPerformanceModalOpen(false);
+                                        document.body.style.overflow = 'unset';
                                     }}
                                 />
                             </div>
-                        </NeoBrutalistCard>
-                    </div>
-                ) : (
-                    <div className="modal-loading">
-                        <div className="loading-spinner"></div>
-                        <p>در حال بارگیری آمار عملکرد...</p>
-                    </div>
-                )}
+
+                            {/* Navigation Tabs */}
+                            <div className="performance-tabs">
+                                <NeoBrutalistButton
+                                    text="نمای کلی"
+                                    color={performanceCurrentView === 'overview' ? 'blue-400' : 'gray-200'}
+                                    textColor={performanceCurrentView === 'overview' ? 'white' : 'black'}
+                                    onClick={() => setPerformanceCurrentView('overview')}
+                                />
+                                <NeoBrutalistButton
+                                    text="مشتریان برتر"
+                                    color={performanceCurrentView === 'customers' ? 'blue-400' : 'gray-200'}
+                                    textColor={performanceCurrentView === 'customers' ? 'white' : 'black'}
+                                    onClick={() => setPerformanceCurrentView('customers')}
+                                />
+                                <NeoBrutalistButton
+                                    text="سفارشات اخیر"
+                                    color={performanceCurrentView === 'orders' ? 'blue-400' : 'gray-200'}
+                                    textColor={performanceCurrentView === 'orders' ? 'white' : 'black'}
+                                    onClick={() => setPerformanceCurrentView('orders')}
+                                />
+                                <NeoBrutalistButton
+                                    text="تحلیل عملکرد"
+                                    color={performanceCurrentView === 'analytics' ? 'blue-400' : 'gray-200'}
+                                    textColor={performanceCurrentView === 'analytics' ? 'white' : 'black'}
+                                    onClick={() => setPerformanceCurrentView('analytics')}
+                                />
+                            </div>
+
+                            {/* Content Area with Proper Scrolling */}
+                            <div className="performance-content" style={{
+                                height: 'calc(100vh - 280px)', // Adjust based on header + tabs height
+                                overflowY: 'auto',
+                                overflowX: 'hidden'
+                            }}>
+                                {performanceLoading ? (
+                                    <div className="loading-container">
+                                        <div className="loading-spinner"></div>
+                                        <p>در حال بارگیری آمار عملکرد...</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Overview Content */}
+                                        {performanceCurrentView === 'overview' && dealerPerformanceData && (
+                                            <div className="overview-content" style={{ minHeight: '0', height: 'auto' }}>
+                                                {/* Key Stats */}
+                                                <div className="performance-stats-grid">
+                                                    <NeoBrutalistCard className="performance-stat-card">
+                                                        <div className="stat-content">
+                                                            <Package className="stat-icon" />
+                                                            <div className="stat-info">
+                                                                <span className="stat-number">{dealerPerformanceData.overview.total_orders}</span>
+                                                                <span className="stat-label">کل سفارشات</span>
+                                                                <span className="stat-subtitle">{dealerPerformanceData.overview.completed_orders} تکمیل شده</span>
+                                                            </div>
+                                                        </div>
+                                                    </NeoBrutalistCard>
+
+                                                    <NeoBrutalistCard className="performance-stat-card">
+                                                        <div className="stat-content">
+                                                            <DollarSign className="stat-icon" />
+                                                            <div className="stat-info">
+                                                                <span className="stat-number">{(dealerPerformanceData.overview.total_sales / 1000000).toFixed(1)}M</span>
+                                                                <span className="stat-label">فروش کل</span>
+                                                                <span className="stat-subtitle">میلیون تومان</span>
+                                                            </div>
+                                                        </div>
+                                                    </NeoBrutalistCard>
+
+                                                    <NeoBrutalistCard className="performance-stat-card">
+                                                        <div className="stat-content">
+                                                            <TrendingUp className="stat-icon" />
+                                                            <div className="stat-info">
+                                                                <span className="stat-number">{dealerPerformanceData.overview.conversion_rate}%</span>
+                                                                <span className="stat-label">نرخ تبدیل</span>
+                                                                <span className="stat-subtitle">موفقیت در فروش</span>
+                                                            </div>
+                                                        </div>
+                                                    </NeoBrutalistCard>
+
+                                                    <NeoBrutalistCard className="performance-stat-card">
+                                                        <div className="stat-content">
+                                                            <Users className="stat-icon" />
+                                                            <div className="stat-info">
+                                                                <span className="stat-number">{dealerPerformanceData.overview.customer_retention_rate}%</span>
+                                                                <span className="stat-label">بازگشت مشتری</span>
+                                                                <span className="stat-subtitle">وفاداری مشتری</span>
+                                                            </div>
+                                                        </div>
+                                                    </NeoBrutalistCard>
+                                                </div>
+
+                                                {/* Commission Overview */}
+                                                <NeoBrutalistCard className="commission-overview-card">
+                                                    <h4>وضعیت کمیسیون</h4>
+                                                    <div className="commission-stats-grid">
+                                                        <div className="commission-stat total">
+                                                            <span className="amount">{dealerPerformanceData.overview.total_commission_earned.toLocaleString('fa-IR')}</span>
+                                                            <span className="label">کل کمیسیون (تومان)</span>
+                                                        </div>
+                                                        <div className="commission-stat paid">
+                                                            <span className="amount">{dealerPerformanceData.overview.paid_commission.toLocaleString('fa-IR')}</span>
+                                                            <span className="label">پرداخت شده (تومان)</span>
+                                                        </div>
+                                                        <div className="commission-stat pending">
+                                                            <span className="amount">{dealerPerformanceData.overview.pending_commission.toLocaleString('fa-IR')}</span>
+                                                            <span className="label">در انتظار (تومان)</span>
+                                                        </div>
+                                                    </div>
+                                                </NeoBrutalistCard>
+
+                                                {/* Quick Actions */}
+                                                <NeoBrutalistCard className="quick-actions-card">
+                                                    <h4>عملیات سریع</h4>
+                                                    <div className="quick-actions-grid">
+                                                        <NeoBrutalistButton
+                                                            text="مشتریان برتر"
+                                                            color="blue-400"
+                                                            textColor="white"
+                                                            onClick={() => setPerformanceCurrentView('customers')}
+                                                        />
+                                                        <NeoBrutalistButton
+                                                            text="سفارشات اخیر"
+                                                            color="green-400"
+                                                            textColor="black"
+                                                            onClick={() => setPerformanceCurrentView('orders')}
+                                                        />
+                                                        <NeoBrutalistButton
+                                                            text="تحلیل عملکرد"
+                                                            color="purple-400"
+                                                            textColor="white"
+                                                            onClick={() => setPerformanceCurrentView('analytics')}
+                                                        />
+                                                        <NeoBrutalistButton
+                                                            text="دانلود گزارش"
+                                                            color="orange-400"
+                                                            textColor="black"
+                                                            onClick={() => alert('در حال آماده‌سازی گزارش...')}
+                                                        />
+                                                    </div>
+                                                </NeoBrutalistCard>
+
+                                                {/* Add extra margin at bottom to ensure full scroll */}
+                                                <div style={{ height: '50px', minHeight: '50px' }}></div>
+                                            </div>
+                                        )}
+
+                                        {/* Customers Content with proper scrolling */}
+                                        {performanceCurrentView === 'customers' && (
+                                            <div className="customers-content" style={{ minHeight: '0', height: 'auto' }}>
+                                                {/* Search and Filter Header */}
+                                                <div className="customers-header">
+                                                    <h4>مشتریان برتر ({topCustomers.length})</h4>
+                                                    <div className="customers-controls">
+                                                        <div className="search-wrapper">
+                                                            <Search size={16} className="search-icon" />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="جستجو در مشتریان..."
+                                                                value={customerSearchTerm}
+                                                                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                                                className="customer-search-input"
+                                                            />
+                                                        </div>
+                                                        <select
+                                                            value={customerSortBy}
+                                                            onChange={(e) => setCustomerSortBy(e.target.value)}
+                                                            className="customer-sort-select"
+                                                        >
+                                                            <option value="total_spent">مبلغ خرید</option>
+                                                            <option value="total_orders">تعداد سفارش</option>
+                                                            <option value="last_order_date">آخرین سفارش</option>
+                                                            <option value="name">نام</option>
+                                                        </select>
+                                                        <button
+                                                            onClick={() => setCustomerSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                                                            className="sort-order-btn"
+                                                        >
+                                                            {customerSortOrder === 'desc' ? <SortDesc size={16} /> : <SortAsc size={16} />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Customers Grid */}
+                                                <div className="customers-grid" style={{ minHeight: '0' }}>
+                                                    {topCustomers.map(customer => (
+                                                        <NeoBrutalistCard
+                                                            key={customer.id}
+                                                            className="customer-card"
+                                                            onClick={() => handleCustomerClick(customer)}
+                                                            style={{ minHeight: '0', height: 'auto' }}
+                                                        >
+                                                            <div className="customer-content">
+                                                                <div className="customer-info">
+                                                                    <div className="customer-avatar">
+                                                                        <User size={24} />
+                                                                    </div>
+                                                                    <div className="customer-details">
+                                                                        <h5>{customer.name}</h5>
+                                                                        <div className="customer-contact">
+                                                                            <Mail size={14} />
+                                                                            <span>{customer.email}</span>
+                                                                        </div>
+                                                                        <div className="customer-contact">
+                                                                            <Phone size={14} />
+                                                                            <span>{customer.phone}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="customer-stats">
+                                                                    <div className="customer-stat">
+                                                                        <span className="stat-number">{customer.total_spent.toLocaleString('fa-IR')}</span>
+                                                                        <span className="stat-label">تومان</span>
+                                                                    </div>
+                                                                    <div className="customer-stat">
+                                                                        <span className="stat-number">{customer.total_orders}</span>
+                                                                        <span className="stat-label">سفارش</span>
+                                                                    </div>
+                                                                    <div className="customer-stat">
+                                                                        <span className="stat-number">{customer.last_order_date ? new Date(customer.last_order_date).toLocaleDateString('fa-IR') : 'ندارد'}</span>
+                                                                        <span className="stat-label">آخرین سفارش</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className={`customer-status ${customer.status}`}>
+                                                                    {customer.status === 'active' ? 'فعال' : 'غیرفعال'}
+                                                                </div>
+                                                            </div>
+                                                        </NeoBrutalistCard>
+                                                    ))}
+                                                </div>
+
+                                                {topCustomers.length === 0 && (
+                                                    <div className="empty-state">
+                                                        <Users size={48} />
+                                                        <h3>مشتری‌ای یافت نشد</h3>
+                                                        <p>هیچ مشتری‌ای با این معیارها یافت نشد</p>
+                                                    </div>
+                                                )}
+
+                                                {/* Bottom spacer for scrolling */}
+                                                <div style={{ height: '50px', minHeight: '50px' }}></div>
+                                            </div>
+                                        )}
+
+                                        {/* Similar fixes for Orders Content */}
+                                        {performanceCurrentView === 'orders' && (
+                                            <div className="orders-content" style={{ minHeight: '0', height: 'auto' }}>
+                                                <h4>سفارشات اخیر ({recentOrders.length})</h4>
+                                                <div className="orders-grid" style={{ minHeight: '0' }}>
+                                                    {recentOrders.map(order => (
+                                                        <NeoBrutalistCard
+                                                            key={order.id}
+                                                            className="order-card"
+                                                            onClick={() => handleOrderClick(order)}
+                                                            style={{ minHeight: '0', height: 'auto' }}
+                                                        >
+                                                            <div className="order-content">
+                                                                <div className="order-header">
+                                                                    <h5>{order.id}</h5>
+                                                                    <div className={`order-status ${order.status}`}>
+                                                                        {order.status === 'completed' ? 'تکمیل شده' : 'در انتظار'}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="order-details">
+                                                                    <span>مشتری: {order.customer_name}</span>
+                                                                    <span>تاریخ: {new Date(order.date).toLocaleDateString('fa-IR')}</span>
+                                                                    <span>{order.items_count} قلم</span>
+                                                                </div>
+                                                                <div className="order-amounts">
+                                                                    <div className="order-amount">
+                                                                        <span className="amount">{order.amount.toLocaleString('fa-IR')}</span>
+                                                                        <span className="label">تومان</span>
+                                                                    </div>
+                                                                    <div className="commission-amount">
+                                                                        <span>کمیسیون: {order.commission.toLocaleString('fa-IR')} تومان</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </NeoBrutalistCard>
+                                                    ))}
+                                                </div>
+
+                                                {recentOrders.length === 0 && (
+                                                    <div className="empty-state">
+                                                        <Package size={48} />
+                                                        <h3>سفارشی یافت نشد</h3>
+                                                        <p>هیچ سفارشی برای این نماینده ثبت نشده است</p>
+                                                    </div>
+                                                )}
+
+                                                <div style={{ height: '50px', minHeight: '50px' }}></div>
+                                            </div>
+                                        )}
+
+                                        {/* Analytics Content with fixed scrolling */}
+                                        {performanceCurrentView === 'analytics' && (
+                                            <div className="analytics-content" style={{ minHeight: '0', height: 'auto' }}>
+                                                <h4>تحلیل عملکرد ماهانه</h4>
+
+                                                {monthlyStats.length > 0 && (
+                                                    <NeoBrutalistCard className="monthly-chart-card">
+                                                        <h5>نمودار فروش و کمیسیون ماهانه</h5>
+                                                        <div className="monthly-stats-list">
+                                                            {monthlyStats.map((month, index) => (
+                                                                <div key={index} className="monthly-stat-item">
+                                                                    <div className="month-name">{month.month}</div>
+                                                                    <div className="month-orders">
+                                                                        <Package size={16} />
+                                                                        <span>{month.orders} سفارش</span>
+                                                                    </div>
+                                                                    <div className="month-sales">
+                                                                        <DollarSign size={16} />
+                                                                        <span>{(month.sales / 1000000).toFixed(1)}M تومان</span>
+                                                                    </div>
+                                                                    <div className="month-commission">
+                                                                        <TrendingUp size={16} />
+                                                                        <span>{month.commission.toLocaleString('fa-IR')} تومان</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </NeoBrutalistCard>
+                                                )}
+
+                                                {dealerPerformanceData && (
+                                                    <div className="analytics-metrics-grid">
+                                                        <NeoBrutalistCard className="metric-card">
+                                                            <Activity size={32} />
+                                                            <div className="metric-value">{dealerPerformanceData.overview.avg_order_value.toLocaleString('fa-IR')}</div>
+                                                            <div className="metric-label">متوسط ارزش سفارش (تومان)</div>
+                                                        </NeoBrutalistCard>
+
+                                                        <NeoBrutalistCard className="metric-card">
+                                                            <Star size={32} />
+                                                            <div className="metric-value">{dealerPerformanceData.dealer.dealer_commission_rate}%</div>
+                                                            <div className="metric-label">نرخ کمیسیون فعلی</div>
+                                                        </NeoBrutalistCard>
+
+                                                        <NeoBrutalistCard className="metric-card">
+                                                            <Clock size={32} />
+                                                            <div className="metric-value">{Math.floor((new Date() - new Date(dealerPerformanceData.dealer.date_joined)) / (1000 * 60 * 60 * 24))}</div>
+                                                            <div className="metric-label">روز همکاری</div>
+                                                        </NeoBrutalistCard>
+                                                    </div>
+                                                )}
+
+                                                <div style={{ height: '50px', minHeight: '50px' }}></div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
             </NeoBrutalistModal>
 
+            {/* Customer Orders Modal */}
+            {customerOrdersOpen && (
+                <div className="modal-overlay">
+                    <div className="customer-orders-modal">
+                        <div className="modal-header">
+                            <h3>سفارشات {selectedCustomer?.name}</h3>
+                            <button
+                                onClick={() => setCustomerOrdersOpen(false)}
+                                className="close-btn"
+                            >
+                                ×
+                            </button>
+                        </div>
 
+                        <div className="customer-summary">
+                            <div className="summary-stats">
+                                <div className="summary-stat">
+                                    <strong>کل سفارشات:</strong>
+                                    <span>{selectedCustomer?.total_orders}</span>
+                                </div>
+                                <div className="summary-stat">
+                                    <strong>مجموع خرید:</strong>
+                                    <span>{selectedCustomer?.total_spent.toLocaleString('fa-IR')} تومان</span>
+                                </div>
+                                <div className="summary-stat">
+                                    <strong>آخرین سفارش:</strong>
+                                    <span>{selectedCustomer?.last_order_date ? new Date(selectedCustomer.last_order_date).toLocaleDateString('fa-IR') : 'ندارد'}</span>
+                                </div>
+                                <div className="summary-stat">
+                                    <strong>وضعیت:</strong>
+                                    <span className={selectedCustomer?.status}>{selectedCustomer?.status === 'active' ? 'فعال' : 'غیرفعال'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="customer-orders-list">
+                            {customerOrders.length > 0 ? customerOrders.map(order => (
+                                <div
+                                    key={order.id}
+                                    onClick={() => handleOrderClick(order)}
+                                    className="customer-order-item"
+                                >
+                                    <div className="order-info">
+                                        <div className="order-id">{order.id}</div>
+                                        <div className="order-date">{new Date(order.date).toLocaleDateString('fa-IR')} - {order.items?.length || 0} قلم</div>
+                                    </div>
+                                    <div className="order-amount">
+                                        <div className="amount">{order.total_amount.toLocaleString('fa-IR')} تومان</div>
+                                        <div className={`status ${order.status}`}>
+                                            {order.status === 'completed' ? 'تکمیل شده' : 'در انتظار'}
+                                        </div>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="empty-state">
+                                    <Package size={48} />
+                                    <h3>هیچ سفارشی یافت نشد</h3>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Order Details Modal */}
+            {orderDetailsOpen && (
+                <div className="modal-overlay">
+                    <div className="order-details-modal">
+                        <div className="modal-header">
+                            <h3>جزئیات سفارش {selectedOrder?.id}</h3>
+                            <button
+                                onClick={() => setOrderDetailsOpen(false)}
+                                className="close-btn"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {orderDetails ? (
+                            <div className="order-details-content">
+                                <div className="order-info-grid">
+                                    <div className="info-item">
+                                        <strong>تاریخ سفارش:</strong>
+                                        <span>{new Date(orderDetails.date).toLocaleDateString('fa-IR')}</span>
+                                    </div>
+                                    <div className="info-item">
+                                        <strong>وضعیت:</strong>
+                                        <span className={orderDetails.status}>
+                                            {orderDetails.status === 'completed' ? 'تکمیل شده' : 'در انتظار'}
+                                        </span>
+                                    </div>
+                                    <div className="info-item">
+                                        <strong>مبلغ کل:</strong>
+                                        <span>{orderDetails.total_amount.toLocaleString('fa-IR')} تومان</span>
+                                    </div>
+                                    <div className="info-item">
+                                        <strong>تعداد آیتم:</strong>
+                                        <span>{orderDetails.items?.length || 0} قلم</span>
+                                    </div>
+                                </div>
+
+                                {orderDetails.items && orderDetails.items.length > 0 && (
+                                    <div className="order-items">
+                                        <h4>آیتم‌های سفارش:</h4>
+                                        <div className="items-list">
+                                            {orderDetails.items.map((item, index) => (
+                                                <div key={index} className="order-item">
+                                                    <div className="item-info">
+                                                        <div className="item-name">{item.product_name}</div>
+                                                        <div className="item-quantity">تعداد: {item.quantity}</div>
+                                                    </div>
+                                                    <div className="item-price">
+                                                        {item.total_price.toLocaleString('fa-IR')} تومان
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {orderDetails.commission && (
+                                    <div className="order-commission">
+                                        <h4>کمیسیون:</h4>
+                                        <div className="commission-details">
+                                            <div>نرخ: {orderDetails.commission.rate}%</div>
+                                            <div>مبلغ: {orderDetails.commission.amount.toLocaleString('fa-IR')} تومان</div>
+                                            <div className={`payment-status ${orderDetails.commission.is_paid ? 'paid' : 'unpaid'}`}>
+                                                {orderDetails.commission.is_paid ? 'پرداخت شده' : 'پرداخت نشده'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="loading-container">
+                                <div className="loading-spinner"></div>
+                                <p>در حال بارگیری جزئیات سفارش...</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,4 +1,4 @@
-# tasks/services/pre_invoice_pdf.py
+# tasks/services/pre_invoice_pdf.py - ENHANCED WITH CONDITIONAL TAX DISPLAY
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -18,12 +18,15 @@ import jdatetime
 
 
 class PreInvoicePDFGenerator:
-    """Generator for pre-invoices with 48-hour validity"""
+    """Enhanced generator for pre-invoices with conditional tax display"""
 
     def __init__(self, order):
         self.order = order
         self.customer = self.order.customer
         self.persian_font = 'Vazir'
+
+        # Determine if this is for official invoice (with tax) or unofficial (without tax)
+        self.is_official = self.order.business_invoice_type == 'official'
 
         self.page_width, self.page_height = A4
         self.margin = 10 * mm
@@ -47,7 +50,7 @@ class PreInvoicePDFGenerator:
             self.persian_font = 'Helvetica'
 
     def setup_styles(self):
-        """Setup paragraph styles - same pattern as enhanced generator"""
+        """Setup paragraph styles - enhanced with more options"""
         self.styles = {
             'default': ParagraphStyle(
                 'default',
@@ -82,10 +85,17 @@ class PreInvoicePDFGenerator:
                 alignment=TA_CENTER,
                 textColor=colors.red,
             ),
+            'invoice_type': ParagraphStyle(
+                'invoice_type',
+                fontName=self.persian_font,
+                fontSize=12,
+                alignment=TA_CENTER,
+                textColor=colors.blue,
+            ),
         }
 
     def _para(self, text, style='table_cell'):
-        """Create Persian paragraph with proper reshaping - same as enhanced generator"""
+        """Create Persian paragraph with proper reshaping"""
         if not text:
             text = ""
         try:
@@ -96,7 +106,7 @@ class PreInvoicePDFGenerator:
             return Paragraph(str(text), self.styles[style])
 
     def draw_background(self, canvas, doc):
-        """Draw background letterhead - same pattern as enhanced generator"""
+        """Draw background letterhead"""
         letterhead_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'letterhead.jpg')
         if os.path.exists(letterhead_path):
             try:
@@ -111,12 +121,12 @@ class PreInvoicePDFGenerator:
             print("⚠️ Letterhead image not found at 'static/images/letterhead.jpg'.")
 
     def add_header_section(self, elements):
-        """Add header with pre-invoice title and validity warning"""
+        """Add header with pre-invoice title and invoice type"""
         # Current date in Shamsi calendar
         current_date = jdatetime.date.today()
 
         # Expiry date (48 hours from now)
-        expiry_datetime = datetime.now() + timedelta(hours=48)
+        expiry_datetime = datetime.now()
         expiry_date = jdatetime.date.fromgregorian(date=expiry_datetime.date())
 
         date_str = current_date.strftime('%Y/%m/%d')
@@ -135,14 +145,19 @@ class PreInvoicePDFGenerator:
         ]))
         elements.append(header_table)
 
+        # Invoice type indicator
+        invoice_type_text = "فاکتور رسمی (شامل مالیات)" if self.is_official else "فاکتور شخصی (بدون مالیات)"
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(self._para(f"نوع فاکتور درخواستی: {invoice_type_text}", 'invoice_type'))
+
         # Validity warning
-        validity_warning = f"⚠️ این پیش فاکتور تا تاریخ {expiry_str} ( تا انتها روز کاری) معتبر است"
+        validity_warning = f"⚠️ این پیش فاکتور تا تاریخ {expiry_str} (تا انتها روز کاری) معتبر است"
         elements.append(Spacer(1, 5 * mm))
         elements.append(self._para(validity_warning, 'warning'))
         elements.append(Spacer(1, 5 * mm))
 
     def add_parties_info(self, elements):
-        """Add seller and buyer information - simplified for pre-invoice"""
+        """Add seller and buyer information - enhanced for official invoices"""
 
         def create_party_table(title, party_data):
             table_content = [
@@ -154,6 +169,21 @@ class PreInvoicePDFGenerator:
             # Add company name if exists
             if party_data.get('company_name'):
                 table_content.append([self._para(f"شرکت: {party_data.get('company_name')}")])
+
+            # For official invoices, show additional customer requirements
+            if self.is_official and title == "مشخصات خریدار":
+                # Check if customer info is complete for official invoice
+                is_valid, missing_fields = self.customer.validate_for_official_invoice()
+
+                if not is_valid:
+                    missing_text = ", ".join(missing_fields)
+                    table_content.append([
+                        self._para(f"⚠️ برای فاکتور رسمی نیاز به تکمیل: {missing_text}", 'warning')
+                    ])
+                else:
+                    table_content.append([
+                        self._para("✅ اطلاعات برای فاکتور رسمی کامل است", 'default')
+                    ])
 
             party_table = Table(table_content, colWidths=[self.content_width])
             party_table.setStyle(TableStyle([
@@ -182,47 +212,107 @@ class PreInvoicePDFGenerator:
         elements.append(Spacer(1, 4 * mm))
 
     def add_items_table(self, elements):
-        """Add items table with pricing"""
-        headers = [
-            "مبلغ کل (ریال)", "مبلغ واحد (ریال)", "تعداد", "شرح کالا", "ردیف"
-        ]
+        """Add items table with conditional tax calculation"""
+        if self.is_official:
+            # Headers for official invoice (with tax columns)
+            headers = [
+                "جمع کل (ریال)", "مالیات (ریال)", "نرخ مالیات (%)",
+                "مبلغ کل", "مبلغ واحد (ریال)", "تعداد", "شرح کالا", "ردیف"
+            ]
 
-        col_widths = [
-            self.content_width * 0.20,  # مبلغ کل
-            self.content_width * 0.20,  # مبلغ واحد
-            self.content_width * 0.15,  # تعداد
-            self.content_width * 0.35,  # شرح کالا
-            self.content_width * 0.10  # ردیف
-        ]
+            col_widths = [
+                self.content_width * 0.15,  # جمع کل
+                self.content_width * 0.12,  # مالیات
+                self.content_width * 0.10,  # نرخ مالیات
+                self.content_width * 0.15,  # مبلغ کل
+                self.content_width * 0.15,  # مبلغ واحد
+                self.content_width * 0.08,  # تعداد
+                self.content_width * 0.20,  # شرح کالا
+                self.content_width * 0.05  # ردیف
+            ]
+        else:
+            # Headers for unofficial invoice (without tax columns)
+            headers = [
+                "مبلغ کل (ریال)", "مبلغ واحد (ریال)", "تعداد", "شرح کالا", "ردیف"
+            ]
+
+            col_widths = [
+                self.content_width * 0.25,  # مبلغ کل
+                self.content_width * 0.25,  # مبلغ واحد
+                self.content_width * 0.15,  # تعداد
+                self.content_width * 0.25,  # شرح کالا
+                self.content_width * 0.10  # ردیف
+            ]
 
         table_data = [[self._para(h, 'table_header') for h in headers]]
 
         items = list(self.order.items.all())
         grand_total = 0
+        grand_total_tax = 0
 
         for i, item in enumerate(items, 1):
             unit_price = int(item.quoted_unit_price or 0)
             quantity = int(item.final_quantity or item.requested_quantity or 0)
             total_price = unit_price * quantity
-            grand_total += total_price
 
-            row = [
-                self._para(f"{total_price:,}"),
-                self._para(f"{unit_price:,}"),
-                self._para(str(quantity)),
-                self._para(item.product.name),
-                self._para(str(i))
-            ]
+            if self.is_official:
+                # Calculate tax for official invoice using product-specific tax rate
+                product_tax_rate = float(getattr(item.product, 'tax_rate', settings.DEFAULT_TAX_RATE * 100))
+                tax_amount = int(total_price * (product_tax_rate / 100))
+                total_with_tax = total_price + tax_amount
+
+                grand_total += total_with_tax
+                grand_total_tax += tax_amount
+
+                row = [
+                    self._para(f"{total_with_tax:,}"),  # جمع کل با مالیات
+                    self._para(f"{tax_amount:,}"),  # مالیات
+                    self._para(f"{product_tax_rate:.1f}%"),  # نرخ مالیات
+                    self._para(f"{total_price:,}"),  # مبلغ کل بدون مالیات
+                    self._para(f"{unit_price:,}"),  # مبلغ واحد
+                    self._para(str(quantity)),  # تعداد
+                    self._para(item.product.name),  # شرح کالا
+                    self._para(str(i))  # ردیف
+                ]
+            else:
+                # Simple calculation for unofficial invoice
+                grand_total += total_price
+
+                row = [
+                    self._para(f"{total_price:,}"),  # مبلغ کل
+                    self._para(f"{unit_price:,}"),  # مبلغ واحد
+                    self._para(str(quantity)),  # تعداد
+                    self._para(item.product.name),  # شرح کالا
+                    self._para(str(i))  # ردیف
+                ]
+
             table_data.append(row)
 
-        # Add total row
-        totals_row = [
-            self._para(f"{grand_total:,}"),
-            "",
-            "",
-            self._para("جمع کل"),
-            ""
-        ]
+        # Add totals row
+        if self.is_official:
+            # Calculate weighted average tax rate for display
+            avg_tax_rate = (
+                        grand_total_tax / (grand_total - grand_total_tax) * 100) if grand_total > grand_total_tax else 0
+
+            totals_row = [
+                self._para(f"{grand_total:,}"),  # جمع کل با مالیات
+                self._para(f"{grand_total_tax:,}"),  # مجموع مالیات
+                self._para(f"{avg_tax_rate:.1f}%"),  # نرخ میانگین
+                self._para(f"{grand_total - grand_total_tax:,}"),  # مجموع بدون مالیات
+                "",  # مبلغ واحد
+                "",  # تعداد
+                self._para("جمع کل"),  # شرح
+                ""  # ردیف
+            ]
+        else:
+            totals_row = [
+                self._para(f"{grand_total:,}"),  # جمع کل
+                "",  # مبلغ واحد
+                "",  # تعداد
+                self._para("جمع کل"),  # شرح کالا
+                ""  # ردیف
+            ]
+
         table_data.append(totals_row)
 
         items_table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -235,28 +325,98 @@ class PreInvoicePDFGenerator:
         elements.append(items_table)
 
     def add_footer(self, elements):
-        """Add footer with terms and conditions"""
-        terms_text = "⚠️ شرایط و ضوابط:\n" \
-                     "• این پیش فاکتور قابل تبدیل به فاکتور رسمی است\n" \
-                     "• پس از تایید سفارش و پرداخت، فاکتور نهایی صادر خواهد شد\n" \
-                     "• قیمت‌ها شامل مالیات بر ارزش افزوده نمی‌باشد (در صورت درخواست فاکتور رسمی، مالیات اضافه خواهد شد)"
+        """Add footer with terms and conditions - corrected for proper RTL display"""
+        elements.append(Spacer(1, 20))
 
-        terms_table = Table([[self._para(terms_text, 'default')]],
-                            colWidths=[self.content_width],
-                            rowHeights=[25 * mm])
+        if self.is_official:
+            # Define terms as separate lines for better control
+            terms_lines = [
+                "⚠️ شرایط و ضوابط فاکتور رسمی:",
+                "• این پیش فاکتور قابل تبدیل به فاکتور رسمی است",
+                "• پس از تایید سفارش و پرداخت، فاکتور نهایی صادر خواهد شد",
+                "• قیمت‌های نمایش داده شده شامل مالیات بر ارزش افزوده می‌باشد",
+                "• برای صدور فاکتور رسمی، اطلاعات کامل شرکت/شخص الزامی است",
+                "• فاکتور رسمی قابل استفاده برای کسر مالیات و تسویه حساب می‌باشد"
+            ]
+        else:
+            terms_lines = [
+                "⚠️ شرایط و ضوابط فاکتور شخصی:",
+                "• این پیش فاکتور قابل تبدیل به فاکتور نهایی است",
+                "• پس از تایید سفارش و پرداخت، فاکتور نهایی صادر خواهد شد",
+                "• قیمت‌ها بدون مالیات بر ارزش افزوده می‌باشد",
+                "• این نوع فاکتور برای خریدهای شخصی مناسب است",
+                "• قابل استفاده برای تسویه حساب اشخاص حقیقی"
+            ]
+
+        # Create custom paragraph method for footer with proper RTL handling
+        def create_rtl_paragraph(text, style_name='default'):
+            """Create RTL paragraph with proper directional formatting"""
+            try:
+                # First reshape the Arabic/Persian text
+                reshaped_text = arabic_reshaper.reshape(str(text))
+                # Then apply RTL display
+                display_text = get_display(reshaped_text)
+                # Add RTL embedding after reshaping
+                final_text = f"\u202B{display_text}\u202C"
+                return Paragraph(final_text, self.styles[style_name])
+            except Exception as e:
+                print(f"RTL paragraph creation error: {e}")
+                return Paragraph(str(text), self.styles[style_name])
+
+        # Join all terms with proper line breaks for single paragraph approach
+        terms_text = "\n".join(terms_lines)
+
+        # Alternative 1: Single paragraph with manual RTL handling
+        terms_paragraph = create_rtl_paragraph(terms_text, 'default')
+
+        # Alternative 2: Use Table with individual rows (more reliable)
+        # Create table data with each line as a separate row
+        table_data = []
+        for line in terms_lines:
+            table_data.append([create_rtl_paragraph(line, 'default')])
+
+        # Use the table approach (more reliable for complex RTL text)
+        terms_table = Table(table_data, colWidths=[self.content_width])
+
+        # Set background color based on invoice type
+        bg_color = colors.lightcyan if self.is_official else colors.lightyellow
+
         terms_table.setStyle(TableStyle([
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('BACKGROUND', (0, 0), (-1, -1), colors.lightyellow),
+            ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),  # Right align for RTL
+            ('BACKGROUND', (0, 0), (-1, -1), bg_color),
             ('LEFTPADDING', (0, 0), (-1, -1), 10),
             ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ]))
 
         elements.append(Spacer(1, 5 * mm))
         elements.append(terms_table)
 
+    # Alternative method - modify your existing _para method
+    def _para_rtl(self, text, style='table_cell'):
+        """Enhanced Persian paragraph with better RTL control"""
+        if not text:
+            text = ""
+        try:
+            # First reshape Arabic/Persian characters
+            reshaped_text = arabic_reshaper.reshape(str(text))
+            # Then apply bidi algorithm
+            display_text = get_display(reshaped_text)
+            # Add explicit RTL embedding for problematic cases
+            if any(ord(c) > 127 for c in text):  # Contains non-ASCII (Persian/Arabic)
+                final_text = f"\u202B{display_text}\u202C"
+            else:
+                final_text = display_text
+            return Paragraph(final_text, self.styles[style])
+        except Exception as e:
+            print(f"Text reshaping error: {e}")
+            return Paragraph(str(text), self.styles[style])
+
     def generate_pdf(self):
-        """Generate the complete pre-invoice PDF"""
+        """Generate the complete pre-invoice PDF with conditional formatting"""
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer,
@@ -281,7 +441,8 @@ class PreInvoicePDFGenerator:
     def get_http_response(self):
         """Return HTTP response with PDF"""
         buffer = self.generate_pdf()
-        filename = f"pre_invoice_{self.order.id}.pdf"
+        invoice_type_suffix = "official" if self.is_official else "unofficial"
+        filename = f"pre_invoice_{self.order.id}_{invoice_type_suffix}.pdf"
         response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

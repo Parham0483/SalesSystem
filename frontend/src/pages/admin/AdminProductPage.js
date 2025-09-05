@@ -32,13 +32,8 @@ const AdminProductsPage = () => {
     // Drag & Drop States
     const [draggedIndex, setDraggedIndex] = useState(null);
     const [draggedOver, setDraggedOver] = useState(null);
-    const [imageOrder, setImageOrder] = useState([]); // Track image display order
+    const [imageOrder, setImageOrder] = useState([]);
     const dragCounter = useRef(0);
-
-    const formatPrice = (price) => {
-        if (!price || price === 0) return 'تماس بگیرید';
-        return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
-    };
 
     // Form State with image ordering
     const [productFormData, setProductFormData] = useState({
@@ -58,9 +53,7 @@ const AdminProductsPage = () => {
     const [imagePreview, setImagePreview] = useState('');
     const [imagePreviews, setImagePreviews] = useState([]);
     const [existingImages, setExistingImages] = useState([]);
-
-    // Enhanced image structure with metadata
-    const [orderedImages, setOrderedImages] = useState([]); // { src, id, type: 'existing'|'new', file?, order }
+    const [orderedImages, setOrderedImages] = useState([]);
 
     // Filtering and Sorting State
     const [searchTerm, setSearchTerm] = useState('');
@@ -72,6 +65,15 @@ const AdminProductsPage = () => {
     // Bulk Actions
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [showBulkActions, setShowBulkActions] = useState(false);
+
+    // Pagination State
+    const [paginationInfo, setPaginationInfo] = useState({
+        count: 0,
+        next: null,
+        previous: null,
+        currentPage: 1,
+        totalPages: 1
+    });
 
     // Stats
     const [productStats, setProductStats] = useState({
@@ -87,17 +89,56 @@ const AdminProductsPage = () => {
     // Categories for filter
     const [categories, setCategories] = useState([]);
 
+    // Card image navigation state
+    const [cardImageIndices, setCardImageIndices] = useState({});
+
     const navigate = useNavigate();
 
-    const fetchProducts = useCallback(async () => {
+    const formatPrice = (price) => {
+        if (!price || price === 0) return 'تماس بگیرید';
+        return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
+    const fetchProducts = useCallback(async (page = 1, limit = 12) => {
         setLoading(true);
         try {
-            const response = await API.get('/admin/products/');
-            setProducts(response.data);
-            calculateStats(response.data);
+            const response = await API.get('/admin/products/', {
+                params: {
+                    page,
+                    limit,
+                    search: searchTerm,
+                    status: statusFilter !== 'all' ? statusFilter : undefined,
+                    stock_filter: stockFilter !== 'all' ? stockFilter : undefined,
+                    category: categoryFilter !== 'all' ? categoryFilter : undefined,
+                    ordering: sortBy
+                }
+            });
+
+            // Handle paginated response structure
+            const responseData = response.data;
+            const productsData = responseData.results || responseData;
+
+            if (!Array.isArray(productsData)) {
+                console.error('API returned non-array data:', responseData);
+                throw new Error('API did not return valid products array');
+            }
+
+            setProducts(productsData);
+            calculateStats(productsData);
+
+            // Set pagination info
+            setPaginationInfo({
+                count: responseData.count || productsData.length,
+                next: responseData.next,
+                previous: responseData.previous,
+                currentPage: page,
+                totalPages: Math.ceil((responseData.count || productsData.length) / limit)
+            });
+
             setError('');
         } catch (err) {
             console.error('Error fetching products:', err);
+            setProducts([]);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
@@ -107,14 +148,19 @@ const AdminProductsPage = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
 
     useEffect(() => {
-        fetchProducts();
+        fetchProducts(1);
         fetchCategories();
-    }, [fetchProducts]);
+    }, [searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
 
     const calculateStats = (productsList) => {
+        if (!Array.isArray(productsList)) {
+            console.warn('calculateStats received non-array:', productsList);
+            productsList = [];
+        }
+
         const totalValue = productsList.reduce((sum, p) => {
             const price = parseFloat(p.base_price) || 0;
             const stock = parseInt(p.stock) || 0;
@@ -163,6 +209,42 @@ const AdminProductsPage = () => {
         }
     };
 
+    // Remove client-side filtering since we're using server-side filtering
+    useEffect(() => {
+        setFilteredProducts(products);
+    }, [products]);
+
+    // Pagination functions
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= paginationInfo.totalPages) {
+            fetchProducts(newPage);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (paginationInfo.next) {
+            handlePageChange(paginationInfo.currentPage + 1);
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (paginationInfo.previous) {
+            handlePageChange(paginationInfo.currentPage - 1);
+        }
+    };
+
+    const handleItemsPerPageChange = (newLimit) => {
+        fetchProducts(1, newLimit);
+    };
+
+    const clearFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('all');
+        setStockFilter('all');
+        setCategoryFilter('all');
+        setSortBy('newest');
+    };
+
     // Drag & Drop Functions
     const handleDragStart = (e, index) => {
         setDraggedIndex(index);
@@ -204,11 +286,9 @@ const AdminProductsPage = () => {
         const newOrderedImages = [...orderedImages];
         const draggedImage = newOrderedImages[draggedIndex];
 
-        // Remove dragged item and insert at new position
         newOrderedImages.splice(draggedIndex, 1);
         newOrderedImages.splice(dropIndex, 0, draggedImage);
 
-        // Update order property
         newOrderedImages.forEach((img, idx) => {
             img.order = idx;
         });
@@ -225,7 +305,6 @@ const AdminProductsPage = () => {
         [newOrderedImages[index - 1], newOrderedImages[index]] =
             [newOrderedImages[index], newOrderedImages[index - 1]];
 
-        // Update order property
         newOrderedImages.forEach((img, idx) => {
             img.order = idx;
         });
@@ -239,7 +318,6 @@ const AdminProductsPage = () => {
         [newOrderedImages[index], newOrderedImages[index + 1]] =
             [newOrderedImages[index + 1], newOrderedImages[index]];
 
-        // Update order property
         newOrderedImages.forEach((img, idx) => {
             img.order = idx;
         });
@@ -280,25 +358,34 @@ const AdminProductsPage = () => {
         return categoryMap[categoryName] || 'admin-category-default';
     };
 
-    // Add state for card image navigation
-    const [cardImageIndices, setCardImageIndices] = useState({});
-
-    // Card image navigation functions
     const getProductImages = (product) => {
+        if (!product) return [];
+
         const images = [];
+        const seenUrls = new Set();
 
-        // Add main product image if exists
-        if (product.image_url || product.image) {
-            images.push(product.image_url || product.image);
-        }
+        const addUniqueImage = (imageUrl) => {
+            const cleanUrl = imageUrl?.toString().trim();
+            if (cleanUrl &&
+                cleanUrl !== '' &&
+                cleanUrl !== 'null' &&
+                cleanUrl !== 'undefined' &&
+                !seenUrls.has(cleanUrl)) {
+                seenUrls.add(cleanUrl);
+                images.push(cleanUrl);
+                return true;
+            }
+            return false;
+        };
 
-        // Add images from ProductImage model
         if (product.product_images && Array.isArray(product.product_images)) {
-            images.push(...product.product_images.map(img => img.image));
+            product.product_images.forEach(img => {
+                const imageUrl = img.image_url || img.image;
+                addUniqueImage(imageUrl);
+            });
         }
 
-        // Remove duplicates and empty values
-        return [...new Set(images.filter(img => img))];
+        return images;
     };
 
     const nextCardImage = (productId, e) => {
@@ -331,36 +418,34 @@ const AdminProductsPage = () => {
 
     const getCurrentCardImage = (product) => {
         const images = getProductImages(product);
+        if (images.length === 0) {
+            return 'https://placehold.co/400x200/e2e8f0/a0aec0?text=No+Image';
+        }
+
         const currentIndex = cardImageIndices[product.id] || 0;
-        return images[currentIndex] || images[0] || 'https://placehold.co/400x200/e2e8f0/a0aec0?text=No+Image';
+        const validIndex = Math.min(currentIndex, images.length - 1);
+        return images[validIndex];
     };
 
-    // Image navigation functions
     const openImageModal = (product) => {
-        // Create array of all product images based on your backend structure
         const images = [];
 
-        // Add main product image if exists
         if (product.image_url || product.image) {
             images.push(product.image_url || product.image);
         }
 
-        // Add images from ProductImage model (your backend structure)
         if (product.product_images && Array.isArray(product.product_images)) {
             images.push(...product.product_images.map(img => img.image));
         }
 
-        // Fallback: check for images array (different backend structures)
         if (product.images && Array.isArray(product.images)) {
             images.push(...product.images.map(img => img.url || img.image || img));
         }
 
-        // Additional images field
         if (product.additional_images && Array.isArray(product.additional_images)) {
             images.push(...product.additional_images.map(img => img.url || img.image || img));
         }
 
-        // Remove duplicates and empty values
         const uniqueImages = [...new Set(images.filter(img => img))];
 
         setProductImages(uniqueImages);
@@ -390,62 +475,6 @@ const AdminProductsPage = () => {
         setSelectedImage(productImages[index]);
     };
 
-    useEffect(() => {
-        let filtered = [...products];
-
-        // Search filter
-        if (searchTerm) {
-            filtered = filtered.filter(p =>
-                p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.category?.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-        }
-
-        // Status filter
-        if (statusFilter !== 'all') {
-            filtered = filtered.filter(p => p.is_active === (statusFilter === 'active'));
-        }
-
-        // Stock filter
-        if (stockFilter !== 'all') {
-            filtered = filtered.filter(p => {
-                if (stockFilter === 'out_of_stock') return p.stock === 0;
-                if (stockFilter === 'low_stock') return p.stock > 0 && p.stock <= 50;
-                if (stockFilter === 'in_stock') return p.stock > 10;
-                return true;
-            });
-        }
-
-        // Category filter
-        if (categoryFilter !== 'all' && categoryFilter !== '') {
-            filtered = filtered.filter(p => {
-                const productCategoryId = typeof p.category === 'object' ? p.category?.id : p.category;
-                return productCategoryId === parseInt(categoryFilter);
-            });
-        }
-
-        // Sorting
-        filtered.sort((a, b) => {
-            switch (sortBy) {
-                case 'newest':
-                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-                case 'oldest':
-                    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-                case 'name':
-                    return a.name.localeCompare(b.name, 'fa');
-                case 'price':
-                    return b.base_price - a.base_price;
-                case 'stock':
-                    return b.stock - a.stock;
-                default:
-                    return 0;
-            }
-        });
-
-        setFilteredProducts(filtered);
-    }, [products, searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
-
     const handleLogout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -459,33 +488,18 @@ const AdminProductsPage = () => {
         if (product) {
             setProductFormData({ ...product });
 
-            // Handle existing images and create ordered structure
             const existingImgs = [];
 
-            // Main product image
-            if (product.image_url || product.image) {
-                existingImgs.push(product.image_url || product.image);
-            }
-
-            // Images from ProductImage model (your backend structure)
             if (product.product_images && Array.isArray(product.product_images)) {
-                existingImgs.push(...product.product_images.map(img => img.image));
+                product.product_images.forEach(img => {
+                    const imageUrl = img.image_url || img.image;
+                    if (imageUrl && imageUrl.trim() !== '' && imageUrl !== 'null') {
+                        existingImgs.push(imageUrl);
+                    }
+                });
             }
 
-            // Fallback for other image fields
-            if (product.images && Array.isArray(product.images)) {
-                existingImgs.push(...product.images.map(img => img.url || img.image || img));
-            }
-
-            if (product.additional_images && Array.isArray(product.additional_images)) {
-                existingImgs.push(...product.additional_images.map(img => img.url || img.image || img));
-            }
-
-            // Remove duplicates and empty values
-            const uniqueExistingImages = [...new Set(existingImgs.filter(img => img))];
-
-            // Create ordered images structure
-            const orderedImgs = uniqueExistingImages.map((img, index) => ({
+            const orderedImgs = existingImgs.map((img, index) => ({
                 id: `existing-${index}`,
                 src: img,
                 type: 'existing',
@@ -493,9 +507,9 @@ const AdminProductsPage = () => {
                 originalIndex: index
             }));
 
-            setExistingImages(uniqueExistingImages);
-            setImagePreview(uniqueExistingImages[0] || '');
-            setImagePreviews(uniqueExistingImages);
+            setExistingImages(existingImgs);
+            setImagePreview(existingImgs[0] || '');
+            setImagePreviews(existingImgs);
             setOrderedImages(orderedImgs);
         } else {
             setProductFormData({
@@ -547,10 +561,8 @@ const AdminProductsPage = () => {
 
         if (imageToRemove.type === 'existing' && editingProduct) {
             try {
-                // Try to find the image ID if it's a ProductImage
                 let backendImageId = null;
 
-                // Check if this image is from product_images array
                 if (editingProduct.product_images) {
                     const imageObj = editingProduct.product_images.find(img => img.image === imageToRemove.src);
                     if (imageObj) {
@@ -559,30 +571,25 @@ const AdminProductsPage = () => {
                 }
 
                 if (backendImageId) {
-                    // Delete from backend using the endpoint you have
                     await API.delete(`/admin/products/${editingProduct.id}/remove-image/${backendImageId}/`);
                 }
 
-                // Update local state
                 setExistingImages(prev => prev.filter(img => img !== imageToRemove.src));
                 setImagePreviews(prev => prev.filter(img => img !== imageToRemove.src));
 
-                // Refresh product data
-                fetchProducts();
+                fetchProducts(paginationInfo.currentPage);
             } catch (error) {
                 console.error('Error removing image:', error);
                 setError('خطا در حذف تصویر');
             }
         }
 
-        // Remove from ordered images and reorder
         const newOrderedImages = orderedImages
             .filter(img => img.id !== imageId)
             .map((img, index) => ({ ...img, order: index }));
 
         setOrderedImages(newOrderedImages);
 
-        // Update imageFiles if it's a new image
         if (imageToRemove.type === 'new') {
             const newImageFiles = imageFiles.filter((_, i) => imageToRemove.id !== `new-${i}`);
             setImageFiles(newImageFiles);
@@ -591,15 +598,13 @@ const AdminProductsPage = () => {
 
     const handleFileChange = (e) => {
         const files = Array.from(e.target.files);
-        console.log('Files selected:', files); // Debug line
 
         if (files.length === 0) return;
 
         const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        const maxSize = 5 * 1024 * 1024; // 5MB per file
-        const maxFiles = 5; // Maximum 5 images
+        const maxSize = 5 * 1024 * 1024;
+        const maxFiles = 5;
 
-        // Validate files
         const validFiles = [];
 
         for (let i = 0; i < Math.min(files.length, maxFiles); i++) {
@@ -619,12 +624,8 @@ const AdminProductsPage = () => {
         }
 
         if (validFiles.length > 0) {
-            console.log('Valid files:', validFiles.length); // Debug line
+            setImageFiles(validFiles);
 
-            // FIXED: Set imageFiles properly
-            setImageFiles(validFiles); // Replace, don't append
-
-            // Create ordered images structure
             const newOrderedImages = [...orderedImages];
             const startIndex = newOrderedImages.length;
 
@@ -633,14 +634,13 @@ const AdminProductsPage = () => {
                     id: `new-${startIndex + index}`,
                     src: URL.createObjectURL(file),
                     type: 'new',
-                    file: file, // Make sure file is stored
+                    file: file,
                     order: startIndex + index
                 });
             });
 
             setOrderedImages(newOrderedImages);
 
-            // Backward compatibility
             if (validFiles.length === 1) {
                 setImageFile(validFiles[0]);
                 setImagePreview(URL.createObjectURL(validFiles[0]));
@@ -652,12 +652,6 @@ const AdminProductsPage = () => {
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-
-        // Debug logging - ADD THIS
-        console.log('=== FORM SUBMIT DEBUG ===');
-        console.log('imageFiles:', imageFiles);
-        console.log('orderedImages:', orderedImages);
-        console.log('Selected files count:', imageFiles.length);
 
         const formData = new FormData();
 
@@ -676,39 +670,29 @@ const AdminProductsPage = () => {
             }
         });
 
-        // Check both imageFiles and orderedImages for files
         let hasFiles = false;
 
-        // Method 1: Use imageFiles directly (more reliable)
         if (imageFiles && imageFiles.length > 0) {
-            console.log('Using imageFiles directly:', imageFiles.length, 'files');
             imageFiles.forEach((file, index) => {
                 formData.append('images', file);
-                console.log(`Added file ${index}:`, file.name);
                 hasFiles = true;
             });
         } else {
-            // Method 2: Fallback to orderedImages
             const orderedNewImages = orderedImages
                 .filter(img => img.type === 'new' && img.file)
                 .sort((a, b) => a.order - b.order);
 
-            console.log('Using orderedImages:', orderedNewImages.length, 'files');
             orderedNewImages.forEach((imageObj, index) => {
                 formData.append('images', imageObj.file);
-                console.log(`Added ordered file ${index}:`, imageObj.file.name);
                 hasFiles = true;
             });
         }
 
-        //Don't submit if no files for new products
         if (!editingProduct && !hasFiles) {
-            console.log('ERROR: No files selected for new product');
             setError('لطفا حداقل یک تصویر انتخاب کنید');
             return;
         }
 
-        // Send image order information
         const imageOrderData = orderedImages.map((img, index) => ({
             type: img.type,
             src: img.type === 'existing' ? img.src : null,
@@ -720,7 +704,6 @@ const AdminProductsPage = () => {
             formData.append('image_order', JSON.stringify(imageOrderData));
         }
 
-        // Send existing images that should be kept
         const orderedExistingImages = orderedImages
             .filter(img => img.type === 'existing')
             .sort((a, b) => a.order - b.order)
@@ -730,12 +713,6 @@ const AdminProductsPage = () => {
             formData.append('existing_images', JSON.stringify(orderedExistingImages));
         }
 
-        // Debug FormData contents
-        console.log('FormData entries:');
-        for (let [key, value] of formData.entries()) {
-            console.log(key, value);
-        }
-
         const url = editingProduct ? `/admin/products/${editingProduct.id}/` : '/admin/products/';
         const method = editingProduct ? 'patch' : 'post';
 
@@ -743,7 +720,7 @@ const AdminProductsPage = () => {
             await API[method](url, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-            fetchProducts();
+            fetchProducts(paginationInfo.currentPage);
             handleCloseModal();
         } catch (err) {
             console.error('Error saving product:', err.response?.data);
@@ -754,7 +731,7 @@ const AdminProductsPage = () => {
     const handleToggleStatus = async (product) => {
         try {
             await API.patch(`/admin/products/${product.id}/`, { is_active: !product.is_active });
-            fetchProducts();
+            fetchProducts(paginationInfo.currentPage);
         } catch (err) {
             console.error('Error toggling status', err);
             setError('خطا در تغییر وضعیت محصول');
@@ -764,7 +741,7 @@ const AdminProductsPage = () => {
     const handleToggleFeatured = async (product) => {
         try {
             await API.patch(`/admin/products/${product.id}/`, { is_featured: !product.is_featured });
-            fetchProducts();
+            fetchProducts(paginationInfo.currentPage);
         } catch (err) {
             console.error('Error toggling featured status', err);
             setError('خطا در تغییر وضعیت ویژه محصول');
@@ -775,26 +752,11 @@ const AdminProductsPage = () => {
         if (window.confirm('آیا از حذف این محصول اطمینان دارید؟ این عمل غیرقابل بازگشت است.')) {
             try {
                 await API.delete(`/admin/products/${productId}/`);
-                fetchProducts();
+                fetchProducts(paginationInfo.currentPage);
             } catch (err) {
                 console.error('Error deleting product', err);
                 setError('خطا در حذف محصول');
             }
-        }
-    };
-
-    const handleQuickStockUpdate = async (productId, newStock) => {
-        const stock = parseInt(newStock, 10);
-        if (isNaN(stock) || stock < 0) {
-            alert("لطفا یک عدد معتبر برای موجودی وارد کنید.");
-            return;
-        }
-        try {
-            await API.patch(`/admin/products/${productId}/`, { stock });
-            fetchProducts();
-        } catch(err) {
-            console.error('Error updating stock', err);
-            setError('خطا در به‌روزرسانی موجودی');
         }
     };
 
@@ -821,25 +783,17 @@ const AdminProductsPage = () => {
 
     const handleBulkAction = async (action) => {
         try {
-            await API.post('/admin/products/bulk-action/', {
+            await API.post('/admin/products/bulk-actions/', {
                 action,
                 product_ids: selectedProducts
             });
-            fetchProducts();
+            fetchProducts(paginationInfo.currentPage);
             setSelectedProducts([]);
             setShowBulkActions(false);
         } catch (err) {
             console.error('Error performing bulk action', err);
             setError('خطا در انجام عملیات گروهی');
         }
-    };
-
-    const clearFilters = () => {
-        setSearchTerm('');
-        setStatusFilter('all');
-        setStockFilter('all');
-        setCategoryFilter('all');
-        setSortBy('newest');
     };
 
     const getStockStatus = (stock) => {
@@ -899,7 +853,8 @@ const AdminProductsPage = () => {
                             مدیریت محصولات
                         </h1>
                         <p className="admin-products-subtitle">
-                            {filteredProducts.length} محصول از مجموع {products.length} محصول
+                            صفحه {paginationInfo.currentPage} از {paginationInfo.totalPages}
+                            ({paginationInfo.count} محصول کل)
                         </p>
                     </div>
                     <div className="admin-products-header-actions">
@@ -1055,27 +1010,7 @@ const AdminProductsPage = () => {
                 )}
             </NeoBrutalistCard>
 
-            {/* Products Header */}
-            <NeoBrutalistCard className="admin-products-table-header">
-                <div className="admin-products-table-header-content">
-                    <label className="admin-products-select-all-wrapper">
-                        <input
-                            type="checkbox"
-                            checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                            onChange={handleSelectAll}
-                        />
-                        انتخاب همه
-                    </label>
-                    <span>نمایش {filteredProducts.length} محصول</span>
-                    <div className="admin-products-view-toggles">
-                        <NeoBrutalistButton
-                            text="📋 لیست"
-                            color="blue-400"
-                            textColor="white"
-                        />
-                    </div>
-                </div>
-            </NeoBrutalistCard>
+
 
             {/* Products Grid */}
             <div className="admin-products-grid">
@@ -1244,12 +1179,12 @@ const AdminProductsPage = () => {
                         <Package size={48} className="admin-products-empty-icon" />
                         <h3>محصولی یافت نشد</h3>
                         <p>
-                            {products.length === 0
+                            {paginationInfo.count === 0
                                 ? 'هنوز محصولی ثبت نشده است.'
                                 : 'بر اساس فیلترهای انتخاب شده، محصولی یافت نشد.'
                             }
                         </p>
-                        {products.length > 0 && (
+                        {paginationInfo.count > 0 && (
                             <NeoBrutalistButton
                                 text="پاک کردن فیلترها"
                                 color="blue-400"
@@ -1257,6 +1192,111 @@ const AdminProductsPage = () => {
                                 onClick={clearFilters}
                             />
                         )}
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
+            {/* Advanced Pagination Section */}
+            {paginationInfo.totalPages > 1 && (
+                <NeoBrutalistCard className="admin-products-pagination-card">
+                    <div className="admin-products-pagination-wrapper">
+                        {/* Page Numbers */}
+                        <div className="admin-products-page-numbers">
+                            {/* First page */}
+                            {paginationInfo.currentPage > 3 && (
+                                <>
+                                    <button
+                                        className={`admin-products-page-btn ${1 === paginationInfo.currentPage ? 'active' : ''}`}
+                                        onClick={() => handlePageChange(1)}
+                                    >
+                                        1
+                                    </button>
+                                    {paginationInfo.currentPage > 4 && <span className="admin-products-page-dots">...</span>}
+                                </>
+                            )}
+
+                            {/* Pages around current */}
+                            {Array.from({ length: Math.min(5, paginationInfo.totalPages) }, (_, i) => {
+                                let pageNum;
+                                if (paginationInfo.totalPages <= 5) {
+                                    pageNum = i + 1;
+                                } else if (paginationInfo.currentPage <= 3) {
+                                    pageNum = i + 1;
+                                } else if (paginationInfo.currentPage >= paginationInfo.totalPages - 2) {
+                                    pageNum = paginationInfo.totalPages - 4 + i;
+                                } else {
+                                    pageNum = paginationInfo.currentPage - 2 + i;
+                                }
+
+                                // Skip if already shown or outside range
+                                if (pageNum < 1 || pageNum > paginationInfo.totalPages) return null;
+                                if (paginationInfo.totalPages > 5 && paginationInfo.currentPage > 3 && pageNum === 1) return null;
+                                if (paginationInfo.totalPages > 5 && paginationInfo.currentPage < paginationInfo.totalPages - 2 && pageNum === paginationInfo.totalPages) return null;
+
+                                return (
+                                    <button
+                                        key={pageNum}
+                                        className={`admin-products-page-btn ${pageNum === paginationInfo.currentPage ? 'active' : ''}`}
+                                        onClick={() => handlePageChange(pageNum)}
+                                    >
+                                        {pageNum}
+                                    </button>
+                                );
+                            })}
+
+                            {/* Last page */}
+                            {paginationInfo.currentPage < paginationInfo.totalPages - 2 && paginationInfo.totalPages > 5 && (
+                                <>
+                                    {paginationInfo.currentPage < paginationInfo.totalPages - 3 && <span className="admin-products-page-dots">...</span>}
+                                    <button
+                                        className={`admin-products-page-btn ${paginationInfo.totalPages === paginationInfo.currentPage ? 'active' : ''}`}
+                                        onClick={() => handlePageChange(paginationInfo.totalPages)}
+                                    >
+                                        {paginationInfo.totalPages}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Navigation buttons */}
+                        <div className="admin-products-pagination-nav">
+                            <NeoBrutalistButton
+                                text="<< اول"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(1)}
+                                disabled={paginationInfo.currentPage === 1}
+                            />
+                            <NeoBrutalistButton
+                                text="< قبلی"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={handlePrevPage}
+                                disabled={!paginationInfo.previous}
+                            />
+                            <NeoBrutalistButton
+                                text="بعدی >"
+                                color="blue-400"
+                                textColor="white"
+                                onClick={handleNextPage}
+                                disabled={!paginationInfo.next}
+                            />
+                            <NeoBrutalistButton
+                                text="آخر >>"
+                                color="gray-400"
+                                textColor="black"
+                                onClick={() => handlePageChange(paginationInfo.totalPages)}
+                                disabled={paginationInfo.currentPage === paginationInfo.totalPages}
+                            />
+                        </div>
+
+                        {/* Page info */}
+                        <div className="admin-products-pagination-info">
+                            <span>
+                                نمایش صفحه {paginationInfo.currentPage} از {paginationInfo.totalPages}
+                                ({paginationInfo.count} محصول کل)
+                            </span>
+                        </div>
                     </div>
                 </NeoBrutalistCard>
             )}

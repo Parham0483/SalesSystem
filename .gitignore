@@ -36,3 +36,6 @@ __pycache__/
 venv/
 *.pyc
 __pycache__/
+/migrations/
+gtc-market-key.jsongtc-market-key.json
+*.json

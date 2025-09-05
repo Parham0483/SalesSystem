@@ -91,7 +91,7 @@ urlpatterns = [
          ProductViewSet.as_view({'post': 'reorder_images'}),
          name='product-reorder-images'),
 
-# In your existing urlpatterns, add:
+
     path('admin/products/<int:pk>/remove-image/<int:image_id>/',
         AdminProductViewSet.as_view({'delete': 'remove_image'}),
         name='admin-product-remove-image'),
@@ -103,6 +103,14 @@ urlpatterns = [
     path('admin/products/<int:pk>/set-primary-image/<int:image_id>/',
         AdminProductViewSet.as_view({'post': 'set_primary_image'}),
         name='admin-product-set-primary-image'),
+
+    path('admin/customers/<int:pk>/orders/',
+     AdminCustomerViewSet.as_view({'get': 'customer_orders'}),
+     name='admin-customer-orders'),
+
+    path('admin/orders/<int:pk>/details/',
+     AdminOrderViewSet.as_view({'get': 'order_details'}),
+     name='admin-order-details'),
 
     # API endpoints from the router
     path('', include(router.urls)),

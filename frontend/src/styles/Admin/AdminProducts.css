@@ -268,7 +268,8 @@
     margin-bottom: 32px;
     background: #ffffff;
     position: relative;
-    overflow: hidden;
+    overflow: visible !important;
+    z-index: 100;
 }
 
 .admin-products-filters-card::before {
@@ -285,7 +286,7 @@
             rgba(59, 130, 246, 0.02) 20px,
             rgba(59, 130, 246, 0.02) 40px
     );
-    z-index: 0;
+    z-index: 1;
 }
 
 .admin-products-filters-header {
@@ -313,7 +314,8 @@
     gap: 20px;
     align-items: end;
     position: relative;
-    z-index: 1;
+    z-index: 101;
+    overflow: visible !important;
 }
 
 .admin-products-search-wrapper {
@@ -1305,6 +1307,7 @@
     .admin-products-filters-grid {
         grid-template-columns: 2fr repeat(2, 1fr);
         gap: 16px;
+        overflow: visible !important;
     }
 }
 
@@ -1909,4 +1912,266 @@
     color: #64748b;
     font-size: 0.7rem;
     text-align: center;
+}
+
+/* Pagination Styles - Matching Dashboard Design */
+.admin-products-table-header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 1.5rem;
+}
+
+.admin-products-header-left,
+.admin-products-header-center,
+.admin-products-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-products-items-per-page {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 600;
+    color: #374151;
+}
+
+.admin-products-page-size-select {
+    padding: 0.5rem;
+    border: 2px solid #000;
+    border-radius: 4px;
+    background-color: #fff;
+    font-family: 'Tahoma', sans-serif;
+    font-weight: bold;
+    font-size: 0.9rem;
+    box-shadow: 2px 2px 0px #000;
+    cursor: pointer;
+}
+
+.admin-products-page-size-select:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0px #000;
+}
+
+.admin-products-page-size-select:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+.admin-products-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-products-page-info {
+    padding: 8px 16px;
+    background: #f1f5f9;
+    border: 3px solid #000;
+    border-radius: 8px;
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 700;
+    min-width: 120px;
+    text-align: center;
+    color: #374151;
+    font-size: 0.9rem;
+}
+
+/* Advanced Pagination Card */
+.admin-products-pagination-card {
+    background-color: #fff;
+    cursor: default;
+    margin-top: 2rem;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px #000;
+    padding: 0;
+}
+
+.admin-products-pagination-card:hover {
+    transform: none;
+    box-shadow: 6px 6px 0px #000;
+}
+
+.admin-products-pagination-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.5rem;
+}
+
+.admin-products-page-numbers {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-products-page-btn {
+    min-width: 40px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    text-align: center;
+    border: 3px solid #000 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 2px 2px 0px #000 !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.admin-products-page-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0px #000 !important;
+    background: #f1f5f9 !important;
+}
+
+.admin-products-page-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0px #000 !important;
+}
+
+.admin-products-page-btn.active {
+    background: var(--blue-400) !important;
+    color: white !important;
+    box-shadow: 2px 2px 0px #000 !important;
+}
+
+.admin-products-page-dots {
+    padding: 0.5rem;
+    font-weight: bold;
+    color: #6b7280;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.admin-products-pagination-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-products-pagination-info {
+    text-align: center;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+    color: #374151;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+/* CSS Variables for Consistency */
+:root {
+    --blue-400: #60a5fa;
+    --green-400: #4ade80;
+    --red-400: #f87171;
+    --gray-400: #9ca3af;
+}
+
+/* Responsive Design for Pagination */
+@media (max-width: 1024px) {
+    .admin-products-table-header-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1.5rem;
+    }
+
+    .admin-products-header-left,
+    .admin-products-header-center,
+    .admin-products-header-right {
+        justify-content: center;
+    }
+
+    .admin-products-pagination-nav {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .admin-products-page-numbers {
+        order: -1;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-products-pagination-wrapper {
+        padding: 1rem;
+    }
+
+    .admin-products-pagination-nav {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .admin-products-page-numbers {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .admin-products-page-btn {
+        min-width: 35px !important;
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-products-table-header-content {
+        padding: 1rem;
+    }
+
+    .admin-products-pagination-info {
+        text-align: center;
+        font-size: 0.8rem;
+    }
+
+    .admin-products-page-numbers {
+        gap: 0.125rem;
+    }
+}
+
+/* Focus States for Accessibility */
+.admin-products-page-btn:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+.admin-products-pagination-wrapper *:focus {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+}
+
+/* Fix Bulk Action Button Clickability */
+.admin-products-bulk-buttons {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.admin-products-bulk-buttons > * {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    position: relative !important;
+    z-index: 10 !important;
+}
+
+/* Ensure buttons are not being blocked by overlays */
+.admin-products-bulk-actions {
+    position: relative;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.admin-products-bulk-actions * {
+    pointer-events: auto;
 }

@@ -5,10 +5,37 @@ from ..models import Product, ProductCategory, ProductImage, ShipmentAnnouncemen
 
 class ProductImageSerializer(serializers.ModelSerializer):
     """Serializer for additional product images"""
+    display_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    file_size_saved = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductImage
-        fields = ['id', 'image', 'alt_text', 'order', 'is_primary']  # FIXED: 'images' -> 'image'
+        fields = [
+            'id', 'image', 'compressed_image', 'thumbnail',
+            'display_url', 'thumbnail_url', 'is_primary',
+            'alt_text', 'order', 'original_size', 'compressed_size',
+            'file_size_saved'
+        ]
+        read_only_fields = ['compressed_image', 'thumbnail', 'original_size', 'compressed_size']
+
+    def get_display_url(self, obj):
+        return obj.get_display_url()
+
+    def get_thumbnail_url(self, obj):
+        return obj.get_thumbnail_url()
+
+    def get_file_size_saved(self, obj):
+        if obj.original_size and obj.compressed_size:
+            saved = obj.original_size - obj.compressed_size
+            percentage = (saved / obj.original_size) * 100
+            return {
+                'bytes_saved': saved,
+                'percentage_saved': round(percentage, 1),
+                'original_size': obj.original_size,
+                'compressed_size': obj.compressed_size
+            }
+        return None
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -21,7 +48,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'name_fa', 'display_name', 'description',
             'slug', 'is_active', 'order', 'products_count', 'parent',
-            'image', 'created_at'  # FIXED: 'images' -> 'image'
+            'image', 'created_at'
         ]
         read_only_fields = ['created_at', 'slug']
 
@@ -34,20 +61,16 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    """Enhanced product serializer with multiple images support"""
-    image_url = serializers.SerializerMethodField()
+    """Fixed product serializer - remove main image field completely"""
     primary_image_url = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
-    product_images = serializers.SerializerMethodField()  # ADD THIS - Frontend expects this field
+    thumbnail_url = serializers.SerializerMethodField()
+    product_images = serializers.SerializerMethodField()
     images_count = serializers.SerializerMethodField()
     stock_status = serializers.ReadOnlyField()
     is_out_of_stock = serializers.ReadOnlyField()
     category_name = serializers.SerializerMethodField()
     category_details = serializers.SerializerMethodField()
     days_since_created = serializers.SerializerMethodField()
-
-    # TAX-RELATED FIELDS:
-    tax_rate = serializers.DecimalField(max_digits=5, decimal_places=2, default=9.00)
     price_with_tax = serializers.SerializerMethodField()
     tax_amount = serializers.SerializerMethodField()
 
@@ -55,38 +78,78 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'name', 'description', 'base_price', 'stock', 'sku',
-            'weight', 'origin', 'image', 'image_url', 'primary_image_url',
-            'images', 'product_images', 'images_count',  # ADD product_images here
+            'weight', 'origin', 'primary_image_url', 'thumbnail_url',
+            'product_images', 'images_count',
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created',
             'tax_rate', 'price_with_tax', 'tax_amount'
         ]
+        # REMOVE the exclude line completely - just don't include 'image' field
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
 
     def get_product_images(self, obj):
-        """Return product images in the format frontend expects"""
-        request = self.context.get('request')
-        images = []
+        """ONLY get valid images from ProductImage model"""
+        valid_images = []
 
-        # Get all ProductImage instances for this product
-        product_images = obj.images.all().order_by('order', 'id')
+        for img in obj.images.all().order_by('order', 'id'):
+            image_url = None
 
-        for img in product_images:
-            image_url = img.image.url if img.image else None
-            if image_url and request:
-                image_url = request.build_absolute_uri(image_url)
+            # Prefer compressed for better performance
+            if img.compressed_image:
+                image_url = self.context['request'].build_absolute_uri(img.compressed_image.url)
+            elif img.image:
+                image_url = self.context['request'].build_absolute_uri(img.image.url)
 
-            images.append({
-                'id': img.id,
-                'image': image_url,  # CHANGED: 'image_url' -> 'image' to match frontend
-                'alt_text': img.alt_text,
-                'order': img.order,
-                'is_primary': img.is_primary
-            })
+            # Only add if we have a valid image URL
+            if image_url and image_url.strip() != '':
+                valid_images.append({
+                    'id': img.id,
+                    'image': image_url,
+                    'image_url': image_url,
+                    'is_primary': img.is_primary,
+                    'alt_text': img.alt_text,
+                    'order': img.order
+                })
 
-        return images
+        return valid_images
+
+    def get_primary_image_url(self, obj):
+        """Get primary image URL - ONLY from ProductImage model"""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if not primary_image:
+            primary_image = obj.images.first()  # Fallback to first image
+
+        if primary_image:
+            if primary_image.compressed_image:
+                return self.context['request'].build_absolute_uri(primary_image.compressed_image.url)
+            elif primary_image.image:
+                return self.context['request'].build_absolute_uri(primary_image.image.url)
+        return None
+
+    def get_thumbnail_url(self, obj):
+        """Get thumbnail URL for cards"""
+        primary_image = obj.images.filter(is_primary=True).first()
+        if not primary_image:
+            primary_image = obj.images.first()
+
+        if primary_image:
+            # Prefer thumbnail for cards, fallback to compressed
+            if primary_image.thumbnail:
+                return self.context['request'].build_absolute_uri(primary_image.thumbnail.url)
+            elif primary_image.compressed_image:
+                return self.context['request'].build_absolute_uri(primary_image.compressed_image.url)
+            elif primary_image.image:
+                return self.context['request'].build_absolute_uri(primary_image.image.url)
+        return None
+
+    def get_images_count(self, obj):
+        """Return count of valid product images"""
+        return obj.images.count()
+
+
+
 
     def get_images(self, obj):
         """Return all product images with proper URLs (backward compatibility)"""
@@ -112,32 +175,9 @@ class ProductSerializer(serializers.ModelSerializer):
 
         return images
 
-    def get_images_count(self, obj):
-        """Return count of product images"""
-        return obj.images.count()
 
-    def get_primary_image_url(self, obj):
-        """Get the primary image URL"""
-        request = self.context.get('request')
 
-        # First try to find primary image from ProductImage
-        primary_image = obj.images.filter(is_primary=True).first()
-        if primary_image and primary_image.image:
-            image_url = primary_image.image.url
-            return request.build_absolute_uri(image_url) if request else image_url
 
-        # Fallback to first image
-        first_image = obj.images.first()
-        if first_image and first_image.image:
-            image_url = first_image.image.url
-            return request.build_absolute_uri(image_url) if request else image_url
-
-        # Final fallback to old single image field
-        if obj.image:
-            image_url = obj.image.url
-            return request.build_absolute_uri(image_url) if request else image_url
-
-        return None
 
     def get_image_url(self, obj):
         """Backward compatibility - returns primary image URL"""
@@ -167,6 +207,14 @@ class ProductSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         return (timezone.now() - obj.created_at).days
 
+    def get_price_with_tax(self, obj):
+        """Get product price including tax"""
+        return float(obj.get_price_with_tax())
+
+    def get_tax_amount(self, obj):
+        """Get tax amount for base price"""
+        return float(obj.get_tax_amount_for_price(obj.base_price))
+
     def validate_image(self, value):
         """Custom validation for image field"""
         # If it's a string (URL), it means no new image is being uploaded
@@ -184,7 +232,7 @@ class ProductSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """Custom update method to handle image properly"""
         # Remove image from validated_data if it's None (no new image)
-        image = validated_data.pop('image', 'no_change')  # FIXED: 'images' -> 'image'
+        image = validated_data.pop('image', 'no_change')
 
         # Update other fields
         for attr, value in validated_data.items():
@@ -223,14 +271,6 @@ class ProductSerializer(serializers.ModelSerializer):
         if value and not value.is_active:
             raise serializers.ValidationError("Selected category is not active")
         return value
-
-    def get_price_with_tax(self, obj):
-        """Get product price including tax"""
-        return float(obj.get_price_with_tax())
-
-    def get_tax_amount(self, obj):
-        """Get tax amount for base price"""
-        return float(obj.get_tax_amount_for_price(obj.base_price))
 
     def validate_tax_rate(self, value):
         """Validate tax rate"""

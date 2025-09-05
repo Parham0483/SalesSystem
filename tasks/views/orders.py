@@ -325,27 +325,18 @@ class OrderViewSet(viewsets.ModelViewSet):
                     logger.info(
                         f"💰 Commission created for dealer {order.assigned_dealer.name}: {commission.commission_amount}")
 
-            # Send completion SMS to customer
-            sms_sent = False
-            if order.customer.phone:
-                completion_sms = f"""سلام {order.customer.name}
-سفارش #{order.id} تکمیل شد!
-از خرید شما متشکریم.
-کیان تجارت پویا کویر"""
-
-                sms_sent = NotificationService.send_sms_notification(
-                    phone=order.customer.phone,
-                    message=completion_sms,
-                    order=order,
-                    sms_type='order_completed'
-                )
+            # REPLACE the basic SMS with full completion notification
+            completion_notification_sent = NotificationService.notify_customer_order_completed(
+                order=completed_order,
+                include_invoice=True
+            )
 
             return Response({
                 'message': 'Order completed successfully',
                 'order': OrderDetailSerializer(completed_order).data,
                 'invoice_id': invoice.id,
                 'commission_created': commission_created,
-                'completion_sms_sent': sms_sent
+                'completion_notification_sent': completion_notification_sent  # Updated response
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -353,6 +344,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Order completion failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @action(detail=True, methods=['POST'], url_path='assign-dealer')
     def assign_dealer(self, request, *args, **kwargs):
@@ -938,20 +930,18 @@ class OrderViewSet(viewsets.ModelViewSet):
                     performed_by=request.user
                 )
 
-                # Send completion notifications
-                try:
-                    NotificationService.send_dual_notification(
-                        order=order,
-                        notification_type='order_completed'
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to send completion notifications: {str(e)}")
+                # FIXED: Send completion notifications with invoice
+                completion_notification_sent = NotificationService.notify_customer_order_completed(
+                    order=completed_order,
+                    include_invoice=True
+                )
 
                 return Response({
                     'message': 'Payment verified, order completed, and final invoice generated',
                     'order': OrderDetailSerializer(completed_order).data,
                     'final_invoice_created': True,
-                    'invoice_id': invoice.id if invoice else None
+                    'invoice_id': invoice.id if invoice else None,
+                    'completion_notification_sent': completion_notification_sent  # Add this
                 })
 
             else:
