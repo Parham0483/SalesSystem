@@ -1543,3 +1543,34 @@
     text-transform: uppercase !important;
     letter-spacing: 1px !important;
 }
+
+.product-card.single-image:hover .primary-image {
+    opacity: 1 !important; /* Keep primary image visible */
+    filter: contrast(1.1) brightness(1.05) saturate(1.1) !important;
+}
+
+/* FIXED: Multi-image products - normal hover transition */
+.product-card.has-hover-image:hover .primary-image {
+    opacity: 0 !important;
+}
+
+.product-card.has-hover-image:hover .hover-image {
+    opacity: 1 !important;
+}
+
+/* FIXED: Only apply hover image effects to products that actually have hover images */
+.product-card.has-hover-image .hover-image {
+    opacity: 0 !important;
+    z-index: 2 !important;
+}
+
+/* Ensure single image products don't show empty hover containers */
+.product-card.single-image .hover-image {
+    display: none !important;
+}
+
+.single-image{
+    display: flex;
+    align-items: center;
+    justify-content: normal !important;
+}

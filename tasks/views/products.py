@@ -12,34 +12,48 @@ from ..serializers.products import (
     ProductSearchSerializer, ProductBulkUpdateSerializer, ShipmentAnnouncementSerializer
 )
 from ..models import Product, ShipmentAnnouncement, ProductCategory, ProductImage
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import PageNumberPagination, LimitOffsetPagination
 
-class ProductPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = 'limit'
-    max_page_size = 50
+
+class ProductPagination(LimitOffsetPagination):
+    default_limit = 9
+    max_limit = 50
+    limit_query_param = 'limit'
+    offset_query_param = 'offset'
+
 
 class ProductViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
+    queryset = Product.objects.all().order_by('-created_at')
     serializer_class = ProductSerializer
     pagination_class = ProductPagination
 
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'new_arrivals', 'categories', 'search']:
-            permission_classes = [IsAuthenticated]
-        else:
-            permission_classes = [IsAdminUser]
-        return [permission() for permission in permission_classes]
-
     def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            queryset = Product.objects.all()
-        else:
-            queryset = Product.objects.filter(is_active=True)
+        queryset = super().get_queryset()
+        search = self.request.query_params.get('search', None)
+        category_id = self.request.query_params.get('category_id', None)
+        status_filter = self.request.query_params.get('status', None)
 
-        # ADD THIS LINE:
-        return queryset.prefetch_related('images').order_by('-created_at')
+        if search:
+            queryset = queryset.filter(name__icontains=search)
+        if category_id and category_id != 'all':
+            queryset = queryset.filter(category_id=category_id)
+        if status_filter and status_filter != 'all':
+            queryset = queryset.filter(stock_status=status_filter)
+
+        print(f"Queryset size: {queryset.count()}")
+        print(f"Queryset IDs: {[p.id for p in queryset[:25]]}")
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        print(f"Query params: {request.query_params}")
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            print(f"Paginated IDs: {[p.id for p in page]}")
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
         """Admin creates a new product with images upload support"""
@@ -89,6 +103,8 @@ class ProductViewSet(viewsets.ModelViewSet):
             'error': 'Invalid data',
             'details': serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+    
 
     @action(detail=False, methods=['GET'], url_path='admin-view')
     def admin_view(self, request):
@@ -147,28 +163,19 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['GET'])
     def search(self, request):
-        """Search products by name, description, or tags"""
-        serializer = ProductSearchSerializer(data=request.query_params)
+        """Enhanced search with proper filtering"""
+        query = request.query_params.get('q', '').strip()
+        category_id = request.query_params.get('category')
+        min_price = request.query_params.get('min_price')
+        max_price = request.query_params.get('max_price')
+        in_stock_only = request.query_params.get('in_stock_only', '').lower() == 'true'
+        sort_by = request.query_params.get('sort_by', '-created_at')
 
-        if not serializer.is_valid():
-            return Response({
-                'error': 'Invalid search parameters',
-                'details': serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        validated_data = serializer.validated_data
-        query = validated_data.get('q', '').strip()
-        category_id = validated_data.get('category')
-        min_price = validated_data.get('min_price')
-        max_price = validated_data.get('max_price')
-        in_stock_only = validated_data.get('in_stock_only', False)
-        sort_by = validated_data.get('sort_by', '-created_at')
-
-        products = self.get_queryset()
+        queryset = self.get_queryset()
 
         # Apply filters
         if query:
-            products = products.filter(
+            queryset = queryset.filter(
                 Q(name__icontains=query) |
                 Q(description__icontains=query) |
                 Q(tags__icontains=query) |
@@ -176,24 +183,34 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
 
         if category_id:
-            products = products.filter(category_id=category_id)
+            try:
+                queryset = queryset.filter(category_id=int(category_id))
+            except (ValueError, TypeError):
+                pass
 
         if min_price is not None:
-            products = products.filter(base_price__gte=min_price)
+            try:
+                queryset = queryset.filter(base_price__gte=float(min_price))
+            except (ValueError, TypeError):
+                pass
 
         if max_price is not None:
-            products = products.filter(base_price__lte=max_price)
+            try:
+                queryset = queryset.filter(base_price__lte=float(max_price))
+            except (ValueError, TypeError):
+                pass
 
         if in_stock_only:
-            products = products.filter(stock__gt=0)
+            queryset = queryset.filter(stock__gt=0)
 
         # Apply sorting
-        products = products.order_by(sort_by)
+        if sort_by in ['name', '-name', 'created_at', '-created_at', 'base_price', '-base_price', 'stock', '-stock']:
+            queryset = queryset.order_by(sort_by)
 
         # Limit results
-        products = products[:100]
+        queryset = queryset[:100]
 
-        serializer = self.get_serializer(products, many=True)
+        serializer = self.get_serializer(queryset, many=True)
         return Response({
             'query': query,
             'filters': {
@@ -317,33 +334,30 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['GET'])
     def categories(self, request):
-        """Get all product categories - UPDATED for all users"""
-        categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
+        """Get all product categories with proper structure"""
+        try:
+            categories = ProductCategory.objects.filter(is_active=True).order_by('order', 'name')
 
-        category_data = []
-        for category in categories:
-            category_data.append({
-                'id': category.id,
-                'name': category.name,
-                'name_fa': category.name_fa,  # Persian name for everyone
-                'display_name': category.display_name,  # Computed property
-                'description': category.description,
-                'image_url': category.image.url if category.image else None,
-                'products_count': category.products_count,
-                'parent_id': category.parent_id,
-                'slug': category.slug,
-                'subcategories': [
-                    {
-                        'id': sub.id,
-                        'name': sub.name,
-                        'name_fa': sub.name_fa,  # Persian name for subcategories too
-                        'display_name': sub.display_name,
-                        'products_count': sub.products_count
-                    } for sub in category.subcategories.filter(is_active=True)
-                ]
-            })
+            category_data = []
+            for category in categories:
+                category_data.append({
+                    'id': category.id,
+                    'name': category.name,
+                    'name_fa': getattr(category, 'name_fa', category.name),
+                    'display_name': getattr(category, 'display_name', category.name),
+                    'description': getattr(category, 'description', ''),
+                    'image_url': category.image.url if hasattr(category, 'image') and category.image else None,
+                    'products_count': getattr(category, 'products_count', 0),
+                    'parent_id': getattr(category, 'parent_id', None),
+                    'slug': getattr(category, 'slug', ''),
+                    'subcategories': []
+                })
 
-        return Response(category_data)
+            return Response(category_data)
+        except Exception as e:
+            print(f"Error fetching categories: {str(e)}")
+            return Response([])
+
 
     @action(detail=False, methods=['GET'], url_path='analytics')
     def analytics(self, request):
@@ -523,6 +537,66 @@ class ProductViewSet(viewsets.ModelViewSet):
         }
 
         return Response(debug_data)
+
+    @action(detail=True, methods=['GET'], url_path='debug')
+    def debug_product(self, request, pk=None):
+        """Debug endpoint to check product structure"""
+        product = self.get_object()
+
+        debug_info = {
+            'product_id': product.id,
+            'product_name': product.name,
+            'category': {
+                'id': product.category.id if product.category else None,
+                'name': product.category.name if product.category else None,
+                'name_fa': getattr(product.category, 'name_fa', None) if product.category else None,
+            },
+            'origin_country': getattr(product, 'origin_country', None),
+            'tax_rate': getattr(product, 'tax_rate', None),
+            'weight': getattr(product, 'weight', None),
+            'base_price': getattr(product, 'base_price', None),
+            'stock': getattr(product, 'stock', None),
+            'sku': getattr(product, 'sku', None),
+        }
+
+        return Response(debug_info)
+
+    # Test this in your Django backend - add this to your ProductViewSet
+
+    @action(detail=False, methods=['GET'], url_path='test-pagination')
+    def test_pagination(self, request):
+        """Test pagination parameters"""
+        limit = request.query_params.get('limit', 20)
+        offset = request.query_params.get('offset', 0)
+
+        try:
+            limit = int(limit)
+            offset = int(offset)
+        except ValueError:
+            return Response({
+                'error': 'Invalid limit or offset',
+                'limit': limit,
+                'offset': offset
+            })
+
+        queryset = self.get_queryset()
+        total_count = queryset.count()
+
+        # Manual pagination
+        products = queryset[offset:offset + limit]
+
+        return Response({
+            'debug_info': {
+                'received_limit': limit,
+                'received_offset': offset,
+                'total_products': total_count,
+                'returned_products': len(products),
+                'products_range': f"{offset + 1} to {offset + len(products)}",
+                'query_params': dict(request.query_params)
+            },
+            'results': [{'id': p.id, 'name': p.name} for p in products],
+            'count': total_count
+        })
 
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):

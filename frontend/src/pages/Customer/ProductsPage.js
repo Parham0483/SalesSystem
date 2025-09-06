@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../component/api';
 import { useAuth } from '../../hooks/useAuth';
-import LazyImage from '../../component/LazyImage';
 import NeoBrutalistCard from '../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
@@ -16,7 +15,7 @@ const ProductsPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [selectedCategory, setSelectedCategory] = useState('all');
-    const [sortBy, setSortBy] = useState('newest');
+    const [sortBy, setSortBy] = useState('-created_at');
     const [categories, setCategories] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -28,7 +27,7 @@ const ProductsPage = () => {
     const [error, setError] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalProducts, setTotalProducts] = useState(0);
-    const [productsPerPage, setProductsPerPage] = useState(9);
+    const [productsPerPage] = useState(9);
     const [totalPages, setTotalPages] = useState(0);
 
     // Hooks
@@ -39,49 +38,38 @@ const ProductsPage = () => {
     const startIndex = (currentPage - 1) * productsPerPage + 1;
     const endIndex = Math.min(currentPage * productsPerPage, totalProducts);
 
-    // SIMPLIFIED IMAGE HANDLING
+    // FIXED: Image handling functions
     const getImageUrl = (product, preferThumbnail = false) => {
         if (!product) return '/placeholder-product.png';
 
-        // Direct thumbnail URL if available and requested
         if (preferThumbnail && product.thumbnail_url) {
-            console.log('Using thumbnail_url:', product.thumbnail_url);
             return product.thumbnail_url;
         }
 
-        // Primary image URL
         if (product.primary_image_url) {
-            console.log('Using primary_image_url:', product.primary_image_url);
             return product.primary_image_url;
         }
 
-        // Fallback to basic image_url
         if (product.image_url) {
-            console.log('Using image_url:', product.image_url);
             return product.image_url;
         }
 
-        // Last resort - check product_images array
         if (product.product_images && product.product_images.length > 0) {
             const firstImage = product.product_images[0];
             if (firstImage.image_url || firstImage.image) {
-                const imageUrl = firstImage.image_url || firstImage.image;
-                console.log('Using product_images[0]:', imageUrl);
-                return imageUrl;
+                return firstImage.image_url || firstImage.image;
             }
         }
 
-        console.log('No valid image found, using placeholder');
         return '/placeholder-product.png';
     };
 
     const getSecondImageUrl = (product) => {
-        if (!product) return null;
-        if (product.product_images && product.product_images.length > 1) {
-            const secondImage = product.product_images[1];
-            return secondImage.image_url || secondImage.image;
+        if (!product || !product.product_images || product.product_images.length <= 1) {
+            return null;
         }
-        return null;
+        const secondImage = product.product_images[1];
+        return secondImage.image_url || secondImage.image;
     };
 
     const getProductImages = (product) => {
@@ -89,8 +77,7 @@ const ProductsPage = () => {
 
         let images = [];
 
-        // Get images from product_images array
-        if (product.product_images && product.product_images.length > 0) {
+        if (product.product_images && Array.isArray(product.product_images) && product.product_images.length > 0) {
             images = product.product_images.map(img => ({
                 id: img.id || Math.random(),
                 image_url: img.image_url || img.image,
@@ -99,7 +86,6 @@ const ProductsPage = () => {
             }));
         }
 
-        // If no product_images, try to construct from primary/thumbnail URLs
         if (images.length === 0) {
             if (product.primary_image_url) {
                 images.push({
@@ -118,7 +104,6 @@ const ProductsPage = () => {
             }
         }
 
-        console.log(`Product ${product.name} images:`, images);
         return images;
     };
 
@@ -139,6 +124,16 @@ const ProductsPage = () => {
     const formatPrice = (price) => {
         if (!price || price === 0) return 'تماس بگیرید';
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
+    };
+
+    const formatWeight = (weight) => {
+        if (!weight || weight === 0) return 'نامشخص';
+        return `${parseFloat(weight).toLocaleString('fa-IR')} کیلوگرم`;
+    };
+
+    const formatTaxRate = (taxRate) => {
+        if (!taxRate || taxRate === 0) return '0%';
+        return `${parseFloat(taxRate).toLocaleString('fa-IR')}%`;
     };
 
     const isNewProduct = (createdAt) => {
@@ -162,17 +157,15 @@ const ProductsPage = () => {
         setSearchTerm('');
         setFilterStatus('all');
         setSelectedCategory('all');
-        setSortBy('newest');
+        setSortBy('-created_at');
         setCurrentPage(1);
     };
 
     const handleProductClick = (product) => {
-        console.log('Product clicked:', product);
         setSelectedProduct(product);
     };
 
     const handleImageClick = (imageUrl, productName, imageIndex = null) => {
-        console.log('Image clicked:', { imageUrl, productName, imageIndex });
         setFullscreenImage({
             url: imageUrl,
             productName: productName || 'بدون نام',
@@ -191,55 +184,47 @@ const ProductsPage = () => {
         navigate('/orders/create', { state: { preselectedProduct: product, stockStatus } });
     };
 
-    // Pagination handlers
-    const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages && page !== currentPage) {
-            setCurrentPage(page);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+    // FIXED: Simplified pagination (similar to AdminProductsPage)
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage && !loading) {
+            console.log('Changing to page:', newPage);
+            fetchProducts(newPage);
         }
     };
 
-    const handleProductsPerPageChange = (newPerPage) => {
-        setProductsPerPage(newPerPage);
-        setCurrentPage(1); // Reset to first page
-    };
-
-    // API functions
-    const fetchProducts = async (page = currentPage, limit = productsPerPage) => {
+    const fetchProducts = useCallback(async (page = 1) => {
+        console.log('=== FETCHING PRODUCTS ===');
+        console.log('Page:', page, 'Offset:', (page - 1) * productsPerPage);
+        setLoading(true);
         try {
-            setLoading(true);
-            setError('');
-
-            const offset = (page - 1) * limit;
-            const params = new URLSearchParams({
-                limit: limit.toString(),
-                offset: offset.toString(),
+            const params = {
+                limit: productsPerPage,
+                offset: (page - 1) * productsPerPage,
+                ordering: sortBy,
+                _t: Date.now()
+            };
+            if (searchTerm) params.search = searchTerm;
+            if (selectedCategory && selectedCategory !== 'all') params.category_id = selectedCategory;
+            if (filterStatus && filterStatus !== 'all') params.status = filterStatus;
+            console.log('API params:', params);
+            const response = await API.get('/products/', { params });
+            console.log('API Response:', {
+                count: response.data.count,
+                results: response.data.results.map(p => p.id),
+                next: response.data.next,
+                previous: response.data.previous
             });
-
-            // Add filters
-            if (searchTerm) {
-                params.append('search', searchTerm);
+            const responseData = response.data;
+            const productsData = responseData.results || responseData;
+            if (!Array.isArray(productsData)) {
+                console.error('API returned non-array data:', responseData);
+                throw new Error('API did not return valid products array');
             }
-            if (selectedCategory && selectedCategory !== 'all') {
-                params.append('category', selectedCategory);
-            }
-            if (filterStatus && filterStatus !== 'all') {
-                params.append('status', filterStatus);
-            }
-            if (sortBy) {
-                params.append('ordering', sortBy);
-            }
-
-            console.log('Fetching products with params:', params.toString());
-
-            const response = await API.get(`/products/?${params.toString()}`);
-            console.log('Products API response:', response.data);
-
-            const data = response.data;
-            setProducts(data.results || []);
-            setTotalProducts(data.count || 0);
-            setTotalPages(Math.ceil((data.count || 0) / limit));
-
+            setProducts([...productsData]); // Force new array for state update
+            setTotalProducts(responseData.count || productsData.length);
+            setTotalPages(Math.ceil((responseData.count || productsData.length) / productsPerPage));
+            setCurrentPage(page);
+            setError('');
         } catch (err) {
             console.error('Error fetching products:', err);
             setError('خطا در بارگیری محصولات');
@@ -249,15 +234,20 @@ const ProductsPage = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [searchTerm, filterStatus, selectedCategory, sortBy, productsPerPage]);
 
     const fetchCategories = async () => {
         try {
-            const response = await API.get('/categories/');
-            console.log('Categories API response:', response.data);
+            const response = await API.get('/products/categories/');
             setCategories(response.data || []);
         } catch (err) {
             console.error('Error fetching categories:', err);
+            try {
+                const response2 = await API.get('/categories/');
+                setCategories(response2.data || []);
+            } catch (err2) {
+                console.error('Error fetching categories from alternative endpoint:', err2);
+            }
         }
     };
 
@@ -272,32 +262,32 @@ const ProductsPage = () => {
     const categoryOptions = [
         { value: 'all', label: 'همه دسته‌ها' },
         ...categories.map(cat => ({
-            value: cat?.id || cat?.name,
-            label: cat?.display_name || cat?.name || 'بدون نام'
+            value: cat?.id?.toString() || cat?.name,
+            label: cat?.display_name || cat?.name_fa || cat?.name || 'بدون نام'
         }))
     ];
 
-
+    const sortOptions = [
+        { value: '-created_at', label: 'جدیدترین' },
+        { value: 'created_at', label: 'قدیمی‌ترین' },
+        { value: 'name', label: 'نام (الف - ی)' },
+        { value: '-name', label: 'نام (ی - الف)' },
+        { value: 'base_price', label: 'قیمت (کم به زیاد)' },
+        { value: '-base_price', label: 'قیمت (زیاد به کم)' },
+        { value: '-stock', label: 'موجودی (زیاد به کم)' },
+        { value: 'stock', label: 'موجودی (کم به زیاد)' }
+    ];
 
     // Effects
     useEffect(() => {
         fetchCategories();
     }, []);
 
+    // FIXED: Simple effect pattern (like AdminProductsPage)
     useEffect(() => {
-        const debounceTimer = setTimeout(() => {
-            console.log('Filters changed, fetching products...');
-            fetchProducts(1, productsPerPage); // Always start from page 1 when filters change
-            if (currentPage !== 1) {
-                setCurrentPage(1);
-            }
-        }, 500);
-        return () => clearTimeout(debounceTimer);
-    }, [searchTerm, selectedCategory, filterStatus, sortBy, productsPerPage]);
-
-    useEffect(() => {
-        fetchProducts(currentPage, productsPerPage);
-    }, [currentPage]);
+        console.log('Filters changed, fetching page 1');
+        fetchProducts(1);
+    }, [searchTerm, filterStatus, selectedCategory, sortBy, fetchProducts]);
 
     useEffect(() => {
         setCurrentImageIndex(0);
@@ -399,7 +389,7 @@ const ProductsPage = () => {
                         text="تلاش مجدد"
                         color="blue-400"
                         textColor="white"
-                        onClick={() => fetchProducts(currentPage, productsPerPage)}
+                        onClick={() => fetchProducts(currentPage)}
                     />
                 </div>
             )}
@@ -416,7 +406,7 @@ const ProductsPage = () => {
                         />
                     </div>
                 </div>
-                <div className="filters-grid">
+                <div className="filters-grid" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
                     <div className="search-wrapper">
                         <Search className="search-icon" />
                         <NeoBrutalistInput
@@ -437,6 +427,12 @@ const ProductsPage = () => {
                         value={selectedCategory || 'all'}
                         onChange={(value) => setSelectedCategory(value)}
                     />
+                    <NeoBrutalistDropdown
+                        label="مرتب‌سازی"
+                        options={sortOptions}
+                        value={sortBy || '-created_at'}
+                        onChange={(value) => setSortBy(value)}
+                    />
                 </div>
             </NeoBrutalistCard>
 
@@ -452,39 +448,34 @@ const ProductsPage = () => {
                     {products?.length > 0 ? (
                         products.map((product, index) => {
                             const imageUrl = getImageUrl(product);
-                            console.log(`Product ${product.id || index} card image:`, imageUrl);
+                            const secondImageUrl = getSecondImageUrl(product);
+                            const hasMultipleImages = secondImageUrl && secondImageUrl !== imageUrl;
 
                             return (
                                 <NeoBrutalistCard
-                                    key={product?.id || `product-${index}`}
-                                    className="product-card"
+                                    key={`${product.id}-${currentPage}`}
+                                    className={`product-card ${hasMultipleImages ? 'has-hover-image' : 'single-image'}`}
                                     onClick={() => handleProductClick(product)}
                                 >
                                     <div className="product-image-container">
                                         <div className="image-wrapper">
-                                            {/* Primary Image */}
                                             <img
                                                 src={imageUrl}
                                                 alt={product?.name || 'محصول'}
                                                 className="product-image primary-image"
                                                 onError={(e) => {
-                                                    console.error(`Product ${product.id} primary image failed:`, e.target.src);
                                                     e.target.src = '/placeholder-product.png';
                                                 }}
-                                                onLoad={() => console.log(`Product ${product.id} primary image loaded`)}
                                             />
 
-                                            {/* Second Image - Shows on Hover */}
-                                            {getSecondImageUrl(product) && (
+                                            {hasMultipleImages && (
                                                 <img
-                                                    src={getSecondImageUrl(product)}
+                                                    src={secondImageUrl}
                                                     alt={`${product?.name || 'محصول'} - تصویر دوم`}
                                                     className="product-image hover-image"
                                                     onError={(e) => {
-                                                        console.error(`Product ${product.id} hover image failed:`, e.target.src);
                                                         e.target.style.display = 'none';
                                                     }}
-                                                    onLoad={() => console.log(`Product ${product.id} hover image loaded`)}
                                                 />
                                             )}
                                         </div>
@@ -505,7 +496,7 @@ const ProductsPage = () => {
                     )}
                 </div>
 
-                {/* Pagination Controls */}
+                {/* SIMPLIFIED: Pagination controls */}
                 {totalPages > 1 && (
                     <div className="pagination-container">
                         <div className="pagination-info">
@@ -514,54 +505,50 @@ const ProductsPage = () => {
                         </div>
 
                         <div className="pagination-controls">
-                            {/* First Page */}
                             <button
                                 className={`pagination-btn ${currentPage === 1 ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(1)}
-                                disabled={currentPage === 1}
+                                disabled={currentPage === 1 || loading}
                                 title="صفحه اول"
                             >
                                 <ChevronsRight size={18} />
                             </button>
 
-                            {/* Previous Page */}
                             <button
                                 className={`pagination-btn ${currentPage === 1 ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 1}
+                                disabled={currentPage === 1 || loading}
                                 title="صفحه قبل"
                             >
                                 <ChevronRight size={18} />
                             </button>
 
-                            {/* Page Numbers */}
                             <div className="pagination-numbers">
                                 {getPageNumbers().map(pageNum => (
                                     <button
                                         key={pageNum}
                                         className={`pagination-number ${currentPage === pageNum ? 'active' : ''}`}
                                         onClick={() => handlePageChange(pageNum)}
+                                        disabled={loading}
                                     >
                                         {pageNum}
                                     </button>
                                 ))}
                             </div>
 
-                            {/* Next Page */}
                             <button
                                 className={`pagination-btn ${currentPage === totalPages ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage === totalPages}
+                                disabled={currentPage === totalPages || loading}
                                 title="صفحه بعد"
                             >
                                 <ChevronLeft size={18} />
                             </button>
 
-                            {/* Last Page */}
                             <button
                                 className={`pagination-btn ${currentPage === totalPages ? 'disabled' : ''}`}
                                 onClick={() => handlePageChange(totalPages)}
-                                disabled={currentPage === totalPages}
+                                disabled={currentPage === totalPages || loading}
                                 title="صفحه آخر"
                             >
                                 <ChevronsLeft size={18} />
@@ -571,7 +558,7 @@ const ProductsPage = () => {
                 )}
             </div>
 
-            {/* SIMPLIFIED MODAL */}
+            {/* Modal for product details */}
             <NeoBrutalistModal
                 isOpen={!!selectedProduct}
                 onClose={() => setSelectedProduct(null)}
@@ -605,7 +592,6 @@ const ProductsPage = () => {
                                                         currentImageIndex + 1
                                                     )}
                                                     onError={(e) => {
-                                                        console.error('Modal image failed:', e.target.src);
                                                         e.target.src = '/placeholder-product.png';
                                                     }}
                                                 />
@@ -636,6 +622,43 @@ const ProductsPage = () => {
                             </div>
                         </div>
 
+                        <div className="modal-product-details">
+                            <h4>مشخصات محصول</h4>
+                            <div className="details-grid">
+                                <div className="detail-item">
+                                    <span className="detail-label">دسته‌بندی:</span>
+                                    <span className="detail-value">
+                                        {selectedProduct.category_name ||
+                                            selectedProduct.category?.display_name ||
+                                            selectedProduct.category?.name_fa ||
+                                            selectedProduct.category?.name ||
+                                            'نامشخص'}
+                                    </span>
+                                </div>
+
+                                <div className="detail-item">
+                                    <span className="detail-label">مبدا:</span>
+                                    <span className="detail-value">
+                                        {selectedProduct.origin_country || 'نامشخص'}
+                                    </span>
+                                </div>
+
+                                <div className="detail-item">
+                                    <span className="detail-label">نرخ مالیات:</span>
+                                    <span className="detail-value">
+                                        {formatTaxRate(selectedProduct.tax_rate)}
+                                    </span>
+                                </div>
+
+                                <div className="detail-item">
+                                    <span className="detail-label">وزن (کیلوگرم):</span>
+                                    <span className="detail-value">
+                                        {formatWeight(selectedProduct.weight)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="modal-actions">
                             {!isDealer && getStockStatus(selectedProduct).status !== 'out_of_stock' && (
                                 <NeoBrutalistButton
@@ -656,7 +679,7 @@ const ProductsPage = () => {
                 )}
             </NeoBrutalistModal>
 
-            {/* SIMPLIFIED FULLSCREEN */}
+            {/* Fullscreen image modal */}
             {fullscreenImage && (
                 <div className="fullscreen-image-overlay" onClick={handleFullscreenClose}>
                     <button className="fullscreen-close-btn" onClick={handleFullscreenClose}>✕</button>
