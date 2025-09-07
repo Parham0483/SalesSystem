@@ -598,13 +598,22 @@ class ProductViewSet(viewsets.ModelViewSet):
             'count': total_count
         })
 
-
     @action(detail=False, methods=['GET'], url_path='all-for-orders')
     def all_for_orders(self, request):
-        """Get all active products for order creation (no pagination)"""
-        products = Product.objects.filter(is_active=True).order_by('name')
-        serializer = self.get_serializer(products, many=True)
-        return Response(serializer.data)
+        """Get all active products for order creation with stock info"""
+        products = Product.objects.filter(is_active=True).select_related('category')
+
+        product_data = []
+        for product in products:
+            product_data.append({
+                'id': product.id,
+                'name': product.name,
+                'category_id': product.category_id,
+                'stock': product.stock,
+                'stock_status': product.stock_status,
+            })
+
+        return Response(product_data)
 
 
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):

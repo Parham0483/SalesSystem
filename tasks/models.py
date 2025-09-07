@@ -359,7 +359,7 @@ class Product(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField()
     base_price = models.DecimalField(
-        max_digits=10,
+        max_digits=18,
         decimal_places=2,
         default=Decimal('0.00'),
         help_text="Base price for reference"
@@ -787,7 +787,7 @@ class Order(models.Model):
 
     # Pricing fields
     quoted_total = models.DecimalField(
-        max_digits=12,
+        max_digits=18,
         decimal_places=2,
         default=Decimal('0.00'),
         help_text="Total quoted by admin"
@@ -1222,7 +1222,7 @@ class OrderItem(models.Model):
 
     # Admin pricing fields
     quoted_unit_price = models.DecimalField(
-        max_digits=15,
+        max_digits=18,
         decimal_places=2,
         default=Decimal('0.00'),
         help_text="Price quoted by admin"
@@ -1258,16 +1258,16 @@ class Invoice(models.Model):
     invoice_type = models.CharField(max_length=15, choices=INVOICE_TYPE_CHOICES, default='pre_invoice')
 
     # Financial fields
-    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    discount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0.00'))
     tax_rate = models.DecimalField(
-        max_digits=5,
+        max_digits=18,
         decimal_places=2,
         default=Decimal('0.00'),
         help_text="Tax rate as percentage"
     )
-    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    payable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    payable_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0.00'))
 
     # Status fields
     issued_at = models.DateTimeField(auto_now_add=True)
@@ -1540,12 +1540,12 @@ class DealerCommission(models.Model):
         help_text="Commission percentage at time of completion"
     )
     commission_amount = models.DecimalField(
-        max_digits=10,
+        max_digits=18,
         decimal_places=2,
         help_text="Calculated commission amount"
     )
     order_total = models.DecimalField(
-        max_digits=12,
+        max_digits=18,
         decimal_places=2,
         help_text="Order total at time of completion"
     )

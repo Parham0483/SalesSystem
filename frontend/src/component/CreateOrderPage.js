@@ -293,10 +293,15 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     const getFilteredProductsForItem = (categoryId) => {
         if (!categoryId || !products.length) return [];
 
-        return products.filter(product =>
-            product.category_id?.toString() === categoryId ||
-            product.category?.toString() === categoryId
-        );
+        return products.filter(product => {
+            const matchesCategory = product.category_id?.toString() === categoryId ||
+                product.category?.toString() === categoryId;
+
+            // Only show products that are in stock
+            const isInStock = product.stock > 0;
+
+            return matchesCategory && isInStock;
+        });
     };
 
     const handleSubmit = async () => {
@@ -331,6 +336,18 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                     customer_notes: item.customer_notes || ''
                 }))
             };
+            for (const item of validItems) {
+                const product = products.find(p => p.id.toString() === item.product);
+                if (!product) {
+                    throw new Error(`محصول مورد نظر یافت نشد`);
+                }
+                if (product.stock === 0) {
+                    throw new Error(`محصول ${product.name} در حال حاضر موجود نیست`);
+                }
+                if (parseInt(item.requested_quantity) > product.stock) {
+                    throw new Error(`تعداد درخواستی برای ${product.name} (${item.requested_quantity}) بیش از موجودی (${product.stock}) است`);
+                }
+            }
 
             // ADD CUSTOMER INFO FOR OFFICIAL INVOICES
             if (needsOfficialInvoice) {
@@ -671,7 +688,8 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                             const itemFilteredProducts = getFilteredProductsForItem(item.category);
                             const productOptions = itemFilteredProducts.map(product => ({
                                 value: product.id.toString(),
-                                label: `${product.name}`
+                                label: `${product.name} ${product.stock > 0 ? `(موجودی: ${product.stock})` : '(ناموجود)'}`,
+                                disabled: product.stock === 0
                             }));
 
                             return (
