@@ -434,122 +434,219 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                     </div>
                 </NeoBrutalistCard>
 
-                {/* Customer Information Form (for official invoices) */}
+
                 {needsOfficialInvoice && (
                     <NeoBrutalistCard className="neo-customer-form-section">
                         <div className="neo-customer-form-header">
                             <h3>اطلاعات مورد نیاز برای فاکتور رسمی</h3>
                             {loadingCustomerInfo && (
-                                <span className="neo-loading-text">🔄 در حال بارگیری اطلاعات...</span>
+                                <span className="neo-loading-text">📄 در حال بارگیری اطلاعات...</span>
                             )}
                         </div>
 
                         <div className="neo-customer-form">
                             <div className="neo-form-row">
-                                <div className="neo-form-field">
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="نام کامل *"
                                         value={customerInfo.name}
                                         onChange={(e) => handleCustomerInfoChange('name', e.target.value)}
                                         error={customerInfoErrors.name}
-                                        placeholder="نام ونام خانوادگی"
+                                        placeholder="نام و نام خانوادگی"
+                                        className={`${customerInfoErrors.name ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="name">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>نام کامل شما</strong>
+                                                <p>این نام در فاکتور رسمی ثبت خواهد شد</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="neo-form-field">
+
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="شماره تماس *"
                                         value={customerInfo.phone}
                                         onChange={(e) => handleCustomerInfoChange('phone', e.target.value)}
                                         error={customerInfoErrors.phone}
-                                        placeholder="شماره تماس"
+                                        placeholder="09123456789"
+                                        className={`${customerInfoErrors.phone ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="phone">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>شماره تماس معتبر</strong>
+                                                <p>مثال: 09123456789</p>
+                                                <p>برای ارسال اطلاعیه‌های سفارش</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="neo-form-row">
-                                <div className="neo-form-field">
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="نام شرکت (اختیاری)"
                                         value={customerInfo.company_name}
                                         onChange={(e) => handleCustomerInfoChange('company_name', e.target.value)}
                                         placeholder="نام شرکت"
                                     />
+                                    <div className="neo-field-tooltip" data-field="company">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>نام شرکت (اختیاری)</strong>
+                                                <p>فاکتور به نام شرکت صادر می‌شود</p>
+                                                <p>برای اشخاص حقوقی</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="neo-form-field">
+
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="شناسه ملی *"
                                         value={customerInfo.national_id}
                                         onChange={(e) => handleCustomerInfoChange('national_id', e.target.value)}
                                         error={customerInfoErrors.national_id}
-                                        placeholder="شناسه ملی"
+                                        placeholder="کد ملی یا شناسه ملی"
                                         maxLength="10"
+                                        className={`${customerInfoErrors.national_id ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="national_id">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>کد ملی</strong>
+                                                <p>کد ملی 10 رقمی یا شناسه ملی</p>
+                                                <p>برای ثبت در سامانه مالیاتی</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="neo-form-row">
-                                <div className="neo-form-field">
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="شناسه اقتصادی"
                                         value={customerInfo.economic_id}
                                         onChange={(e) => handleCustomerInfoChange('economic_id', e.target.value)}
                                         placeholder="شناسه اقتصادی"
                                     />
+                                    <div className="neo-field-tooltip" data-field="economic_id">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>شناسه اقتصادی</strong>
+                                                <p>فقط برای شرکت‌های دارای شناسه</p>
+                                                <p>اختیاری برای اشخاص حقیقی</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="neo-form-field">
+
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="کد پستی *"
                                         value={customerInfo.postal_code}
                                         onChange={(e) => handleCustomerInfoChange('postal_code', e.target.value)}
                                         error={customerInfoErrors.postal_code}
-                                        placeholder="کد پستی"
+                                        placeholder="1234567890"
                                         maxLength="10"
+                                        className={`${customerInfoErrors.postal_code ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="postal_code">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>کد پستی</strong>
+                                                <p>کد پستی 10 رقمی</p>
+                                                <p>برای تکمیل آدرس فاکتور</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="neo-form-row">
-                                <div className="neo-form-field">
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="استان *"
                                         value={customerInfo.province}
                                         onChange={(e) => handleCustomerInfoChange('province', e.target.value)}
                                         error={customerInfoErrors.province}
-                                        placeholder="استان"
+                                        placeholder="تهران"
+                                        className={`${customerInfoErrors.province ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="province">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>استان محل سکونت</strong>
+                                                <p>نام استان به فارسی</p>
+                                                <p>مثال: تهران، اصفهان</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="neo-form-field">
+
+                                <div className="neo-form-field neo-tooltip-container">
                                     <NeoBrutalistInput
                                         label="شهر *"
                                         value={customerInfo.city}
                                         onChange={(e) => handleCustomerInfoChange('city', e.target.value)}
                                         error={customerInfoErrors.city}
-                                        placeholder="شهر"
+                                        placeholder="تهران"
+                                        className={`${customerInfoErrors.city ? 'neo-required-field' : ''}`}
                                     />
+                                    <div className="neo-field-tooltip" data-field="city">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>شهر محل سکونت</strong>
+                                                <p>نام شهر به فارسی</p>
+                                                <p>مثال: تهران، کرج</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="neo-form-row">
-                                <div className="neo-textarea-group">
+                                <div className="neo-textarea-group neo-tooltip-container">
                                     <label className="neo-textarea-label">آدرس کامل *</label>
                                     <textarea
-                                        className={`neo-textarea ${customerInfoErrors.complete_address ? 'error' : ''}`}
+                                        className={`neo-textarea ${customerInfoErrors.complete_address ? 'error neo-required-field' : ''}`}
                                         value={customerInfo.complete_address}
                                         onChange={(e) => handleCustomerInfoChange('complete_address', e.target.value)}
-                                        placeholder="مثال: تهران، خیابان آزادی، پلاک 123، طبقه 2"
+                                        placeholder="تهران، خیابان آزادی، پلاک 123، طبقه 2"
                                         rows={3}
                                     />
-                                    {customerInfoErrors.complete_address && (
-                                        <span className="neo-error-text">{customerInfoErrors.complete_address}</span>
-                                    )}
+                                    <div className="neo-field-tooltip" data-field="address">
+                                        <div className="neo-tooltip-content">
+                                            <div className="neo-tooltip-text">
+                                                <strong>آدرس کامل</strong>
+                                                <p>آدرس دقیق شامل خیابان، کوچه، پلاک</p>
+                                                <p>این آدرس در فاکتور رسمی درج می‌شود</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {Object.keys(customerInfoErrors).length > 0 && (
-                            <div className="neo-form-errors">
-                                <span className="neo-error-icon">⚠️</span>
-                                <span>لطفاً فیلدهای الزامی را تکمیل کنید</span>
+                        {/* Overall Status Summary */}
+                        {Object.keys(customerInfoErrors).length > 0 ? (
+                            <div className="neo-form-status error">
+                                <span className="neo-status-icon">⚠️</span>
+                                <span className="neo-status-text">
+                    برای صدور فاکتور رسمی، {Object.keys(customerInfoErrors).length} فیلد باقی‌مانده
+                </span>
+                            </div>
+                        ) : customerInfoLoaded && (
+                            <div className="neo-form-status success">
+                                <span className="neo-status-icon">✅</span>
+                                <span className="neo-status-text">
+                    آماده برای صدور فاکتور رسمی
+                </span>
                             </div>
                         )}
                     </NeoBrutalistCard>
