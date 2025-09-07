@@ -599,6 +599,14 @@ class ProductViewSet(viewsets.ModelViewSet):
         })
 
 
+    @action(detail=False, methods=['GET'], url_path='all-for-orders')
+    def all_for_orders(self, request):
+        """Get all active products for order creation (no pagination)"""
+        products = Product.objects.filter(is_active=True).order_by('name')
+        serializer = self.get_serializer(products, many=True)
+        return Response(serializer.data)
+
+
 class ShipmentAnnouncementViewSet(viewsets.ModelViewSet):
     """Fixed ViewSet for shipment announcements"""
     authentication_classes = [JWTAuthentication]

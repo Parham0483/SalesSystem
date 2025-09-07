@@ -155,33 +155,23 @@ const CreateOrderPage = ({ onOrderCreated }) => {
         setLoadingProducts(true);
         try {
             console.log('Starting to fetch products...');
-            const response = await API.get('/products/');
+            // Use the new endpoint that returns all products
+            const response = await API.get('/products/all-for-orders/');
             console.log('Raw products response:', response);
 
             if (response && response.data) {
-                // Handle paginated response (which is what you're getting)
-                if (response.data.results && Array.isArray(response.data.results)) {
-                    setProducts(response.data.results);
-                    console.log('✅ Products loaded from paginated response:', response.data.results.length, 'products');
-                }
-                // Handle direct array response
-                else if (Array.isArray(response.data)) {
+                // This should be a direct array, not paginated
+                if (Array.isArray(response.data)) {
                     setProducts(response.data);
-                    console.log('✅ Products loaded directly:', response.data.length, 'products');
-                }
-                // Handle unexpected format
-                else {
-                    console.error('❌ Unexpected response format:', response.data);
+                } else {
                     setProducts([]);
                     setError('خطا در بارگیری محصولات - فرمت داده نادرست');
                 }
             } else {
-                console.error('❌ No response or response.data');
                 setProducts([]);
                 setError('خطا در دریافت پاسخ از سرور');
             }
         } catch (err) {
-            console.error('❌ Error fetching products:', err);
             setProducts([]);
             setError('خطا در بارگیری محصولات: ' + (err.response?.data?.message || err.message));
         } finally {
