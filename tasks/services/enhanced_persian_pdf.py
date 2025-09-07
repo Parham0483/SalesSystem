@@ -70,8 +70,35 @@ class EnhancedPersianInvoicePDFGenerator:
         }
 
     def _para(self, text, style='table_cell'):
-        reshaped_text = get_display(arabic_reshaper.reshape(str(text)))
-        return Paragraph(reshaped_text, self.styles[style])
+        """Create Persian paragraph with robust error handling"""
+        if not text:
+            text = ""
+
+        try:
+            # Clean problematic Unicode control characters
+            cleaned_text = str(text)
+            for char in ['\u2068', '\u2069', '\u061C', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E']:
+                cleaned_text = cleaned_text.replace(char, '')
+
+            # Reshape Arabic/Persian characters
+            reshaped_text = arabic_reshaper.reshape(cleaned_text)
+
+            # Apply bidi with fallback
+            try:
+                display_text = get_display(reshaped_text)
+            except (ValueError, UnicodeError) as e:
+                if "FSI" in str(e) or "isolate" in str(e).lower():
+                    # Use reshaped text without bidi
+                    display_text = reshaped_text
+                else:
+                    raise e
+
+            return Paragraph(display_text, self.styles[style])
+
+        except Exception as e:
+            print(f"Text processing error for '{text[:50]}...': {e}")
+            # Final fallback: original text
+            return Paragraph(str(text), self.styles[style])
 
     def draw_background(self, canvas, doc):
         letterhead_path = os.path.join(settings.BASE_DIR, 'static', 'images', 'letterhead.jpg')
