@@ -688,7 +688,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                             const itemFilteredProducts = getFilteredProductsForItem(item.category);
                             const productOptions = itemFilteredProducts.map(product => ({
                                 value: product.id.toString(),
-                                label: `${product.name} ${product.stock > 0 ? `(موجودی: ${product.stock})` : '(ناموجود)'}`,
+                                label: `${product.name}`,
                                 disabled: product.stock === 0
                             }));
 
