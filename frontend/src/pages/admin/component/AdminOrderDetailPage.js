@@ -435,6 +435,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
     const [customerInfo, setCustomerInfo] = useState(null);
     const [loadingCustomerInfo, setLoadingCustomerInfo] = useState(false);
 
+    const [lastRefresh, setLastRefresh] = useState(Date.now());
+    const [refreshing, setRefreshing] = useState(false);
+
     // ADDED: Payment receipts state
     const [paymentReceipts, setPaymentReceipts] = useState([]);
     const [loadingReceipts, setLoadingReceipts] = useState(false);
@@ -467,22 +470,81 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     }, [order]);
 
-    const fetchOrder = async () => {
-        setLoading(true);
+    const fetchOrder = async (showLoading = true) => {
+        if (showLoading) {
+            setLoading(true);
+        } else {
+            setRefreshing(true);
+        }
+
         try {
+            console.log(`Fetching order ${orderId} at ${new Date().toISOString()}`);
             const res = await API.get(`/orders/${orderId}/`);
+
+            console.log('Order fetched successfully:', res.data.status);
             setOrder(res.data);
             setItems(res.data.items || []);
             setAdminComment(res.data.admin_comment || '');
+            setError('');
+            setLastRefresh(Date.now());
+
         } catch (err) {
             console.error('Error fetching order:', err);
             setError('خطا در بارگیری سفارش');
         } finally {
-            setLoading(false);
+            if (showLoading) {
+                setLoading(false);
+            } else {
+                setRefreshing(false);
+            }
+        }
+    };
+    const handleOrderUpdate = async () => {
+        console.log('Order update triggered, refreshing data...');
+
+        // Refresh current order data
+        await fetchOrder(false);
+
+        // Notify parent component if callback exists
+        if (onOrderUpdated) {
+            try {
+                await onOrderUpdated();
+                console.log('Parent order list refreshed');
+            } catch (error) {
+                console.error('Error refreshing parent order list:', error);
+            }
+        }
+
+        // Additional refresh for dependent data
+        if (order?.customer) {
+            fetchCustomerInfo();
+        }
+
+        if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts)) {
+            fetchPaymentReceipts();
         }
     };
 
-    // ADDED: Function to fetch payment receipts for admin
+    // ADDED: Force refresh function for major status changes
+    const handleMajorStatusChange = async (newStatus) => {
+        console.log(`Major status change detected: ${newStatus}`);
+
+        // Show user that refresh is happening
+        setRefreshing(true);
+
+        // Wait a bit for backend to process
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Full refresh
+        await fetchOrder(false);
+
+        // Notify parent
+        if (onOrderUpdated) {
+            await onOrderUpdated();
+        }
+
+        setRefreshing(false);
+    };
     const fetchPaymentReceipts = async () => {
         setLoadingReceipts(true);
         setReceiptsError('');
@@ -1083,7 +1145,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
             {(order.status !== 'cancelled' && order.status !== 'rejected') && (
                 <AdminPricingEditSection
                     order={order}
-                    onUpdate={fetchOrder}
+                    onUpdate={handleOrderUpdate}
+                    onOrderListRefresh={onOrderUpdated}
+                    onMajorStatusChange={handleMajorStatusChange}
                 />
             )}
 

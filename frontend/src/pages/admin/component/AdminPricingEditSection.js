@@ -93,7 +93,13 @@ const PersianFormattedInput = ({
     );
 };
 
-const AdminPricingEditSection = ({ order, onUpdate }) => {
+// FIXED: Updated component props to include the missing callbacks
+const AdminPricingEditSection = ({
+                                     order,
+                                     onUpdate,
+                                     onOrderListRefresh,
+                                     onMajorStatusChange
+                                 }) => {
     const [editing, setEditing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [reopening, setReopening] = useState(false);
@@ -101,6 +107,9 @@ const AdminPricingEditSection = ({ order, onUpdate }) => {
     const [adminComment, setAdminComment] = useState(order.admin_comment || '');
     const [notifyCustomer, setNotifyCustomer] = useState(false);
     const [error, setError] = useState('');
+
+    // FIXED: Added missing refreshKey state
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Configuration for future implementation
     const FUTURE_FEATURES = {
@@ -338,8 +347,39 @@ const AdminPricingEditSection = ({ order, onUpdate }) => {
                 alert(message);
                 setEditing(false);
 
-                if (onUpdate) {
-                    onUpdate();
+                // FIXED: Enhanced refresh strategies with proper error handling
+                try {
+                    // 1. Call the onUpdate callback (refreshes current order detail)
+                    if (onUpdate) {
+                        await onUpdate();
+                    }
+
+                    // 2. If there's a parent list refresh callback, call it
+                    if (onOrderListRefresh) {
+                        await onOrderListRefresh();
+                    }
+
+                    // 3. Force a small delay then refresh current component state
+                    setTimeout(() => {
+                        // Reset local state to match new server state
+                        setItems(response.data.updated_order?.items || order.items || []);
+                        setAdminComment(response.data.updated_order?.admin_comment || adminComment);
+
+                        // Force component re-render by updating refresh key
+                        setRefreshKey(prev => prev + 1);
+                    }, 500);
+
+                    // 4. If status changed significantly, trigger major status change
+                    if (statusChanged && (statusChanged === 'waiting_customer_approval' || statusChanged === 'confirmed')) {
+                        console.log('Order status changed significantly, triggering refresh');
+
+                        if (onMajorStatusChange) {
+                            await onMajorStatusChange(statusChanged);
+                        }
+                    }
+                } catch (refreshError) {
+                    console.error('Error during refresh operations:', refreshError);
+                    // Don't fail the main operation if refresh fails
                 }
             }
 
@@ -514,7 +554,7 @@ const AdminPricingEditSection = ({ order, onUpdate }) => {
     }
 
     return (
-        <NeoBrutalistCard className="admin-pricing-edit-card" style={{ borderLeft: '6px solid #3b82f6' }}>
+        <NeoBrutalistCard className="admin-pricing-edit-card" style={{ borderLeft: '6px solid #3b82f6' }} key={refreshKey}>
             <div className="admin-card-header">
                 <h2 className="admin-card-title">
                     {isPendingPricing ? 'قیمت‌گذاری و جزئیات' :
