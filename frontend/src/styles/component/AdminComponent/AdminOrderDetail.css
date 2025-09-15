@@ -646,3 +646,521 @@
     padding: 1.5rem;
     direction: rtl;
 }
+
+/* Enhanced Persian Number Formatting CSS for Admin Order Detail */
+/* Add to AdminOrderDetail.css or create new file */
+
+/* Persian Formatted Input Styles */
+.persian-formatted-input {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 0.9rem;
+    text-align: center;
+    direction: ltr; /* Keep LTR for number input */
+    font-family: 'Tahoma', 'Arial', sans-serif;
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0 #000;
+    background-color: white;
+    color: #1a1a1a;
+    outline: none;
+    transition: all 0.2s ease;
+    border-radius: 0;
+}
+
+.persian-formatted-input:focus {
+    box-shadow: 4px 4px 0 #000;
+    transform: translate(2px, 2px);
+    outline: 2px solid #000;
+    outline-offset: 2px;
+    background-color: #fffbf0;
+}
+
+.persian-formatted-input:hover:not(:disabled) {
+    box-shadow: 4px 4px 0 #000;
+    transform: translate(2px, 2px);
+}
+
+.persian-formatted-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #f5f5f5;
+    color: #666;
+}
+
+.persian-formatted-input::placeholder {
+    color: #666;
+    opacity: 0.7;
+    font-style: italic;
+}
+
+/* Enhanced table cell styles for better number display */
+.admin-table-cell.admin-total-cell {
+    font-weight: bold;
+    color: #059669;
+    font-size: 1rem;
+    font-family: 'Tahoma', sans-serif;
+    direction: rtl;
+    text-align: center;
+    padding: 1rem 0.75rem;
+    background-color: #f0f9ff;
+    border-left: 3px solid #059669;
+}
+
+.admin-table-cell.admin-tax-cell {
+    font-weight: bold;
+    color: #dc2626;
+    font-size: 0.95rem;
+    font-family: 'Tahoma', sans-serif;
+    direction: rtl;
+    text-align: center;
+    padding: 1rem 0.75rem;
+    background-color: #fef2f2;
+    border-left: 3px solid #dc2626;
+}
+
+.tax-rate-display {
+    font-weight: bold;
+    color: #059669;
+    font-size: 0.9rem;
+    direction: rtl;
+    background-color: #f0f9ff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #059669;
+    display: inline-block;
+}
+
+/* Live calculation styling */
+.live-calculation {
+    color: #059669;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    display: inline-block;
+    min-height: 1.2em;
+}
+
+.live-calculation.updating {
+    color: #f59e0b;
+    background-color: #fef3c7;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #f59e0b;
+    animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Total breakdown styling */
+.total-breakdown {
+    text-align: right;
+    direction: rtl;
+    font-family: 'Tahoma', sans-serif;
+    line-height: 1.6;
+    background-color: #f8fafc;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 2px solid #e2e8f0;
+}
+
+.total-breakdown > div {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.total-breakdown .total-final {
+    font-weight: bold;
+    color: #dc2626;
+    border-top: 2px solid #dc2626;
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    background-color: #fef2f2;
+    padding: 0.75rem;
+    border-radius: 4px;
+}
+
+/* Enhanced order total section */
+.admin-order-total-section {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border: 3px solid #000;
+    box-shadow: 6px 6px 0 #000;
+    border-radius: 8px;
+    direction: rtl;
+    text-align: right;
+}
+
+.admin-order-total-section h4 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+    margin: 0 0 1rem 0;
+    color: #1a1a1a;
+    text-transform: uppercase;
+    border-bottom: 2px solid #000;
+    padding-bottom: 0.5rem;
+}
+
+/* Conditional table layouts for official vs unofficial invoices */
+.admin-items-table[data-invoice-type="unofficial"] .admin-table-header,
+.admin-items-table[data-invoice-type="unofficial"] .admin-table-row {
+    display: grid;
+    grid-template-columns:
+        minmax(180px, 2.5fr) /* Product name */
+        minmax(100px, 1.5fr) /* Requested quantity */
+        minmax(120px, 1.5fr) /* Customer Notes */
+        minmax(140px, 1.8fr) /* Unit price */
+        minmax(100px, 1.2fr) /* Final quantity */
+        minmax(150px, 2fr)   /* Admin Notes */
+        minmax(140px, 1.8fr); /* Total amount */
+    min-width: 1000px;
+    align-items: stretch;
+}
+
+.admin-items-table[data-invoice-type="official"] .admin-table-header,
+.admin-items-table[data-invoice-type="official"] .admin-table-row {
+    display: grid;
+    grid-template-columns:
+        minmax(180px, 2.2fr) /* Product name */
+        minmax(100px, 1.3fr) /* Requested quantity */
+        minmax(120px, 1.4fr) /* Customer Notes */
+        minmax(140px, 1.6fr) /* Unit price */
+        minmax(100px, 1.1fr) /* Final quantity */
+        minmax(90px, 1.2fr)  /* Tax rate */
+        minmax(130px, 1.5fr) /* Tax amount */
+        minmax(150px, 1.8fr) /* Admin Notes */
+        minmax(140px, 1.6fr); /* Total amount */
+    min-width: 1300px;
+    align-items: stretch;
+}
+
+/* Enhanced input cell styling */
+.admin-input-cell {
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-input-cell .persian-formatted-input {
+    max-width: 200px;
+    margin: 0 auto;
+}
+
+/* Status badges styling */
+.status-badge {
+    padding: 8px 16px;
+    border: 2px solid #000;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border-radius: 4px;
+    box-shadow: 3px 3px #000;
+    margin-left: 0.5rem;
+    display: inline-block;
+}
+
+.status-badge.pending-pricing {
+    background-color: #fef3c7;
+    color: #92400e;
+    border-color: #f59e0b;
+    box-shadow: 3px 3px #f59e0b;
+}
+
+.status-badge.waiting-approval {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #3b82f6;
+    box-shadow: 3px 3px #3b82f6;
+}
+
+.status-badge.confirmed {
+    background-color: #d1fae5;
+    color: #047857;
+    border-color: #10b981;
+    box-shadow: 3px 3px #10b981;
+}
+
+.status-badge.payment-uploaded {
+    background-color: #f3e8ff;
+    color: #7c3aed;
+    border-color: #a855f7;
+    box-shadow: 3px 3px #a855f7;
+}
+
+.status-badge.editing {
+    background-color: #fed7d7;
+    color: #c53030;
+    border-color: #e53e3e;
+    box-shadow: 3px 3px #e53e3e;
+}
+
+/* Status info boxes */
+.status-info {
+    font-family: 'Tahoma', sans-serif;
+    line-height: 1.5;
+    text-align: right;
+    direction: rtl;
+}
+
+/* Customer notification section */
+.notification-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-family: 'Tahoma', Arial, sans-serif;
+    cursor: pointer;
+    padding: 0.75rem;
+    background-color: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 6px;
+    direction: rtl;
+    text-align: right;
+    transition: all 0.2s ease;
+}
+
+.notification-checkbox-container:hover {
+    background-color: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.notification-checkbox-container input[type="checkbox"] {
+    width: 1.2rem;
+    height: 1.2rem;
+    cursor: pointer;
+    margin-left: 0.5rem;
+}
+
+.notification-info {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    margin-right: 1.7rem;
+    font-family: 'Tahoma', Arial, sans-serif;
+    direction: rtl;
+    text-align: right;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .persian-formatted-input {
+        font-size: 0.8rem;
+        padding: 0.5rem;
+    }
+
+    .admin-table-cell.admin-total-cell,
+    .admin-table-cell.admin-tax-cell {
+        font-size: 0.85rem;
+        padding: 0.75rem 0.5rem;
+    }
+
+    .total-breakdown {
+        font-size: 0.9rem;
+        padding: 0.75rem;
+    }
+
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 6px 12px;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Mobile card layout for table rows */
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-row,
+    .admin-items-table[data-invoice-type="official"] .admin-table-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        min-width: auto;
+        border: 2px solid #000;
+        box-shadow: 4px 4px #000;
+        margin-bottom: 1.5rem;
+        padding: 0;
+        text-align: right;
+        background-color: #fff;
+        border-radius: 6px;
+    }
+
+    .admin-table-cell {
+        justify-content: space-between;
+        text-align: right;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #ddd;
+        border-left: none;
+        position: relative;
+        flex-direction: row;
+        align-items: center;
+        direction: rtl;
+    }
+
+    .admin-table-cell:last-child {
+        border-bottom: none;
+    }
+
+    .admin-table-cell:before {
+        font-weight: bold;
+        color: #666;
+        margin-left: 0.5rem;
+        min-width: 120px;
+        flex-shrink: 0;
+        font-size: 0.85rem;
+        font-family: 'Tahoma', sans-serif;
+    }
+
+    /* Mobile labels for UNOFFICIAL invoice (7 columns) */
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(1):before { content: "محصول: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(2):before { content: "تعداد درخواستی: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(3):before { content: "نظر مشتری: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(4):before { content: "قیمت واحد: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(5):before { content: "تعداد نهایی: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(6):before { content: "نظر مدیر: "; }
+    .admin-items-table[data-invoice-type="unofficial"] .admin-table-cell:nth-child(7):before { content: "جمع کل: "; }
+
+    /* Mobile labels for OFFICIAL invoice (9 columns) */
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(1):before { content: "محصول: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(2):before { content: "تعداد درخواستی: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(3):before { content: "نظر مشتری: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(4):before { content: "قیمت واحد: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(5):before { content: "تعداد نهایی: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(6):before { content: "نرخ مالیات: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(7):before { content: "مبلغ مالیات: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(8):before { content: "نظر مدیر: "; }
+    .admin-items-table[data-invoice-type="official"] .admin-table-cell:nth-child(9):before { content: "جمع کل: "; }
+
+    .admin-input-cell {
+        flex-direction: row;
+    }
+
+    .admin-input-cell .persian-formatted-input {
+        max-width: 180px;
+        flex-grow: 1;
+    }
+
+    .admin-order-total-section {
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+
+    .admin-order-total-section h4 {
+        font-size: 1.2rem;
+        margin-bottom: 0.75rem;
+    }
+}
+
+/* Animation for live calculations */
+@keyframes numberChange {
+    0% {
+        background-color: #fef3c7;
+        transform: scale(1.05);
+    }
+    50% {
+        background-color: #fed7aa;
+        transform: scale(1.1);
+    }
+    100% {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+.live-calculation.changed {
+    animation: numberChange 0.6s ease-in-out;
+}
+
+/* Enhanced focus states for better accessibility */
+.persian-formatted-input:focus-visible {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+/* Print styles for invoices */
+@media print {
+    .admin-pricing-edit-actions,
+    .admin-submit-section,
+    .customer-notification-section {
+        display: none !important;
+    }
+
+    .admin-items-table {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .admin-table-cell {
+        font-size: 12px;
+        padding: 8px;
+    }
+
+    .persian-formatted-input {
+        border: 1px solid #000;
+        box-shadow: none;
+        background: white;
+        print-color-adjust: exact;
+    }
+
+    .total-breakdown {
+        border: 2px solid #000;
+        background: white;
+        print-color-adjust: exact;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .persian-formatted-input {
+        border-width: 3px;
+        border-color: #000;
+    }
+
+    .admin-table-cell.admin-total-cell {
+        background-color: #fff;
+        border: 2px solid #000;
+    }
+
+    .admin-table-cell.admin-tax-cell {
+        background-color: #fff;
+        border: 2px solid #000;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .persian-formatted-input,
+    .live-calculation,
+    .status-badge {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* RTL specific adjustments for better Persian text rendering */
+[dir="rtl"] .admin-items-table,
+.admin-items-table[data-invoice-type] {
+    direction: rtl;
+    text-align: right;
+}
+
+[dir="rtl"] .admin-table-cell,
+.admin-table-cell {
+    text-align: center;
+    direction: rtl;
+}
+
+[dir="rtl"] .admin-table-cell.admin-product-name,
+.admin-table-cell.admin-product-name {
+    text-align: right;
+    direction: rtl;
+}
+
+[dir="rtl"] .admin-table-cell.admin-customer-notes,
+.admin-table-cell.admin-customer-notes {
+    text-align: right;
+    direction: rtl;
+}

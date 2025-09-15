@@ -6,8 +6,9 @@ import NeoBrutalistCard from '../../../component/NeoBrutalist/NeoBrutalistCard';
 import NeoBrutalistButton from '../../../component/NeoBrutalist/NeoBrutalistButton';
 import NeoBrutalistInput from '../../../component/NeoBrutalist/NeoBrutalistInput';
 import '../../../styles/component/AdminComponent/AdminOrderDetail.css';
+import AdminPricingEditSection from './AdminPricingEditSection';
 
-// FIXED: Enhanced price formatting function for admin
+
 const formatPriceFixed = (price) => {
     // Handle null, undefined, and zero values properly
     if (price === null || price === undefined || isNaN(price)) {
@@ -26,8 +27,6 @@ const formatPriceFixed = (price) => {
         return `${numericPrice} ریال`;
     }
 };
-
-// FIXED: Enhanced quantity formatting function for admin
 const formatQuantityFixed = (quantity) => {
     // Handle null, undefined, and zero values properly
     if (quantity === null || quantity === undefined || isNaN(quantity)) {
@@ -56,7 +55,6 @@ const calculateTotalFixed = (unitPrice, quantity) => {
     return formatPriceFixed(total).replace(' ریال', '');
 };
 
-// FIXED: Admin Invoice Manager Component
 const AdminInvoiceManager = ({ order, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [invoiceStatus, setInvoiceStatus] = useState(null);
@@ -80,10 +78,42 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
                 quoted_total: order.quoted_total || 0,
                 can_download_final_invoice: order.status === 'completed',
                 final_invoice_available: order.status === 'completed',
+                // NEW: Pre-invoice status fallbacks
+                can_download_pre_invoice: order.status === 'waiting_customer_approval',
+                pre_invoice_available: order.status === 'waiting_customer_approval',
                 total_with_tax: null
             });
         } finally {
             setLoadingStatus(false);
+        }
+    };
+
+    // NEW: Download pre-invoice function for admin
+    const downloadPreInvoice = async () => {
+        setLoading(true);
+        try {
+            const response = await API.get(`/orders/${order.id}/download-pre-invoice/`, {
+                responseType: 'blob'
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `pre_invoice_${order.id}_${order.business_invoice_type}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Admin error downloading pre-invoice:', err);
+            if (err.response?.data?.error) {
+                alert(`خطا: ${err.response.data.error}`);
+            } else {
+                alert('خطا در دانلود پیش‌فاکتور');
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -119,7 +149,7 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
         return (
             <div className="neo-invoice-card">
                 <div className="neo-loading-content">
-                    <span>🔄 در حال بارگیری وضعیت فاکتور...</span>
+                    <span>📄 در حال بارگیری وضعیت فاکتور...</span>
                 </div>
             </div>
         );
@@ -129,11 +159,24 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
         return null; // Don't render if there's an error or no status
     }
 
+    // NEW: Determine what type of invoice/document is available
+    const getAvailableInvoiceType = () => {
+        if (invoiceStatus.final_invoice_available && invoiceStatus.can_download_final_invoice) {
+            return 'final';
+        } else if (invoiceStatus.pre_invoice_available && invoiceStatus.can_download_pre_invoice) {
+            return 'pre';
+        }
+        return null;
+    };
+
+    const availableInvoiceType = getAvailableInvoiceType();
+
     return (
         <NeoBrutalistCard className="neo-invoice-card" style={{ borderLeft: '6px solid #10b981' }}>
             <div className="neo-card-header">
                 <h3 className="neo-card-title">مدیریت فاکتور (ادمین)</h3>
                 <div className="neo-invoice-status-badges">
+                    {/* NEW: Show pre-invoice badge when available */}
                     {invoiceStatus.pre_invoice_available && (
                         <span className="neo-badge neo-badge-info">پیش‌فاکتور موجود</span>
                     )}
@@ -162,6 +205,17 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
                         }
                     </span>
                 </div>
+
+                {/* NEW: Show invoice status and type */}
+                <div className="neo-info-item">
+                    <span className="neo-info-label">وضعیت سند</span>
+                    <span className="neo-info-value">
+                        {availableInvoiceType === 'final' ? '✅ فاکتور نهایی آماده' :
+                            availableInvoiceType === 'pre' ? '📋 پیش‌فاکتور آماده' :
+                                '⏳ در انتظار تولید سند'}
+                    </span>
+                </div>
+
                 {order.status === 'completed' && (
                     <div className="neo-info-item">
                         <span className="neo-info-label">وضعیت</span>
@@ -173,17 +227,79 @@ const AdminInvoiceManager = ({ order, onUpdate }) => {
             </div>
 
             <div className="neo-invoice-actions">
+                {/* NEW: Pre-invoice download section */}
+                {invoiceStatus.can_download_pre_invoice && !invoiceStatus.final_invoice_available && (
+                    <div className="neo-action-group">
+                        <h4 className="neo-action-group-title">پیش‌فاکتور (معتبر تا پایان روز کاری)</h4>
+                        <div className="neo-action-buttons">
+                            <button
+                                className="neo-btn neo-btn-secondary"
+                                onClick={downloadPreInvoice}
+                                disabled={loading}
+                                style={{
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: '2px solid #1e40af'
+                                }}
+                            >
+                                {loading ? 'در حال دانلود...' : '📋 دانلود پیش‌فاکتور'}
+                            </button>
+                        </div>
+                        <div className="neo-info-note" style={{
+                            fontSize: '0.875rem',
+                            color: '#6b7280',
+                            marginTop: '0.5rem',
+                            fontStyle: 'italic'
+                        }}>
+                            💡 پیش‌فاکتور برای بررسی و تأیید قیمت‌گذاری است
+                        </div>
+                    </div>
+                )}
+
+                {/* Final invoice download section */}
                 {invoiceStatus.can_download_final_invoice && (
                     <div className="neo-action-group">
-                        <h4 className="neo-action-group-title">فاکتور نهایی</h4>
+                        <h4 className="neo-action-group-title">
+                            {availableInvoiceType === 'final' ? 'فاکتور نهایی' : 'فاکتور'}
+                        </h4>
                         <div className="neo-action-buttons">
                             <button
                                 className="neo-btn neo-btn-primary"
                                 onClick={downloadFinalInvoice}
                                 disabled={loading}
                             >
-                                {loading ? 'در حال دانلود...' : 'دانلود فاکتور نهایی'}
+                                {loading ? 'در حال دانلود...' :
+                                    availableInvoiceType === 'final' ? 'دانلود فاکتور نهایی' : 'دانلود فاکتور'}
                             </button>
+                        </div>
+                        {availableInvoiceType === 'final' && (
+                            <div className="neo-info-note" style={{
+                                fontSize: '0.875rem',
+                                color: '#059669',
+                                marginTop: '0.5rem',
+                                fontWeight: 'bold'
+                            }}>
+                                ✅ فاکتور نهایی - پرداخت تأیید شده
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* NEW: Show status when no invoice is available */}
+                {!availableInvoiceType && (
+                    <div className="neo-action-group">
+                        <h4 className="neo-action-group-title">وضعیت فاکتور</h4>
+                        <div className="neo-info-note" style={{
+                            backgroundColor: '#fef3c7',
+                            padding: '0.75rem',
+                            borderRadius: '6px',
+                            fontSize: '0.9rem',
+                            color: '#92400e',
+                            border: '2px solid #f59e0b'
+                        }}>
+                            {order.status === 'pending_pricing' ? '⏳ در انتظار قیمت‌گذاری' :
+                                order.status === 'confirmed' ? '📋 سفارش تأیید شده - آماده تولید فاکتور' :
+                                    '⏳ فاکتور هنوز آماده نیست'}
                         </div>
                     </div>
                 )}
@@ -963,133 +1079,13 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
-            {/* Pricing Form */}
-            <NeoBrutalistCard className="admin-pricing-card">
-                <div className="admin-card-header">
-                    <h2 className="admin-card-title">قیمت‌گذاری و جزئیات</h2>
-                </div>
-
-                <form className="admin-pricing-form" onSubmit={handlePricingSubmit}>
-                    {/* Admin Comment */}
-                    <div className="admin-comment-section">
-                        <h3 className="admin-comment-title">نظر مدیر</h3>
-                        <textarea
-                            className="admin-comment-textarea"
-                            value={adminComment}
-                            onChange={e => setAdminComment(e.target.value)}
-                            placeholder="نظرات و توضیحات مدیر برای این سفارش..."
-                            rows={4}
-                            disabled={order.status !== 'pending_pricing'}
-                        />
-                    </div>
-
-                    {/* Items Table */}
-                    <div className="admin-items-section">
-                        <h3 className="admin-section-title">محصولات</h3>
-                        <div
-                            className="admin-items-table"
-                            ref={tableRef}
-                            data-invoice-type={order.business_invoice_type || 'unofficial'}
-                        >
-                            <div className="admin-table-header">
-                                <div className="admin-header-cell">نام محصول</div>
-                                <div className="admin-header-cell">تعداد درخواستی</div>
-                                <div className="admin-header-cell">نظر مشتری</div>
-                                <div className="admin-header-cell">قیمت واحد (ریال)</div>
-                                <div className="admin-header-cell">تعداد نهایی</div>
-                                {isOfficialInvoice() && (
-                                    <>
-                                        <div className="admin-header-cell">نرخ مالیات (%)</div>
-                                        <div className="admin-header-cell">مبلغ مالیات (ریال)</div>
-                                    </>
-                                )}
-                                <div className="admin-header-cell">نظر مدیر</div>
-                                <div className="admin-header-cell">جمع کل</div>
-                            </div>
-
-                            {items.map((item, idx) => (
-                                <div key={item.id} className="admin-table-row">
-                                    <div className="admin-table-cell admin-product-name" title={item.product_name}>
-                                        {item.product_name}
-                                    </div>
-                                    <div className="admin-table-cell">
-                                        {formatQuantity(item.requested_quantity)}
-                                    </div>
-                                    <div className="admin-table-cell admin-customer-notes" title={item.customer_notes}>
-                                        {item.customer_notes || '-'}
-                                    </div>
-                                    <div className="admin-table-cell admin-input-cell">
-                                        <NeoBrutalistInput
-                                            type="number"
-                                            value={item.quoted_unit_price || ''}
-                                            onChange={e => updateItem(idx, 'quoted_unit_price', e.target.value)}
-                                            placeholder="قیمت"
-                                            min="0"
-                                            step="1000"
-                                            disabled={order.status !== 'pending_pricing'}
-                                        />
-                                    </div>
-                                    <div className="admin-table-cell admin-input-cell">
-                                        <NeoBrutalistInput
-                                            type="number"
-                                            value={item.final_quantity || ''}
-                                            onChange={e => updateItem(idx, 'final_quantity', e.target.value)}
-                                            placeholder="تعداد"
-                                            min="0"
-                                            disabled={order.status !== 'pending_pricing'}
-                                        />
-                                    </div>
-
-                                    {isOfficialInvoice() && (
-                                        <>
-                                            <div className="admin-table-cell">
-                                                <span className="tax-rate-display">
-                                                    {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
-                                                </span>
-                                            </div>
-                                            <div className="admin-table-cell">
-                                                {formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate))}
-                                            </div>
-                                        </>
-                                    )}
-
-                                    <div className="admin-table-cell admin-input-cell">
-                                        <NeoBrutalistInput
-                                            type="text"
-                                            value={item.admin_notes || ''}
-                                            onChange={e => updateItem(idx, 'admin_notes', e.target.value)}
-                                            placeholder="نظر مدیر"
-                                            disabled={order.status !== 'pending_pricing'}
-                                        />
-                                    </div>
-                                    <div className="admin-table-cell admin-total-cell">
-                                        {isOfficialInvoice()
-                                            ? formatPrice(calculateItemTotalWithTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate))
-                                            : formatPrice(calculateTotal(item.quoted_unit_price, item.final_quantity))
-                                        }
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Submit Section */}
-                    <div className="admin-submit-section">
-                        {order.status === 'pending_pricing' && (
-                            <NeoBrutalistButton
-                                text={submitting ? "" : "ثبت قیمت‌گذاری"}
-                                color="yellow-400"
-                                textColor="black"
-                                type="submit"
-                                disabled={submitting}
-                                className="admin-submit-btn"
-                            />
-                        )}
-                    </div>
-                </form>
-            </NeoBrutalistCard>
-
-
+            {/* FIXED: Show AdminPricingEditSection for all statuses except cancelled/rejected */}
+            {(order.status !== 'cancelled' && order.status !== 'rejected') && (
+                <AdminPricingEditSection
+                    order={order}
+                    onUpdate={fetchOrder}
+                />
+            )}
 
             {(order.status === 'payment_uploaded' || (order.status === 'completed' && order.has_payment_receipts)) && (
                 <NeoBrutalistCard className="admin-payment-verification-card">

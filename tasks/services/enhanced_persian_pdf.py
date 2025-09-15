@@ -227,7 +227,7 @@ class EnhancedPersianInvoicePDFGenerator:
             self.content_width * 0.07,  # تخفیف
             self.content_width * 0.09,  # مبلغ کل
             self.content_width * 0.09,  # مبلغ واحد
-            self.content_width * 0.06,  # واحد
+            self.content_width * 0.08,  # واحد
             self.content_width * 0.06,  # تعداد
             self.content_width * 0.15,  # شرح کالا
             self.content_width * 0.06,  # کد کالا
@@ -263,7 +263,7 @@ class EnhancedPersianInvoicePDFGenerator:
                 self._para(f"{discount:,}"),  # تخفیف
                 self._para(f"{total_price:,}"),  # مبلغ کل
                 self._para(f"{unit_price:,}"),  # مبلغ واحد
-                self._para("عدد"),  # واحد
+                self._para("کیلوگرم"),  # واحد
                 self._para(str(quantity)),  # تعداد
                 self._para(item.product.name),  # شرح کالا
                 self._para(str(getattr(item.product, 'sku', ''))),  # کد کالا

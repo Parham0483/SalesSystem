@@ -217,12 +217,12 @@ class OrderDetailSerializer(OrderSerializer):
 class OrderItemAdminUpdateSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     id = serializers.IntegerField()
-    quoted_unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
-    final_quantity = serializers.IntegerField(required=False, allow_null=True)
+    quoted_unit_price = serializers.DecimalField(max_digits=18, decimal_places=2, required=False, allow_null=True)
+    final_quantity = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     admin_notes = serializers.CharField(allow_blank=True, required=False)
 
     #TAX-RELATED FIELDS:
-    product_tax_rate = serializers.DecimalField(source='product.tax_rate', read_only=True, max_digits=5,
+    product_tax_rate = serializers.DecimalField(source='product.tax_rate', read_only=True, max_digits=15,
                                                 decimal_places=2)
     unit_tax_amount = serializers.SerializerMethodField()
     total_tax_amount = serializers.SerializerMethodField()
@@ -273,7 +273,7 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
     status = serializers.ChoiceField(choices=STATUS_CHOICES, read_only=True)
     admin_comment = serializers.CharField(allow_blank=True, required=False)
     pricing_date = serializers.DateTimeField(read_only=True)
-    quoted_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    quoted_total = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
     business_invoice_type = serializers.ChoiceField(
         choices=Order.BUSINESS_INVOICE_TYPE_CHOICES,
         required=False,
@@ -286,20 +286,45 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'status', 'pricing_date', 'quoted_total']
 
     def validate_items(self, value):
-        """Validate that at least one item has pricing"""
+        """Enhanced validation for items"""
         if not value:
             raise serializers.ValidationError("At least one item is required")
 
         # Check if at least one item has valid pricing
         has_valid_pricing = False
-        for item_data in value:
+        for i, item_data in enumerate(value):
+            item_id = item_data.get('id')
             quoted_price = item_data.get('quoted_unit_price')
             final_qty = item_data.get('final_quantity')
 
+            # Validate item ID
+            if not item_id:
+                raise serializers.ValidationError(f"Item {i}: ID is required")
+
+            # Validate pricing if provided
+            if quoted_price is not None:
+                try:
+                    price_decimal = Decimal(str(quoted_price))
+                    if price_decimal <= 0:
+                        raise serializers.ValidationError(f"Item {i}: Price must be greater than 0")
+                    if price_decimal > Decimal('9999999999999.99'):  # Max for 15 digits, 2 decimals
+                        raise serializers.ValidationError(f"Item {i}: Price too large (max 13 digits before decimal)")
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(f"Item {i}: Invalid price format")
+
+            # Validate quantity if provided
+            if final_qty is not None:
+                try:
+                    qty_int = int(final_qty)
+                    if qty_int <= 0:
+                        raise serializers.ValidationError(f"Item {i}: Quantity must be greater than 0")
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(f"Item {i}: Invalid quantity format")
+
+            # Check if this item has valid pricing
             if quoted_price is not None and final_qty is not None:
                 if float(quoted_price) > 0 and int(final_qty) > 0:
                     has_valid_pricing = True
-                    break
 
         if not has_valid_pricing:
             raise serializers.ValidationError(
@@ -309,19 +334,23 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
+        """Enhanced update method with better error handling"""
         items_data = validated_data.pop('items', [])
         admin_comment = validated_data.get('admin_comment')
 
+        # Handle business invoice type change
         if 'business_invoice_type' in validated_data:
             old_type = instance.get_business_invoice_type_display()
             instance.business_invoice_type = validated_data['business_invoice_type']
             new_type = instance.get_business_invoice_type_display()
             print(f"Order #{instance.id} business invoice type: {old_type} → {new_type}")
 
-        # CRITICAL: Check that order is in correct status for pricing
-        if instance.status != 'pending_pricing':
+        # Check that order is in correct status for pricing - ALLOW MORE STATUSES
+        allowed_statuses = ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded']
+        if instance.status not in allowed_statuses:
             raise serializers.ValidationError(
-                f"Cannot update pricing for order with status: {instance.status}"
+                f"Cannot update pricing for order with status: {instance.status}. "
+                f"Allowed statuses: {', '.join(allowed_statuses)}"
             )
 
         with transaction.atomic():
@@ -330,7 +359,10 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
                 instance.admin_comment = admin_comment
 
             # Create a mapping of existing items by ID
-            item_mapping = {item.id: item for item in instance.items.all()}
+            existing_items = {item.id: item for item in instance.items.all()}
+
+            # Track what we're updating
+            updated_items = []
 
             # Update each order item
             for item_data in items_data:
@@ -338,69 +370,80 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
                 if not item_id:
                     continue
 
-                item = item_mapping.get(item_id)
-                if not item:
-                    continue
+                if item_id not in existing_items:
+                    raise serializers.ValidationError(f"Item with ID {item_id} not found in this order")
+
+                item = existing_items[item_id]
 
                 # Update the item fields
-                for attr, value in item_data.items():
-                    if attr == 'id':
-                        continue
+                changes_made = False
 
-                    if attr == 'quoted_unit_price' and value is not None:
-                        # Convert to Decimal and validate
-                        decimal_value = Decimal(str(value))
-                        if decimal_value < 0:
-                            raise serializers.ValidationError(f"Price cannot be negative for item {item_id}")
-                        item.quoted_unit_price = decimal_value
-                    elif attr == 'final_quantity' and value is not None:
-                        # Validate quantity
-                        int_value = int(value)
-                        if int_value < 0:
-                            raise serializers.ValidationError(f"Quantity cannot be negative for item {item_id}")
-                        item.final_quantity = int_value
-                    elif attr == 'admin_notes':
-                        item.admin_notes = value or ''
+                if 'quoted_unit_price' in item_data and item_data['quoted_unit_price'] is not None:
+                    new_price = Decimal(str(item_data['quoted_unit_price']))
+                    if item.quoted_unit_price != new_price:
+                        item.quoted_unit_price = new_price
+                        changes_made = True
 
-                # Save the updated item
-                item.save()
+                if 'final_quantity' in item_data and item_data['final_quantity'] is not None:
+                    new_qty = int(item_data['final_quantity'])
+                    if item.final_quantity != new_qty:
+                        item.final_quantity = new_qty
+                        changes_made = True
 
-            # Calculate total for items with pricing
+                if 'admin_notes' in item_data:
+                    new_notes = item_data['admin_notes'] or ''
+                    if item.admin_notes != new_notes:
+                        item.admin_notes = new_notes
+                        changes_made = True
+
+                if changes_made:
+                    item.save()
+                    updated_items.append(item)
+
+            # Calculate new total
             total = Decimal('0.00')
             priced_items_count = 0
 
             # Refresh items from database to get updated values
             for item in instance.items.all():
                 if item.quoted_unit_price and item.final_quantity:
-                    item_total = Decimal(str(item.quoted_unit_price)) * Decimal(str(item.final_quantity))
+                    item_total = item.quoted_unit_price * item.final_quantity
                     total += item_total
                     priced_items_count += 1
 
-            # CRITICAL: Only update status if we have valid pricing
+            # Update order if we have valid pricing
             if priced_items_count > 0 and total > 0:
-                # Update order with pricing information
+                # Store old values for comparison
+                old_total = instance.quoted_total
+
+                # Update order fields
                 instance.pricing_date = timezone.now()
                 instance.quoted_total = total
-                instance.status = 'waiting_customer_approval'
+
+                # Only change status if currently pending pricing
+                if instance.status == 'pending_pricing':
+                    instance.status = 'waiting_customer_approval'
+
                 instance.priced_by = self.context['request'].user
 
                 # Save the instance
-                instance.save(update_fields=[
-                    'admin_comment', 'pricing_date', 'quoted_total',
-                    'status', 'priced_by'
-                ])
+                save_fields = ['admin_comment', 'pricing_date', 'quoted_total', 'priced_by']
+                if instance.status == 'waiting_customer_approval':
+                    save_fields.append('status')
+
+                instance.save(update_fields=save_fields)
 
                 print(f"✅ Order {instance.id} pricing updated:")
-                print(f"   - Total: {total}")
+                print(f"   - Old total: {old_total}")
+                print(f"   - New total: {total}")
                 print(f"   - Status: {instance.status}")
-                print(f"   - Priced items: {priced_items_count}")
+                print(f"   - Updated items: {len(updated_items)}")
             else:
                 raise serializers.ValidationError(
                     "Cannot submit pricing: No valid items with price and quantity"
                 )
 
         return instance
-
 
 class OrderDetailSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source='customer.name', read_only=True)

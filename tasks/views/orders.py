@@ -1501,6 +1501,282 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'error': f'خطا در نمایش فاکتور: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=True, methods=['POST'], url_path='reopen-for-pricing')
+    def reopen_for_pricing(self, request, *args, **kwargs):
+        """ENHANCED: Admin reopens order for major pricing revision"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            if order.status not in ['waiting_customer_approval', 'confirmed']:
+                return Response({
+                    'error': f'Cannot reopen order with status: {order.status}. Only orders waiting for customer approval or confirmed orders can be reopened.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Change status back to pending_pricing for major revision
+            order.status = 'pending_pricing'
+            order.save(update_fields=['status'])
+
+            # Create log entry
+            OrderLog.objects.create(
+                order=order,
+                action='pricing_reopened',
+                description=f"Order reopened for major pricing revision by {request.user.name}",
+                performed_by=request.user
+            )
+
+            logger.info(f"✅ Order {order.id} reopened for pricing revision by admin {request.user.name}")
+
+            return Response({
+                'message': 'Order reopened for pricing revision',
+                'order': OrderDetailSerializer(order).data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"❌ Failed to reopen order {order.id} for pricing: {str(e)}")
+            return Response({
+                'error': f'Failed to reopen order: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='update-pricing')
+    def update_pricing(self, request, *args, **kwargs):
+        """ENHANCED: Admin updates pricing with debugging - sends back to customer approval if pricing changes"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            # DEBUGGING: Log the incoming request data
+            logger.info(f"🔍 Update pricing request for order {order.id}")
+            logger.info(f"🔍 Request data: {request.data}")
+            logger.info(f"🔍 Order status: {order.status}")
+
+            # Allow pricing updates for these statuses
+            if order.status not in ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded']:
+                logger.error(f"❌ Invalid status for pricing update: {order.status}")
+                return Response({
+                    'error': f'Cannot update pricing for order with status: {order.status}. Allowed statuses: pending_pricing, waiting_customer_approval, confirmed, payment_uploaded'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Store old total and status for comparison
+            old_total = order.quoted_total
+            old_status = order.status
+
+            # DEBUGGING: Validate the incoming data structure
+            if 'items' not in request.data:
+                logger.error("❌ Missing 'items' field in request data")
+                return Response({
+                    'error': 'Missing items data',
+                    'details': 'Request must include items array'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            items_data = request.data.get('items', [])
+            if not isinstance(items_data, list):
+                logger.error("❌ Items data is not a list")
+                return Response({
+                    'error': 'Items must be an array',
+                    'details': f'Received items type: {type(items_data)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # DEBUGGING: Validate each item
+            for i, item_data in enumerate(items_data):
+                logger.info(f"🔍 Validating item {i}: {item_data}")
+
+                required_fields = ['id', 'quoted_unit_price', 'final_quantity']
+                missing_fields = [field for field in required_fields if field not in item_data]
+
+                if missing_fields:
+                    logger.error(f"❌ Item {i} missing fields: {missing_fields}")
+                    return Response({
+                        'error': f'Item {i} missing required fields: {missing_fields}',
+                        'details': f'Each item must have: {required_fields}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Validate data types
+                try:
+                    item_id = int(item_data['id'])
+                    unit_price = float(item_data['quoted_unit_price'])
+                    quantity = int(item_data['final_quantity'])
+
+                    if unit_price <= 0:
+                        logger.error(f"❌ Item {i} has invalid price: {unit_price}")
+                        return Response({
+                            'error': f'Item {i} price must be greater than 0',
+                            'details': f'Received price: {unit_price}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                    if quantity <= 0:
+                        logger.error(f"❌ Item {i} has invalid quantity: {quantity}")
+                        return Response({
+                            'error': f'Item {i} quantity must be greater than 0',
+                            'details': f'Received quantity: {quantity}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                except (ValueError, TypeError) as e:
+                    logger.error(f"❌ Item {i} data type error: {e}")
+                    return Response({
+                        'error': f'Item {i} has invalid data types',
+                        'details': f'Error: {str(e)}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+            # DEBUGGING: Check if order items exist
+            order_items = order.items.all()
+            order_item_ids = [item.id for item in order_items]
+            requested_item_ids = [int(item['id']) for item in items_data]
+
+            missing_items = [item_id for item_id in requested_item_ids if item_id not in order_item_ids]
+            if missing_items:
+                logger.error(f"❌ Order items not found: {missing_items}")
+                return Response({
+                    'error': f'Order items not found: {missing_items}',
+                    'details': f'Available items: {order_item_ids}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # DEBUGGING: Prepare serializer data
+            serializer_data = {
+                'admin_comment': request.data.get('admin_comment', ''),
+                'items': items_data
+            }
+
+            logger.info(f"🔍 Serializer data: {serializer_data}")
+
+            # Use the existing OrderAdminUpdateSerializer for validation
+            serializer = OrderAdminUpdateSerializer(
+                order,
+                data=serializer_data,
+                context={'request': request},
+                partial=True  # Allow partial updates
+            )
+
+            # DEBUGGING: Check serializer validation
+            if not serializer.is_valid():
+                logger.error(f"❌ Serializer validation failed: {serializer.errors}")
+                return Response({
+                    'error': 'Invalid pricing data',
+                    'details': serializer.errors,
+                    'debug_info': {
+                        'received_data': request.data,
+                        'serializer_data': serializer_data,
+                        'validation_errors': serializer.errors
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Save the updates
+            logger.info("✅ Serializer validation passed, saving updates")
+            updated_order = serializer.save()
+            new_total = updated_order.quoted_total
+
+            # Determine if pricing actually changed
+            pricing_changed = old_total != new_total
+            logger.info(f"🔍 Pricing changed: {pricing_changed} (Old: {old_total}, New: {new_total})")
+
+            # NEW LOGIC: If pricing changed and order was confirmed, send back to customer approval
+            if pricing_changed and old_status == 'confirmed':
+                updated_order.status = 'waiting_customer_approval'
+                updated_order.save(update_fields=['status'])
+
+                # Regenerate pre-invoice with new pricing
+                pre_invoice_regenerated = True
+
+                # Create log entry
+                OrderLog.objects.create(
+                    order=updated_order,
+                    action='pricing_updated_needs_reapproval',
+                    description=f"Pricing updated by {request.user.name} - Total changed from {old_total} to {new_total}. Order sent back for customer approval.",
+                    performed_by=request.user
+                )
+
+                # Send notification to customer about pricing change
+                send_notification = request.data.get('notify_customer', True)  # Default to True for confirmed orders
+                notification_sent = False
+
+                if send_notification:
+                    try:
+                        dual_result = NotificationService.send_dual_notification(
+                            order=updated_order,
+                            notification_type='pricing_updated'
+                        )
+                        notification_sent = dual_result['email']['sent'] or dual_result['sms']['sent']
+                    except Exception as e:
+                        logger.warning(f"Failed to send pricing update notification: {str(e)}")
+
+                logger.info("✅ Pricing update completed successfully (sent back for approval)")
+                return Response({
+                    'message': 'Pricing updated successfully. Order sent back to customer for approval due to pricing changes.',
+                    'order': OrderDetailSerializer(updated_order).data,
+                    'pricing_changes': {
+                        'old_total': float(old_total) if old_total else 0,
+                        'new_total': float(new_total) if new_total else 0,
+                        'changed': pricing_changed,
+                        'pre_invoice_regenerated': pre_invoice_regenerated,
+                        'status_changed_to': 'waiting_customer_approval'
+                    },
+                    'notification_sent': notification_sent
+                }, status=status.HTTP_200_OK)
+
+            else:
+                # Normal pricing update (for pending_pricing or waiting_customer_approval statuses)
+                log_description = f"Pricing updated by {request.user.name}"
+                if pricing_changed:
+                    log_description += f" - Total changed from {old_total} to {new_total}"
+
+                OrderLog.objects.create(
+                    order=updated_order,
+                    action='pricing_updated',
+                    description=log_description,
+                    performed_by=request.user
+                )
+
+                # Optional notification for non-confirmed orders
+                send_notification = request.data.get('notify_customer', False)
+                notification_sent = False
+
+                if send_notification and pricing_changed:
+                    try:
+                        dual_result = NotificationService.send_dual_notification(
+                            order=updated_order,
+                            notification_type='pricing_updated'
+                        )
+                        notification_sent = dual_result['email']['sent'] or dual_result['sms']['sent']
+                    except Exception as e:
+                        logger.warning(f"Failed to send pricing update notification: {str(e)}")
+
+                logger.info("✅ Pricing update completed successfully")
+                return Response({
+                    'message': 'Pricing updated successfully',
+                    'order': OrderDetailSerializer(updated_order).data,
+                    'pricing_changes': {
+                        'old_total': float(old_total) if old_total else 0,
+                        'new_total': float(new_total) if new_total else 0,
+                        'changed': pricing_changed,
+                        'pre_invoice_regenerated': pricing_changed and updated_order.status == 'waiting_customer_approval'
+                    },
+                    'notification_sent': notification_sent
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"❌ Pricing update failed for order {order.id}: {str(e)}")
+            logger.error(f"❌ Request data was: {request.data}")
+            import traceback
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+
+            return Response({
+                'error': f'Pricing update failed: {str(e)}',
+                'debug_info': {
+                    'order_id': order.id,
+                    'order_status': order.status,
+                    'request_data': request.data,
+                    'error_type': type(e).__name__
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class OrderItemViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
