@@ -367,9 +367,8 @@
     gap: 12px !important;
     flex-shrink: 0 !important;
     height: 150px !important;
-    justify-content: center !important;
+    justify-content: flex-end !important;
     text-align: center !important;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%) !important;
     backdrop-filter: blur(10px) !important;
 }
 

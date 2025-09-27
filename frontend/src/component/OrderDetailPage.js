@@ -7,58 +7,61 @@ import PaymentReceiptUploadModal from './PaymentReceiptUploadModal';
 import CustomerInfoManagement from './CustomerInfoManagement';
 import '../styles/component/CustomerComponent/OrderDetail.css';
 
-// Enhanced InvoiceManager Component for OrderDetailPage.js
+// Enhanced InvoiceManager Component
 const InvoiceManager = ({ order, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [invoiceStatus, setInvoiceStatus] = useState(null);
     const [loadingStatus, setLoadingStatus] = useState(false);
 
     useEffect(() => {
-        if (order) {
+        if (order?.id) {
             fetchInvoiceStatus();
         }
-    }, [order]);
+    }, [order?.id]);
 
     const fetchInvoiceStatus = async () => {
+        if (!order?.id) return;
+
         setLoadingStatus(true);
         try {
             const response = await API.get(`/orders/${order.id}/invoice-status/`);
             setInvoiceStatus(response.data);
         } catch (error) {
             console.error('Error fetching invoice status:', error);
+            // Create fallback status from order data
+            setInvoiceStatus({
+                business_invoice_type_display: order.business_invoice_type === 'official' ? 'فاکتور رسمی' : 'فاکتور غیررسمی',
+                quoted_total: order.quoted_total || 0,
+                can_download_final_invoice: order.status === 'completed',
+                final_invoice_available: order.status === 'completed',
+                can_download_pre_invoice: order.status === 'waiting_customer_approval',
+                pre_invoice_available: order.status === 'waiting_customer_approval',
+                order_status: order.status
+            });
         } finally {
             setLoadingStatus(false);
         }
     };
 
-    const handleInvoiceTypeChange = async (newType) => {
-        if (!window.confirm(`آیا می‌خواهید نوع فاکتور را به "${newType === 'official' ? 'رسمی' : 'بدون مالیات'}" تغییر دهید؟`)) {
-            return;
+    const formatPrice = (price) => {
+        if (price === null || price === undefined || isNaN(price)) {
+            return 'در انتظار';
         }
-
-        setLoading(true);
+        const numericPrice = parseFloat(price);
+        if (numericPrice === 0) {
+            return 'در انتظار';
+        }
         try {
-            const response = await API.post(
-                `/orders/${order.id}/update-business-invoice-type/`,
-                { business_invoice_type: newType }
-            );
-
-            alert('نوع فاکتور با موفقیت تغییر یافت');
-            onUpdate(); // Refresh parent component
-            fetchInvoiceStatus(); // Refresh invoice status
+            return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
         } catch (error) {
-            if (error.response?.data?.missing_fields) {
-                alert(`خطا: اطلاعات مشتری ناقص است. فیلدهای مورد نیاز: ${error.response.data.missing_fields.join(', ')}`);
-            } else {
-                alert('خطا در تغییر نوع فاکتور');
-            }
-            console.error(error);
-        } finally {
-            setLoading(false);
+            console.error('Price formatting error:', error, 'for price:', price);
+            return `${numericPrice} ریال`;
         }
     };
 
     const downloadPreInvoice = async () => {
+        if (!order?.id) return;
+
         setLoading(true);
         try {
             const response = await API.get(`/orders/${order.id}/download-pre-invoice/`, {
@@ -87,6 +90,8 @@ const InvoiceManager = ({ order, onUpdate }) => {
     };
 
     const downloadFinalInvoice = async () => {
+        if (!order?.id) return;
+
         setLoading(true);
         try {
             const response = await API.get(`/orders/${order.id}/download-final-invoice/`, {
@@ -104,41 +109,10 @@ const InvoiceManager = ({ order, onUpdate }) => {
             window.URL.revokeObjectURL(url);
         } catch (err) {
             console.error('Error downloading final invoice:', err);
-            if (err.response?.data?.missing_fields) {
-                alert(`خطا: اطلاعات مشتری ناقص است. فیلدهای مورد نیاز: ${err.response.data.missing_fields.join(', ')}`);
-            } else if (err.response?.data?.error) {
+            if (err.response?.data?.error) {
                 alert(`خطا: ${err.response.data.error}`);
             } else {
                 alert('خطا در دانلود فاکتور نهایی');
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const previewInvoice = async (invoiceType) => {
-        setLoading(true);
-        try {
-            let endpoint;
-            if (invoiceType === 'pre') {
-                endpoint = `/orders/${order.id}/preview-pre-invoice/`;
-            } else {
-                endpoint = `/orders/${order.id}/preview-invoice/`;
-            }
-
-            const response = await API.get(endpoint, { responseType: 'blob' });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            window.open(url, '_blank');
-            setTimeout(() => {
-                window.URL.revokeObjectURL(url);
-            }, 60000);
-        } catch (error) {
-            console.error('Error previewing invoice:', error);
-            if (error.response?.data?.error) {
-                alert(`خطا: ${error.response.data.error}`);
-            } else {
-                alert('خطا در نمایش پیش‌نمایش فاکتور');
             }
         } finally {
             setLoading(false);
@@ -149,7 +123,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
         return (
             <div className="neo-invoice-card">
                 <div className="neo-loading-content">
-                    <span>🔄 در حال بارگیری وضعیت فاکتور...</span>
+                    <span>📄 در حال بارگیری وضعیت فاکتور...</span>
                 </div>
             </div>
         );
@@ -159,7 +133,7 @@ const InvoiceManager = ({ order, onUpdate }) => {
         return (
             <div className="neo-invoice-card">
                 <div className="neo-error-content">
-                    <span>❌ خطا در بارگیری وضعیت فاکتور</span>
+                    <span>⚠ خطا در بارگیری وضعیت فاکتور</span>
                 </div>
             </div>
         );
@@ -182,77 +156,32 @@ const InvoiceManager = ({ order, onUpdate }) => {
                 </div>
             </div>
 
-            {/* Invoice Type and Amount Information */}
             <div className="neo-invoice-info-grid">
                 <div className="neo-info-item">
                     <span className="neo-info-label">نوع فاکتور فعلی</span>
-                    <span className={`neo-info-value ${order.business_invoice_type === 'official' ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
+                    <span className={`neo-info-value ${order?.business_invoice_type === 'official' ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
                         {invoiceStatus.business_invoice_type_display}
                     </span>
                 </div>
 
                 <div className="neo-info-item">
-                    <span className="neo-info-label">مبلغ کل (بدون مالیات)</span>
+                    <span className="neo-info-label">مبلغ کل</span>
                     <span className="neo-info-value">
-                        {formatPriceFixed(invoiceStatus.quoted_total)}
+                        {formatPrice(invoiceStatus.quoted_total)}
                     </span>
                 </div>
 
-                {order.business_invoice_type === 'official' && invoiceStatus.tax_breakdown && (
-                    <>
-                        {/* Show total tax */}
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">مجموع مالیات</span>
-                            <span className="neo-info-value neo-tax-badge">
-                                {formatPriceFixed(invoiceStatus.total_tax_amount)}
-                            </span>
-                        </div>
-
-                        {/* Show final total */}
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">مبلغ نهایی (با مالیات)</span>
-                            <span className="neo-info-value neo-total-with-tax">
-                                {formatPriceFixed(invoiceStatus.total_with_tax)}
-                            </span>
-                        </div>
-
-                        {/* Show tax breakdown by rate if multiple rates exist */}
-                        {invoiceStatus.tax_breakdown.has_mixed_rates && (
-                            <div className="neo-info-item full-width">
-                                <span className="neo-info-label">تفکیک مالیات:</span>
-                                <div className="tax-breakdown-details">
-                                    {Object.values(invoiceStatus.tax_breakdown.breakdown_by_rate).map((rateInfo, index) => (
-                                        <div key={index} className="tax-rate-info">
-                                            <span>مالیات {rateInfo.rate}%: {formatPriceFixed(rateInfo.tax_amount)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
-
-                {invoiceStatus.has_invoice && (
-                    <>
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">شماره فاکتور</span>
-                            <span className="neo-info-value neo-invoice-number">
-                                {invoiceStatus.invoice_number}
-                            </span>
-                        </div>
-                        <div className="neo-info-item">
-                            <span className="neo-info-label">نوع فاکتور موجود</span>
-                            <span className="neo-info-value">
-                                {invoiceStatus.invoice_type === 'pre_invoice' ? 'پیش‌فاکتور' : 'فاکتور نهایی'}
-                            </span>
-                        </div>
-                    </>
+                {order?.business_invoice_type === 'official' && invoiceStatus.total_with_tax && (
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">مبلغ نهایی (با مالیات)</span>
+                        <span className="neo-info-value neo-total-with-tax">
+                            {formatPrice(invoiceStatus.total_with_tax)}
+                        </span>
+                    </div>
                 )}
             </div>
 
-            {/* Download Actions */}
             <div className="neo-invoice-actions">
-                {/* Pre-invoice downloads */}
                 {invoiceStatus.can_download_pre_invoice && (
                     <div className="neo-action-group">
                         <h4 className="neo-action-group-title">پیش‌فاکتور (معتبر تا انتها روز کاری)</h4>
@@ -265,13 +194,9 @@ const InvoiceManager = ({ order, onUpdate }) => {
                                 {loading ? 'در حال دانلود...' : 'دانلود پیش‌فاکتور'}
                             </button>
                         </div>
-                        <div className="neo-pre-invoice-note">
-                            <span>⚠️ معتبر تا انتها روز کار </span>
-                        </div>
                     </div>
                 )}
 
-                {/* Final invoice downloads */}
                 {invoiceStatus.can_download_final_invoice && (
                     <div className="neo-action-group">
                         <h4 className="neo-action-group-title">فاکتور نهایی</h4>
@@ -283,18 +208,10 @@ const InvoiceManager = ({ order, onUpdate }) => {
                             >
                                 {loading ? 'در حال دانلود...' : 'دانلود فاکتور نهایی'}
                             </button>
-                            <button
-                                className="neo-btn neo-btn-secondary"
-                                onClick={() => previewInvoice('final')}
-                                disabled={loading}
-                            >
-                                پیش‌نمایش فاکتور نهایی
-                            </button>
                         </div>
                     </div>
                 )}
 
-                {/* No invoices available message */}
                 {!invoiceStatus.can_download_pre_invoice && !invoiceStatus.can_download_final_invoice && (
                     <div className="neo-no-invoices-message">
                         <div className="neo-message-icon">📄</div>
@@ -309,124 +226,36 @@ const InvoiceManager = ({ order, onUpdate }) => {
                         </div>
                     </div>
                 )}
-
-                {/* Admin controls for invoice type */}
-                {window.userRole === 'admin' && order.status !== 'completed' && (
-                    <div className="neo-admin-controls">
-                        <div className="neo-invoice-type-controls">
-                            <label className="neo-label">تغییر نوع فاکتور:</label>
-                            <div className="neo-radio-group">
-                                <label className="neo-radio-label">
-                                    <input
-                                        type="radio"
-                                        name={`invoiceType_${order.id}`}
-                                        value="unofficial"
-                                        checked={order.business_invoice_type === 'unofficial'}
-                                        onChange={() => handleInvoiceTypeChange('unofficial')}
-                                        disabled={loading}
-                                    />
-                                    <span className="neo-radio-text">بدون مالیات</span>
-                                </label>
-                                <label className="neo-radio-label">
-                                    <input
-                                        type="radio"
-                                        name={`invoiceType_${order.id}`}
-                                        value="official"
-                                        checked={order.business_invoice_type === 'official'}
-                                        onChange={() => handleInvoiceTypeChange('official')}
-                                        disabled={loading}
-                                    />
-                                    <span className="neo-radio-text">رسمی</span>
-                                </label>
-                            </div>
-
-                            {/* Customer info validation warning for official invoices */}
-                            {order.business_invoice_type === 'official' && invoiceStatus.customer_ready_for_official === false && (
-                                <div className="neo-validation-warning">
-                                    <span className="neo-warning-icon">⚠️</span>
-                                    <span>اطلاعات مشتری برای فاکتور رسمی کامل نیست</span>
-                                    {invoiceStatus.missing_customer_fields && invoiceStatus.missing_customer_fields.length > 0 && (
-                                        <div className="neo-missing-fields">
-                                            فیلدهای مورد نیاز: {invoiceStatus.missing_customer_fields.join(', ')}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Invoice Requirements Info */}
-            {order.business_invoice_type === 'official' && (
-                <div className="neo-invoice-requirements">
-                    <h4 className="neo-requirements-title">الزامات فاکتور رسمی:</h4>
-                    <ul className="neo-requirements-list">
-                        <li className={invoiceStatus.customer_ready_for_official ? 'completed' : 'pending'}>
-                            شناسه ملی مشتری
-                        </li>
-                        <li className={invoiceStatus.customer_ready_for_official ? 'completed' : 'pending'}>
-                            آدرس کامل
-                        </li>
-                        <li className={invoiceStatus.customer_ready_for_official ? 'completed' : 'pending'}>
-                            کد پستی ۱۰ رقمی
-                        </li>
-                        <li className="completed">
-                            محاسبه مالیات {invoiceStatus.tax_rate || 9}%
-                        </li>
-                    </ul>
-                </div>
-            )}
-
-            {/* Invoice Generation Status Messages */}
-            <div className="neo-generation-status">
-                {invoiceStatus.pre_invoice_available && order.status === 'confirmed' && (
-                    <div className="neo-status-message neo-success">
-                        <span>پیش‌فاکتور با موفقیت تولید شد</span>
-                    </div>
-                )}
-
-                {invoiceStatus.final_invoice_available && order.status === 'completed' && (
-                    <div className="neo-status-message neo-success">
-                        <span>فاکتور نهایی تولید شد - سفارش کامل!</span>
-                    </div>
-                )}
-
-                {order.status === 'payment_uploaded' && !invoiceStatus.final_invoice_available && (
-                    <div className="neo-status-message neo-info">
-                        <span>منتظر تأیید پرداخت برای تولید فاکتور نهایی</span>
-                    </div>
-                )}
             </div>
         </div>
     );
 };
 
-// FIXED: Simplified AuthenticatedImage Component - No Authentication Required
+// Enhanced AuthenticatedImage Component
 const AuthenticatedImage = ({ receipt, onError }) => {
     const [imageData, setImageData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (receipt && receipt.file_type === 'image') {
+        if (receipt?.file_type === 'image') {
             loadImage();
         }
-    }, [receipt]);
+    }, [receipt?.id]);
 
     const loadImage = async () => {
+        if (!receipt) return;
+
         try {
             setLoading(true);
             setError(null);
 
-            // FIXED: Use direct media URL without authentication
             const imageUrl = receipt.file_url || receipt.download_url;
 
             if (!imageUrl) {
                 throw new Error('Image URL not available');
             }
 
-            // FIXED: Simple direct access - no authentication needed for media files
             setImageData(imageUrl);
             setLoading(false);
 
@@ -449,7 +278,7 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                 borderRadius: '8px',
                 backgroundColor: '#f9f9f9'
             }}>
-                <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔄</div>
+                <div style={{ fontSize: '24px', marginBottom: '8px' }}>📄</div>
                 <span>در حال بارگیری تصویر...</span>
             </div>
         );
@@ -467,9 +296,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
             }}>
                 <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
                 <div style={{ marginBottom: '10px' }}>خطا در بارگیری تصویر</div>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
-                    {error}
-                </div>
                 <button
                     onClick={loadImage}
                     style={{
@@ -507,7 +333,7 @@ const AuthenticatedImage = ({ receipt, onError }) => {
         <div className="neo-image-container">
             <img
                 src={imageData}
-                alt={`رسید پرداخت ${receipt.file_name}`}
+                alt={`رسید پرداخت ${receipt?.file_name || 'unknown'}`}
                 className="neo-receipt-image"
                 onClick={() => window.open(imageData, '_blank')}
                 style={{
@@ -527,69 +353,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
             />
         </div>
     );
-};
-
-// FIXED: Enhanced price formatting function
-const formatPriceFixed = (price) => {
-    // Handle null, undefined, and zero values properly
-    if (price === null || price === undefined || isNaN(price)) {
-        return 'در انتظار';
-    }
-
-    const numericPrice = parseFloat(price);
-    if (numericPrice === 0) {
-        return 'در انتظار';
-    }
-
-    try {
-        return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
-    } catch (error) {
-        console.error('Price formatting error:', error, 'for price:', price);
-        return `${numericPrice} ریال`;
-    }
-};
-
-// FIXED: Enhanced quantity formatting function
-const formatQuantityFixed = (quantity) => {
-    // Handle null, undefined, and zero values properly
-    if (quantity === null || quantity === undefined || isNaN(quantity)) {
-        return 'در انتظار';
-    }
-
-    const numericQuantity = parseInt(quantity);
-    if (numericQuantity === 0) {
-        return 'در انتظار';
-    }
-
-    try {
-        return new Intl.NumberFormat('fa-IR').format(numericQuantity);
-    } catch (error) {
-        console.error('Quantity formatting error:', error, 'for quantity:', quantity);
-        return numericQuantity.toString();
-    }
-};
-
-// FIXED: Enhanced total calculation function
-const calculateTotalFixed = (unitPrice, quantity) => {
-    // Handle null, undefined, and zero values properly
-    if (!unitPrice || !quantity || isNaN(unitPrice) || isNaN(quantity)) {
-        return 'در انتظار';
-    }
-
-    const numericPrice = parseFloat(unitPrice);
-    const numericQuantity = parseInt(quantity);
-
-    if (numericPrice === 0 || numericQuantity === 0) {
-        return 'در انتظار';
-    }
-
-    try {
-        const total = numericPrice * numericQuantity;
-        return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
-    } catch (error) {
-        console.error('Total calculation error:', error, 'for price:', unitPrice, 'quantity:', quantity);
-        return 'خطا در محاسبه';
-    }
 };
 
 const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
@@ -627,29 +390,62 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         if (order?.items && tableRef.current) {
             applySmartTextSizing();
         }
-    }, [order]);
+    }, [order?.items]);
 
     useEffect(() => {
         if (order && (order.status === 'payment_uploaded' || order.has_payment_receipts || order.payment_receipts?.length > 0)) {
             fetchPaymentReceipts();
         }
-    }, [order]);
+    }, [order?.id, order?.status, order?.has_payment_receipts]);
 
     const fetchOrder = async () => {
+        if (!orderId) return;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
         setLoading(true);
         setError('');
+
         try {
-            const response = await API.get(`/orders/${orderId}/`);
-            setOrder(response.data);
+            console.log('Fetching order:', orderId);
+
+            const response = await API.get(`/orders/${orderId}/`, {
+                signal: controller.signal,
+                timeout: 15000
+            });
+
+            clearTimeout(timeoutId);
+            console.log('Order response:', response.data);
+
+            if (response.data) {
+                setOrder(response.data);
+            } else {
+                throw new Error('No order data received');
+            }
+
         } catch (err) {
+            clearTimeout(timeoutId);
             console.error('Error fetching order:', err);
-            setError('خطا در بارگیری جزئیات سفارش');
+
+            if (err.name === 'AbortError') {
+                setError('درخواست منقضی شد. لطفا دوباره تلاش کنید');
+            } else if (err.response?.status === 404) {
+                setError('سفارش پیدا نشد');
+            } else if (err.response?.status === 403) {
+                setError('شما اجازه دسترسی به این سفارش را ندارید');
+            } else if (err.response?.status === 401) {
+                setError('لطفا دوباره وارد شوید');
+            } else if (err.code === 'NETWORK_ERROR' || err.message.includes('Network Error')) {
+                setError('خطا در اتصال به شبکه. لطفا اتصال اینترنت خود را بررسی کنید');
+            } else {
+                setError(`خطا در بارگیری جزئیات سفارش: ${err.message || 'خطایی نامشخص'}`);
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    // Fetch customer info separately
     const fetchCustomerInfo = async () => {
         setLoadingCustomerInfo(true);
         try {
@@ -659,13 +455,14 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             }
         } catch (err) {
             console.error('Error fetching customer info:', err);
-            // Don't show error for missing customer info
         } finally {
             setLoadingCustomerInfo(false);
         }
     };
 
     const fetchPaymentReceipts = async () => {
+        if (!orderId) return;
+
         setLoadingReceipts(true);
         setReceiptsError('');
         try {
@@ -679,7 +476,10 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
+    // Helper functions
     const deletePaymentReceipt = async (receiptId) => {
+        if (!orderId || !receiptId) return;
+
         if (!window.confirm('آیا از حذف این رسید اطمینان دارید؟')) {
             return;
         }
@@ -695,8 +495,9 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // FIXED: Simplified download function - no authentication needed
     const handleDownloadReceipt = async (receipt) => {
+        if (!receipt) return;
+
         try {
             const downloadUrl = receipt.file_url || receipt.download_url;
 
@@ -705,7 +506,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            // FIXED: Simple direct download - no authentication needed
             const link = document.createElement('a');
             link.href = downloadUrl;
             link.download = receipt.file_name;
@@ -720,8 +520,9 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         }
     };
 
-    // FIXED: Simplified PDF view function - no authentication needed
     const handleViewPDF = async (receipt) => {
+        if (!receipt) return;
+
         try {
             const viewUrl = receipt.file_url || receipt.download_url;
 
@@ -730,11 +531,9 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 return;
             }
 
-            // FIXED: Direct PDF view - no authentication needed
             const newWindow = window.open(viewUrl, '_blank');
 
             if (!newWindow) {
-                // Fallback to download if popup blocked
                 const link = document.createElement('a');
                 link.href = viewUrl;
                 link.download = receipt.file_name;
@@ -748,6 +547,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const renderReceiptPreview = (receipt, index) => {
+        if (!receipt) return null;
+
         if (receipt.file_type === 'image') {
             return (
                 <div className="neo-receipt-preview" key={`image-${receipt.id}`}>
@@ -778,8 +579,10 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const applySmartTextSizing = () => {
-        const productCells = tableRef.current?.querySelectorAll('.neo-table-cell:nth-child(1)');
-        const notesCells = tableRef.current?.querySelectorAll('.neo-table-cell:nth-child(3)');
+        if (!tableRef.current) return;
+
+        const productCells = tableRef.current.querySelectorAll('.neo-table-cell:nth-child(1)');
+        const notesCells = tableRef.current.querySelectorAll('.neo-table-cell:nth-child(3)');
 
         productCells?.forEach(cell => {
             const textLength = cell.textContent.length;
@@ -813,6 +616,11 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             return;
         }
 
+        if (!orderId) {
+            setError('شناسه سفارش موجود نیست');
+            return;
+        }
+
         setSubmitting(true);
         setError('');
 
@@ -831,7 +639,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 fetchOrder();
             }
         } catch (err) {
-            console.error('❌ Error submitting approval:', err);
+            console.error('⚠ Error submitting approval:', err);
             setError(err.response?.data?.error || 'خطا در ارسال تصمیم');
         } finally {
             setSubmitting(false);
@@ -847,11 +655,13 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
 
     const handleCustomerInfoUpdate = (updatedInfo) => {
         setCustomerInfo(updatedInfo);
-        // Also refresh order to get updated customer info
         fetchOrder();
     };
 
+    // Status and formatting functions
     const getStatusColor = (status) => {
+        if (!status) return 'gray-400';
+
         switch (status) {
             case 'pending_pricing': return 'yellow-400';
             case 'waiting_customer_approval': return 'blue-400';
@@ -865,6 +675,8 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const formatStatus = (status) => {
+        if (!status) return 'نامشخص';
+
         const statusMap = {
             'pending_pricing': 'در انتظار قیمت‌گذاری',
             'waiting_customer_approval': 'در انتظار تأیید',
@@ -877,14 +689,55 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         return statusMap[status] || status;
     };
 
-    // FIXED: Use the enhanced formatPriceFixed function
-    const formatPrice = (price) => formatPriceFixed(price);
+    const formatPrice = (price) => {
+        if (price === null || price === undefined || isNaN(price)) {
+            return 'در انتظار';
+        }
+        const numericPrice = parseFloat(price);
+        if (numericPrice === 0) {
+            return 'در انتظار';
+        }
+        try {
+            return `${new Intl.NumberFormat('fa-IR').format(numericPrice)} ریال`;
+        } catch (error) {
+            console.error('Price formatting error:', error, 'for price:', price);
+            return `${numericPrice} ریال`;
+        }
+    };
 
-    // FIXED: Use the enhanced formatQuantityFixed function
-    const formatQuantity = (quantity) => formatQuantityFixed(quantity);
+    const formatQuantity = (quantity) => {
+        if (quantity === null || quantity === undefined || isNaN(quantity)) {
+            return 'در انتظار';
+        }
+        const numericQuantity = parseInt(quantity);
+        if (numericQuantity === 0) {
+            return 'در انتظار';
+        }
+        try {
+            return new Intl.NumberFormat('fa-IR').format(numericQuantity);
+        } catch (error) {
+            console.error('Quantity formatting error:', error, 'for quantity:', quantity);
+            return numericQuantity.toString();
+        }
+    };
 
-    // FIXED: Use the enhanced calculateTotalFixed function
-    const calculateTotal = (unitPrice, quantity) => calculateTotalFixed(unitPrice, quantity);
+    const calculateTotal = (unitPrice, quantity) => {
+        if (!unitPrice || !quantity || isNaN(unitPrice) || isNaN(quantity)) {
+            return 'در انتظار';
+        }
+        const numericPrice = parseFloat(unitPrice);
+        const numericQuantity = parseInt(quantity);
+        if (numericPrice === 0 || numericQuantity === 0) {
+            return 'در انتظار';
+        }
+        try {
+            const total = numericPrice * numericQuantity;
+            return `${new Intl.NumberFormat('fa-IR').format(total)} ریال`;
+        } catch (error) {
+            console.error('Total calculation error:', error, 'for price:', unitPrice, 'quantity:', quantity);
+            return 'خطا در محاسبه';
+        }
+    };
 
     const truncateText = (text, maxLength = 30) => {
         if (!text) return '-';
@@ -893,64 +746,23 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
     };
 
     const formatFileSize = (bytes) => {
-        if (bytes === 0) return '0 Bytes';
+        if (!bytes || bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
     };
 
-    // Function to determine if order needs official invoice info
     const isOfficialInvoice = () => {
         return order?.business_invoice_type === 'official';
     };
 
-    //Check if customer info is complete
     const isCustomerInfoComplete = () => {
         if (!customerInfo || !isOfficialInvoice()) return true;
 
         const required = ['national_id', 'complete_address', 'postal_code'];
         return required.every(field => customerInfo[field] && customerInfo[field].trim() !== '');
     };
-
-    if (loading) {
-        return (
-            <div className="neo-order-detail">
-                <NeoBrutalistCard className="neo-loading-card">
-                    <div className="neo-loading-content">
-                        <span>🔄</span>
-                        <span className="neo-loading-text">در حال بارگذاری جزئیات سفارش...</span>
-                    </div>
-                </NeoBrutalistCard>
-            </div>
-        );
-    }
-
-    if (error && !order) {
-        return (
-            <div className="neo-order-detail">
-                <NeoBrutalistCard className="neo-error-card">
-                    <div className="neo-error-content">
-                        <span className="neo-error-icon">⚠️</span>
-                        <span className="neo-error-text">{error}</span>
-                    </div>
-                </NeoBrutalistCard>
-            </div>
-        );
-    }
-
-    if (!order) {
-        return (
-            <div className="neo-order-detail">
-                <NeoBrutalistCard className="neo-error-card">
-                    <div className="neo-error-content">
-                        <span className="neo-error-icon">❌</span>
-                        <span className="neo-error-text">سفارش پیدا نشد</span>
-                    </div>
-                </NeoBrutalistCard>
-            </div>
-        );
-    }
 
     const calculateItemTax = (unitPrice, quantity, taxRate) => {
         if (!unitPrice || !quantity || !taxRate) return 0;
@@ -964,6 +776,122 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         const tax = taxRate ? subtotal * (taxRate / 100) : 0;
         return subtotal + tax;
     };
+
+    // Loading and error states
+    if (loading) {
+        return (
+            <div className="neo-order-detail">
+                <NeoBrutalistCard className="neo-loading-card">
+                    <div className="neo-loading-content">
+                        <span>📄</span>
+                        <span className="neo-loading-text">در حال بارگذاری جزئیات سفارش...</span>
+
+                        <div style={{
+                            width: '200px',
+                            height: '4px',
+                            backgroundColor: '#e5e7eb',
+                            borderRadius: '2px',
+                            margin: '1rem auto',
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{
+                                width: '100%',
+                                height: '100%',
+                                backgroundColor: '#3b82f6',
+                                animation: 'loading-progress 2s infinite',
+                                transformOrigin: 'left'
+                            }} />
+                        </div>
+
+                        <div style={{
+                            display: 'flex',
+                            gap: '1rem',
+                            justifyContent: 'center',
+                            marginTop: '1rem'
+                        }}>
+                            <button
+                                onClick={() => {
+                                    setLoading(false);
+                                    setError('بارگیری لغو شد');
+                                }}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                لغو
+                            </button>
+                            <button
+                                onClick={fetchOrder}
+                                style={{
+                                    padding: '0.5rem 1rem',
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                تلاش مجدد
+                            </button>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            </div>
+        );
+    }
+
+    if (error && !order) {
+        return (
+            <div className="neo-order-detail">
+                <NeoBrutalistCard className="neo-error-card">
+                    <div className="neo-error-content">
+                        <span className="neo-error-icon">⚠️</span>
+                        <span className="neo-error-text">{error}</span>
+
+                        <button
+                            onClick={() => {
+                                setError('');
+                                fetchOrder();
+                            }}
+                            style={{
+                                marginTop: '1rem',
+                                padding: '0.75rem 1.5rem',
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '1rem',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            تلاش مجدد
+                        </button>
+                    </div>
+                </NeoBrutalistCard>
+            </div>
+        );
+    }
+
+    if (!order) {
+        return (
+            <div className="neo-order-detail">
+                <NeoBrutalistCard className="neo-error-card">
+                    <div className="neo-error-content">
+                        <span className="neo-error-icon">⚠</span>
+                        <span className="neo-error-text">سفارش پیدا نشد</span>
+                    </div>
+                </NeoBrutalistCard>
+            </div>
+        );
+    }
 
     return (
         <div className="neo-order-detail" dir="rtl">
@@ -993,12 +921,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 <div className="neo-order-info-grid">
                     <div className="neo-info-item">
                         <span className="neo-info-label">مشتری</span>
-                        <span className="neo-info-value">{order.customer_name}</span>
+                        <span className="neo-info-value">{order.customer_name || 'نامشخص'}</span>
+                    </div>
+                    <div className="neo-info-item">
+                        <span className="neo-info-label">شماره تماس</span>
+                        <span className="neo-info-value">{order.customer_phone || 'ثبت نشده'}</span>
                     </div>
                     <div className="neo-info-item">
                         <span className="neo-info-label">تاریخ ایجاد</span>
                         <span className="neo-info-value">
-                            {new Date(order.created_at).toLocaleDateString('fa-IR')}
+                            {order.created_at ? new Date(order.created_at).toLocaleDateString('fa-IR') : 'نامشخص'}
                         </span>
                     </div>
                     <div className="neo-info-item">
@@ -1006,11 +938,10 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <span className="neo-info-value">{formatStatus(order.status)}</span>
                     </div>
 
-                    {/* Invoice Type Display */}
                     <div className="neo-info-item">
                         <span className="neo-info-label">نوع فاکتور</span>
                         <span className={`neo-info-value ${isOfficialInvoice() ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
-                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور شخصی ')}
+                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور شخصی')}
                             {isOfficialInvoice() && (
                                 <span className="neo-tax-badge">دارای مالیات</span>
                             )}
@@ -1025,15 +956,84 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             </span>
                         </div>
                     )}
+
+                    {/* Show pricing information if available */}
+                    {order.pricing_date && (
+                        <div className="neo-info-item">
+                            <span className="neo-info-label">تاریخ قیمت‌گذاری</span>
+                            <span className="neo-info-value">
+                                {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
+                            </span>
+                        </div>
+                    )}
+
+                    {order.priced_by_name && (
+                        <div className="neo-info-item">
+                            <span className="neo-info-label">قیمت‌گذاری شده توسط</span>
+                            <span className="neo-info-value">{order.priced_by_name}</span>
+                        </div>
+                    )}
+
+                    {/* Show dealer information if assigned */}
+                    {order.assigned_dealer_name && (
+                        <div className="neo-info-item">
+                            <span className="neo-info-label">نماینده فروش</span>
+                            <span className="neo-info-value">{order.assigned_dealer_name}</span>
+                        </div>
+                    )}
+
+                    {/* Customer comment */}
+                    {order.customer_comment && (
+                        <div className="neo-info-item full-width">
+                            <span className="neo-info-label">توضیحات شما</span>
+                            <span className="neo-info-value">{order.customer_comment}</span>
+                        </div>
+                    )}
                 </div>
             </NeoBrutalistCard>
 
+            {/* Admin Comment Section - Enhanced */}
+            {order.admin_comment && order.admin_comment.trim() && (
+                <NeoBrutalistCard className="neo-admin-reply-card" style={{ borderLeft: '6px solid #10b981' }}>
+                    <div className="neo-card-header">
+                        <h2 className="neo-card-title">پاسخ و توضیحات مدیر</h2>
+                        <span className="neo-admin-badge">پیام از مدیریت</span>
+                    </div>
+                    <div className="neo-comment-section">
+                        <div className="neo-comment-display" style={{
+                            backgroundColor: '#f0f9ff',
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            border: '2px solid #0ea5e9',
+                            fontFamily: 'IRANSans, Tahoma, Arial, sans-serif'
+                        }}>
+                            <div className="neo-comment-icon" style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                marginBottom: '0.5rem',
+                                color: '#0369a1',
+                                fontWeight: 'bold'
+                            }}>
+                                <span style={{ marginLeft: '0.5rem' }}>💬</span>
+                                <span>پیام از مدیریت:</span>
+                            </div>
+                            <p className="neo-comment-text" style={{
+                                margin: 0,
+                                lineHeight: '1.6',
+                                color: '#1e40af',
+                                fontSize: '1rem'
+                            }}>{order.admin_comment}</p>
+                        </div>
+                    </div>
+                </NeoBrutalistCard>
+            )}
+
             {/* Invoice Manager Component */}
-            {(order.status === 'waiting_customer_approval' || order.status === 'confirmed' || order.status === 'payment_uploaded' || order.status === 'completed' || window.userRole === 'admin') && (
+            {(order.status === 'waiting_customer_approval' || order.status === 'confirmed' || order.status === 'payment_uploaded' || order.status === 'completed' || (typeof window !== 'undefined' && window.userRole === 'admin')) && (
                 <InvoiceManager order={order} onUpdate={fetchOrder} />
             )}
 
-            {/*Customer Invoice Information (for official invoices) */}
+            {/* Customer Invoice Information (for official invoices) */}
             {isOfficialInvoice() && (
                 <NeoBrutalistCard className="neo-customer-invoice-info-card">
                     <div className="neo-card-header">
@@ -1049,7 +1049,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="neo-customer-invoice-info">
                         {loadingCustomerInfo ? (
                             <div style={{ textAlign: 'center', padding: '2rem' }}>
-                                <span>🔄 در حال بارگیری اطلاعات...</span>
+                                <span>📄 در حال بارگیری اطلاعات...</span>
                             </div>
                         ) : (
                             <>
@@ -1092,7 +1092,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                     </div>
                                 </div>
 
-                                {/*Invoice readiness indicator */}
                                 <div className="invoice-readiness" style={{ marginTop: '1rem' }}>
                                     {isCustomerInfoComplete() ? (
                                         <div className="readiness-indicator ready" style={{
@@ -1136,7 +1135,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         <h2 className="neo-card-title">
                             رسیدهای پرداخت ({paymentReceipts.length})
                         </h2>
-                        {loadingReceipts && <span>🔄 در حال بارگیری...</span>}
+                        {loadingReceipts && <span>📄 در حال بارگیری...</span>}
                     </div>
 
                     {receiptsError && (
@@ -1146,7 +1145,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     )}
 
                     <div className="neo-payment-receipts-content">
-                        {/* Allow adding more receipts if still in confirmed status */}
                         {order.status === 'confirmed' && (
                             <div className="neo-add-more-receipts">
                                 <NeoBrutalistButton
@@ -1159,7 +1157,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             </div>
                         )}
 
-                        {/* Display all payment receipts */}
                         <div className="neo-receipts-grid">
                             {paymentReceipts.map((receipt, index) => (
                                 <div key={receipt.id} className="neo-receipt-item" data-file-type={receipt.file_type}>
@@ -1200,7 +1197,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         {renderReceiptPreview(receipt, index)}
                                     </div>
 
-                                    {/* Receipt actions */}
                                     <div className="neo-receipt-actions">
                                         <NeoBrutalistButton
                                             text="📥 دانلود"
@@ -1210,7 +1206,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             className="neo-download-receipt-btn"
                                         />
 
-                                        {/* Allow deletion only if order is still in confirmed status */}
                                         {order.status === 'confirmed' && (
                                             <NeoBrutalistButton
                                                 text="🗑️ حذف"
@@ -1225,7 +1220,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             ))}
                         </div>
 
-                        {/* Overall payment status */}
                         <div className="neo-payment-summary">
                             <div className="neo-summary-stats">
                                 <div className="neo-stat-item">
@@ -1250,74 +1244,136 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
+            {/* Order Items Table - Enhanced */}
             <NeoBrutalistCard className="neo-items-card">
                 <div className="neo-card-header">
                     <h2 className="neo-card-title">اقلام سفارش</h2>
-                </div>
-                <div
-                    className="neo-items-table"
-                    ref={tableRef}
-                    data-invoice-type={order.business_invoice_type || 'unofficial'}
-                >
-                    {/* FIXED: Conditional headers based on invoice type */}
-                    <div className="neo-table-header">
-                        <div className="neo-header-cell">نام محصول</div>
-                        <div className="neo-header-cell">تعداد درخواستی</div>
-                        <div className="neo-header-cell">یادداشت مشتری</div>
-                        <div className="neo-header-cell">قیمت واحد</div>
-                        <div className="neo-header-cell">تعداد نهایی</div>
-                        {/* FIXED: Only render tax columns for official invoices */}
-                        {order.business_invoice_type === 'official' && (
-                            <>
-                                <div className="neo-header-cell">نرخ مالیات</div>
-                                <div className="neo-header-cell">مبلغ مالیات</div>
-                            </>
-                        )}
-                        <div className="neo-header-cell">مبلغ کل</div>
+                    <div className="neo-items-summary">
+                        <span>تعداد کل: {order.items?.length || 0} قلم</span>
                     </div>
-
-                    {/* FIXED: Conditional row cells based on invoice type */}
-                    {order.items?.map((item, index) => (
-                        <div key={index} className="neo-table-row">
-                            <div className="neo-table-cell" title={item.product_name} data-pending={!item.product_name}>
-                                {item.product_name || 'نامشخص'}
-                            </div>
-                            <div className="neo-table-cell">
-                                {formatQuantity(item.requested_quantity)}
-                            </div>
-                            <div className="neo-table-cell" title={item.customer_notes} data-pending={!item.customer_notes}>
-                                {truncateText(item.customer_notes) || '-'}
-                            </div>
-                            <div className="neo-table-cell" data-pending={!item.quoted_unit_price}>
-                                {formatPrice(item.quoted_unit_price)}
-                            </div>
-                            <div className="neo-table-cell" data-pending={!item.final_quantity}>
-                                {formatQuantity(item.final_quantity)}
-                            </div>
-
+                </div>
+                <div className="neo-items-table-container">
+                    <table
+                        className="neo-items-table"
+                        ref={tableRef}
+                        data-invoice-type={order.business_invoice_type || 'unofficial'}
+                    >
+                        <thead>
+                        <tr>
+                            <th>نام محصول</th>
+                            <th>تعداد درخواستی</th>
+                            <th>یادداشت شما</th>
+                            <th>قیمت واحد</th>
+                            <th>تعداد نهایی</th>
                             {order.business_invoice_type === 'official' && (
                                 <>
-                                    <div className="neo-table-cell">
-                                        {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
+                                    <th>نرخ مالیات</th>
+                                    <th>مبلغ مالیات</th>
+                                </>
+                            )}
+                            <th>مبلغ کل</th>
+                            <th>یادداشت مدیر</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {order.items?.map((item, index) => (
+                            <tr key={index}>
+                                <td title={item.product_name} data-pending={!item.product_name}>
+                                    <div className="product-info">
+                                        <div className="product-name">{item.product_name || 'نامشخص'}</div>
+                                        {item.product_code && (
+                                            <div className="product-code" style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                                کد: {item.product_code}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="neo-table-cell">
-                                        {item.quoted_unit_price && item.final_quantity && item.product_tax_rate ?
-                                            formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
-                                            'در انتظار'
-                                        }
+                                </td>
+                                <td>{formatQuantity(item.requested_quantity)}</td>
+                                <td title={item.customer_notes} data-pending={!item.customer_notes}>
+                                    {truncateText(item.customer_notes) || '-'}
+                                </td>
+                                <td data-pending={!item.quoted_unit_price}>
+                                    {formatPrice(item.quoted_unit_price)}
+                                </td>
+                                <td data-pending={!item.final_quantity}>
+                                    {formatQuantity(item.final_quantity)}
+                                </td>
+
+                                {order.business_invoice_type === 'official' && (
+                                    <>
+                                        <td>
+                                            {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
+                                        </td>
+                                        <td>
+                                            {item.quoted_unit_price && item.final_quantity && item.product_tax_rate ?
+                                                formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
+                                                'در انتظار'
+                                            }
+                                        </td>
+                                    </>
+                                )}
+
+                                <td data-pending={!item.quoted_unit_price || !item.final_quantity}>
+                                    {order.business_invoice_type === 'official' && item.product_tax_rate ?
+                                        formatPrice(calculateItemTotal(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
+                                        calculateTotal(item.quoted_unit_price, item.final_quantity)
+                                    }
+                                </td>
+
+                                <td className="admin-notes" title={item.admin_notes}>
+                                    {item.admin_notes ? (
+                                        <div className="admin-note-content" style={{
+                                            padding: '0.5rem',
+                                            borderRadius: '4px',
+                                            border: '1px solid #f59e0b',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            {truncateText(item.admin_notes, 50)}
+                                        </div>
+                                    ) : (
+                                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>-</span>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Order Total Summary */}
+                {order.quoted_total > 0 && (
+                    <div className="neo-order-total-summary" style={{
+                        marginTop: '1rem',
+                        padding: '1rem',
+                        backgroundColor: '#f9fafb',
+                        borderRadius: '8px',
+                        border: '2px solid #e5e7eb'
+                    }}>
+                        <div className="total-breakdown">
+                            <div className="total-item">
+                                <span className="total-label">مجموع بدون مالیات:</span>
+                                <span className="total-value">{formatPrice(order.quoted_total)}</span>
+                            </div>
+                            {order.business_invoice_type === 'official' && (
+                                <>
+                                    <div className="total-item">
+                                        <span className="total-label">مالیات:</span>
+                                        <span className="total-value">محاسبه می‌شود</span>
+                                    </div>
+                                    <div className="total-item total-final" style={{
+                                        borderTop: '2px solid #374151',
+                                        paddingTop: '0.5rem',
+                                        fontWeight: 'bold',
+                                        fontSize: '1.1rem'
+                                    }}>
+                                        <span className="total-label">مبلغ نهایی:</span>
+                                        <span className="total-value">در فاکتور نهایی</span>
                                     </div>
                                 </>
                             )}
-
-                            <div className="neo-table-cell" data-pending={!item.quoted_unit_price || !item.final_quantity}>
-                                {order.business_invoice_type === 'official' && item.product_tax_rate ?
-                                    formatPrice(calculateItemTotal(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
-                                    calculateTotal(item.quoted_unit_price, item.final_quantity)
-                                }
-                            </div>
                         </div>
-                    ))}
-                </div>
+                    </div>
+                )}
             </NeoBrutalistCard>
 
             {/* Customer Approval Section */}
@@ -1373,74 +1429,54 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 color="yellow-400"
                                 textColor="black"
                                 onClick={handleApprovalSubmit}
-                                disabled={submitting || generatingInvoice || !approvalDecision}
-                                className="neo-submit-decision-btn"
+                                disabled={submitting || generatingInvoice}
+                                className="neo-approval-submit-btn"
                             />
                         </div>
                     </div>
                 </NeoBrutalistCard>
             )}
 
-            {/* Payment Receipt Upload Section */}
-            {(order.status === 'confirmed' && !order.has_payment_receipts) && (
-                <NeoBrutalistCard className="neo-payment-upload-card">
-                    <div className="neo-card-header">
-                        <h2 className="neo-card-title">آپلود رسید پرداخت</h2>
-                    </div>
-                    <div className="neo-payment-upload-content">
-                        <p className="neo-payment-instructions">
-                            لطفاً رسید(های) پرداخت یا تصویر چک خود را آپلود کنید. می‌توانید چندین فایل انتخاب کنید.
-                            پس از بررسی و تایید توسط مدیر، سفارش شما تکمیل خواهد شد.
-                        </p>
-
-                        <div className="neo-upload-button-container">
-                            <NeoBrutalistButton
-                                text="آپلود رسیدهای پرداخت"
-                                color="yellow-400"
-                                textColor="black"
-                                onClick={() => setIsPaymentModalOpen(true)}
-                                className="neo-upload-receipt-btn"
-                            />
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-            {/* Order Status Messages */}
+            {/* Upload Payment Receipt Section */}
             {order.status === 'confirmed' && (
-                <div className="neo-status-message neo-success">
-                    <span className="neo-status-icon">✅</span>
-                    <span>سفارش با موفقیت تایید شد و فاکتور صادر گردید!</span>
-                </div>
+                <NeoBrutalistCard className="neo-payment-upload-section">
+                    <h2 className="neo-payment-title">آپلود رسید پرداخت</h2>
+                    <p className="neo-payment-description">
+                        لطفا رسید پرداخت خود را آپلود کنید تا فاکتور نهایی برای شما صادر شود.
+                    </p>
+                    <div className="neo-payment-upload-actions">
+                        <NeoBrutalistButton
+                            text="📤 آپلود رسید پرداخت"
+                            color="green-400"
+                            textColor="black"
+                            onClick={() => {
+                                console.log('Button clicked, opening modal'); // Debug log
+                                setIsPaymentModalOpen(true);
+                            }}
+                            className="neo-upload-payment-btn"
+                        />
+                    </div>
+                </NeoBrutalistCard>
             )}
 
-            {order.status === 'payment_uploaded' && (
-                <div className="neo-status-message neo-info">
-                    <span>رسیدهای پرداخت شما آپلود شد و در انتظار بررسی توسط مدیر می‌باشد.</span>
-                </div>
+            {/* Fixed Modal - Make sure all props are correct */}
+            {isPaymentModalOpen && (
+                <PaymentReceiptUploadModal
+                    orderId={orderId}
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => {
+                        console.log('Closing modal'); // Debug log
+                        setIsPaymentModalOpen(false);
+                    }}
+                    onUploadSuccess={handlePaymentUploadSuccess}
+                />
             )}
 
-            {order.status === 'completed' && (
-                <div className="neo-status-message neo-success">
-                    <span>سفارش شما با موفقیت تکمیل شد! از خرید شما متشکریم.</span>
-                </div>
-            )}
-
-            {/* Customer Info Management Modal */}
             {isCustomerInfoModalOpen && (
                 <CustomerInfoManagement
                     onClose={() => setIsCustomerInfoModalOpen(false)}
                     onUpdate={handleCustomerInfoUpdate}
-                />
-            )}
-
-            {/* Payment Upload Modal */}
-            {isPaymentModalOpen && (
-                <PaymentReceiptUploadModal
-                    orderId={order.id}
-                    onUploadSuccess={handlePaymentUploadSuccess}
-                    isOpen={isPaymentModalOpen}
-                    onClose={() => setIsPaymentModalOpen(false)}
+                    initialData={customerInfo}
                 />
             )}
         </div>
