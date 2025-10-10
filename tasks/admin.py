@@ -341,7 +341,7 @@ class OrderLogAdmin(admin.ModelAdmin):
 # Update existing admins
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'base_price', 'stock', 'is_active', 'times_ordered', 'created_at']
+    list_display = ['name', 'stock', 'is_active', 'times_ordered', 'created_at']
     list_filter = ['is_active', 'created_at']
     search_fields = ['name', 'description']
     readonly_fields = ['created_at']
@@ -361,7 +361,7 @@ class InvoiceAdmin(admin.ModelAdmin):
     ]
     list_filter = ['invoice_type', 'is_finalized', 'is_paid', 'issued_at']
     search_fields = ['invoice_number', 'order__customer__name', 'order__id']
-    readonly_fields = ['issued_at', 'tax_amount', 'payable_amount']
+    readonly_fields = ['issued_at',  'payable_amount']
 
     def order_link(self, obj):
         url = reverse('admin:tasks_order_change', args=[obj.order.id])

@@ -236,7 +236,7 @@ class EnhancedPersianInvoicePDFGenerator:
 
         table_data = [[self._para(h, 'table_header') for h in headers]]
 
-        items = list(self.order.items.all())
+        items = list(self.order.items.filter(is_active=True))
         grand_total_final, grand_total_tax, grand_total_after_discount = 0, 0, 0
 
         for i, item in enumerate(items, 1):

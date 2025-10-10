@@ -266,7 +266,8 @@ const CreateOrderPage = ({ onOrderCreated }) => {
     };
 
     const addOrderItem = () => {
-        setOrderItems([...orderItems, { category: '', product: '', requested_quantity: 1, customer_notes: '' }]);
+        // Prepend new item to the beginning of the array so it appears on top
+        setOrderItems([{ category: '', product: '', requested_quantity: 1, customer_notes: '' }, ...orderItems]);
     };
 
     const removeOrderItem = (index) => {
@@ -693,7 +694,11 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                             }));
 
                             return (
-                                <NeoBrutalistCard key={index} className="neo-item-card">
+                                <NeoBrutalistCard
+                                    key={index}
+                                    className="neo-item-card"
+                                    style={{ zIndex: orderItems.length - index }}  // Higher z-index for top cards
+                                >
                                     <div className="neo-item-header">
                                         <h3 className="neo-item-number">محصول #{index + 1}</h3>
                                         {orderItems.length > 1 && (
@@ -793,7 +798,7 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 {/* Submit Button */}
                 <div className="neo-form-actions">
                     <NeoBrutalistButton
-                        text={loading ? "در حال ثبت..." : "ثبت سفارش"}
+                        text={loading ? "" : "ثبت سفارش"}
                         color="yellow-400"
                         textColor="black"
                         onClick={handleSubmit}

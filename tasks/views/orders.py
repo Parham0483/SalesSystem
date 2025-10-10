@@ -1,7 +1,9 @@
 # tasks/views/orders.py - COMPLETE INTEGRATION WITH SMS
 import mimetypes
 import os
+from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum, Q
 from rest_framework import viewsets, status, request
 from rest_framework.permissions import IsAuthenticated
@@ -15,7 +17,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 
 from mysite import settings
-from ..models import OrderPaymentReceipt, Invoice  # Import the receipt model
+from ..models import OrderPaymentReceipt, Invoice, OrderItemPricingOption  # Import the receipt model
 
 from ..serializers import (
     OrderCreateSerializer,
@@ -28,6 +30,8 @@ from ..serializers.dealers import (
     DealerNotesUpdateSerializer
 )
 from ..models import Order, OrderItem, Customer, OrderLog
+from ..serializers.orders import OrderItemDetailSerializer, CustomerItemSelectionSerializer, \
+    OrderAdminMultiplePricingSerializer
 from ..services.notification_service import NotificationService
 from ..services.enhanced_persian_pdf import EnhancedPersianInvoicePDFGenerator
 from ..services.unofficial_invoice_pdf import UnofficialInvoicePDFGenerator
@@ -71,20 +75,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         return OrderDetailSerializer
 
     def retrieve(self, request, *args, **kwargs):
-        """Custom retrieve method with better error handling"""
         try:
             order = self.get_object()
+            logger.info(f"Fetching order {order.id} with {order.items.count()} items")
+            for item in order.items.all():
+                try:
+                    options_count = item.pricing_options.count()
+                except Exception as count_err:
+                    logger.warning(f"Failed to count pricing options for item {item.id}: {str(count_err)}")
+                    options_count = 0
+                logger.info(f"Item {item.id} has {options_count} pricing options")
             serializer = self.get_serializer(order)
-
-            logger.info(
-                f"🔍 Order {order.id} accessed by {request.user.name} (Staff: {request.user.is_staff}, Dealer: {request.user.is_dealer})")
-
+            logger.info(f"Serialized order data: {serializer.data}")
             return Response(serializer.data)
         except Exception as e:
-            logger.error(f"❌ Error retrieving order: {str(e)}")
-            return Response({
-                'error': f'Order not found or access denied: {str(e)}'
-            }, status=status.HTTP_404_NOT_FOUND)
+            logger.error(f"Error retrieving order {kwargs.get('pk')}: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def create(self, request, *args, **kwargs):
         try:
@@ -198,6 +204,435 @@ class OrderViewSet(viewsets.ModelViewSet):
             logger.error(f"❌ Pricing submission failed: {str(e)}")
             return Response({
                 'error': f'Pricing submission failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='submit-multiple-pricing')
+    def submit_multiple_pricing(self, request, pk=None):
+        """Admin submits pricing with multiple options per item"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            if order.status != 'pending_pricing':
+                return Response({
+                    'error': f'Cannot price order with status: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = OrderAdminMultiplePricingSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            items_data = serializer.validated_data['items']
+            admin_comment = serializer.validated_data.get('admin_comment', '')
+
+            with transaction.atomic():
+                for item_data in items_data:
+                    item_id = item_data['item_id']
+
+                    try:
+                        item = order.items.get(id=item_id, is_active=True)
+                    except OrderItem.DoesNotExist:
+                        continue
+
+                    # Update item quantity and notes
+                    item.final_quantity = item_data['final_quantity']
+                    item.admin_notes = item_data.get('admin_notes', '')
+                    item.item_status = 'priced'
+
+                    # Clear existing pricing options
+                    item.pricing_options.all().delete()
+
+                    # Create new pricing options
+                    for idx, option_data in enumerate(item_data['pricing_options']):
+                        OrderItemPricingOption.objects.create(
+                            order_item=item,
+                            payment_term=option_data['payment_term'],
+                            custom_term_label=option_data.get('custom_term_label', ''),
+                            unit_price=option_data['unit_price'],
+                            discount_percentage=option_data.get('discount_percentage', 0),
+                            admin_notes=option_data.get('admin_notes', ''),
+                            display_order=option_data.get('display_order', idx)
+                        )
+
+                    item.save()
+
+                # Update order
+                order.status = 'waiting_customer_approval'
+                order.pricing_date = timezone.now()
+                order.priced_by = request.user
+                if admin_comment:
+                    order.admin_comment = admin_comment
+                order.save()
+
+                # Create log
+                OrderLog.objects.create(
+                    order=order,
+                    action='pricing_submitted',
+                    description=f"Pricing with multiple options submitted by {request.user.name}",
+                    performed_by=request.user
+                )
+
+            # Send notification
+            dual_result = NotificationService.send_dual_notification(
+                order=order,
+                notification_type='pricing_ready'
+            )
+
+            logger.info(f"Pricing with multiple options submitted for Order #{order.id}")
+
+            return Response({
+                'message': 'Pricing submitted successfully with multiple options',
+                'order': OrderDetailSerializer(order).data,
+                'notifications': {
+                    'email_sent': dual_result['email']['sent'],
+                    'sms_sent': dual_result['sms']['sent']
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error submitting multiple pricing: {str(e)}")
+            return Response({
+                'error': f'Failed to submit pricing: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='customer-select-option')
+    def customer_select_option(self, request, pk=None):
+        """Customer selects a pricing option or rejects item"""
+        try:
+            order = self.get_object()
+
+            if order.customer != request.user:
+                return Response({
+                    'error': 'Permission denied'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            if order.status != 'waiting_customer_approval':
+                return Response({
+                    'error': f'Cannot select options when order status is: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = CustomerItemSelectionSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            item_id = serializer.validated_data['item_id']
+            action = serializer.validated_data['action']
+
+            item = order.items.get(id=item_id, is_active=True)
+
+            if action == 'select_option':
+                option_id = serializer.validated_data['selected_option_id']
+
+                # Verify option belongs to this item
+                if not item.pricing_options.filter(id=option_id).exists():
+                    return Response({
+                        'error': 'Invalid option selected'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                success = item.select_pricing_option(option_id)
+                if not success:
+                    return Response({
+                        'error': 'Failed to select option'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                OrderLog.objects.create(
+                    order=order,
+                    action='item_option_selected',
+                    description=f"Customer selected pricing option for '{item.product.name}'",
+                    performed_by=request.user
+                )
+
+                message = 'Pricing option selected successfully'
+
+            else:  # reject
+                item.item_status = 'customer_rejected'
+                item.customer_rejection_reason = serializer.validated_data['rejection_reason']
+                item.save()
+
+                OrderLog.objects.create(
+                    order=order,
+                    action='item_rejected',
+                    description=f"Customer rejected '{item.product.name}': {item.customer_rejection_reason}",
+                    performed_by=request.user
+                )
+
+                message = 'Item rejected'
+
+            # Check completion
+            all_decided = order.all_items_decided()
+
+            # Recalculate total
+            total = Decimal('0.00')
+            for item in order.items.filter(is_active=True, item_status='customer_selected'):
+                total += item.total_price
+
+            order.quoted_total = total
+            order.save(update_fields=['quoted_total'])
+
+            return Response({
+                'message': message,
+                'all_items_decided': all_decided,
+                'selected_items_count': order.items.filter(item_status='customer_selected').count(),
+                'rejected_items_count': order.items.filter(item_status='customer_rejected').count(),
+                'pending_items_count': order.items.filter(is_active=True, item_status='priced').count(),
+                'current_total': float(order.quoted_total),
+                'item': OrderItemDetailSerializer(item).data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error selecting option: {str(e)}")
+            return Response({
+                'error': f'Failed to process selection: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['DELETE'], url_path='customer-remove-item/(?P<item_id>[^/.]+)')
+    def customer_remove_item(self, request, pk=None, item_id=None):
+        """Customer removes item from their own order before pricing"""
+        try:
+            order = self.get_object()
+
+            if order.customer != request.user:
+                return Response({
+                    'error': 'دسترسی غیرمجاز'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # ✅ FIXED: Allow removal during both pending_pricing AND waiting_customer_approval
+            if order.status not in ['pending_pricing', 'waiting_customer_approval']:
+                return Response({
+                    'error': 'امکان حذف محصولات در این مرحله وجود ندارد',
+                    'current_status': order.status,
+                    'message': 'شما فقط می‌توانید محصولات را قبل از تایید نهایی سفارش حذف کنید'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                item = order.items.get(id=item_id, is_active=True)
+            except OrderItem.DoesNotExist:
+                return Response({
+                    'error': 'این محصول در سبد خرید شما یافت نشد یا قبلاً حذف شده است'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Count remaining ACTIVE items
+            remaining_items = order.items.filter(is_active=True).count()
+
+            if remaining_items <= 1:
+                # This is the last item - need to reject entire order
+                reject_entire_order = request.data.get('reject_entire_order', False)
+                rejection_reason = request.data.get('rejection_reason', '')
+
+                if not reject_entire_order:
+                    return Response({
+                        'error': 'این آخرین محصول سفارش است',
+                        'message': 'آیا می‌خواهید کل سفارش را رد کنید؟',
+                        'requires_confirmation': True,
+                        'last_item': True
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if not rejection_reason:
+                    return Response({
+                        'error': 'لطفاً دلیل رد سفارش را ذکر کنید'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Reject entire order
+                order.status = 'rejected'
+                order.customer_rejection_reason = rejection_reason
+                order.customer_response_date = timezone.now()
+                order.save(update_fields=['status', 'customer_rejection_reason', 'customer_response_date'])
+
+                # Mark item as removed
+                item.is_active = False
+                item.item_status = 'customer_removed'
+                item.removed_at = timezone.now()
+                item.removed_by = request.user
+                item.save()
+
+                # Create log entry
+                OrderLog.objects.create(
+                    order=order,
+                    action='order_rejected_by_customer',
+                    description=f"سفارش توسط {request.user.name} رد شد - دلیل: {rejection_reason}",
+                    performed_by=request.user
+                )
+
+                # Notify admin
+                try:
+                    NotificationService.notify_admin_order_status_change(
+                        order, 'rejected', request.user
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send admin notification: {str(e)}")
+
+                logger.info(f"Customer {request.user.name} rejected order {order.id}")
+
+                return Response({
+                    'message': 'سفارش با موفقیت رد شد',
+                    'order_rejected': True,
+                    'order': OrderDetailSerializer(order).data
+                }, status=status.HTTP_200_OK)
+
+            # Normal item removal (not the last item)
+            # Soft delete the item
+            item.is_active = False
+            item.item_status = 'customer_removed'
+            item.removed_at = timezone.now()
+            item.removed_by = request.user
+            item.save()
+
+            if order.status == 'waiting_customer_approval':
+                # Recalculate quoted_total based on remaining active items
+                from decimal import Decimal
+                total = Decimal('0.00')
+
+                for remaining_item in order.items.filter(is_active=True):
+                    # Get the selected pricing option or use the first option
+                    selected_option = remaining_item.pricing_options.filter(is_selected=True).first()
+                    if not selected_option:
+                        selected_option = remaining_item.pricing_options.first()
+
+                    if selected_option:
+                        total += selected_option.total_price
+
+                order.quoted_total = total
+                order.save(update_fields=['quoted_total'])
+
+            # Create log entry
+            OrderLog.objects.create(
+                order=order,
+                action='item_removed_by_customer',
+                description=f"مشتری محصول '{item.product.name}' را از سفارش حذف کرد",
+                performed_by=request.user
+            )
+
+            # Send notification to admin
+            try:
+                notification_sent = NotificationService.notify_admin_item_removed_by_customer(
+                    order=order,
+                    removed_item=item,
+                    customer=request.user
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send admin notification: {str(e)}")
+                notification_sent = False
+
+            logger.info(f"Customer {request.user.name} removed item {item_id} from order {order.id}")
+
+            return Response({
+                'message': 'محصول با موفقیت حذف شد',
+                'removed_item': {
+                    'id': item.id,
+                    'product_name': item.product.name,
+                    'quantity': item.requested_quantity
+                },
+                'remaining_items': order.items.filter(is_active=True).count(),
+                'admin_notified': notification_sent,
+                'new_total': float(order.quoted_total) if order.status == 'waiting_customer_approval' else None,
+                'order': OrderDetailSerializer(order).data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error removing item {item_id} from order {pk}: {str(e)}")
+            return Response({
+                'error': f'خطا در حذف محصول: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @action(detail=True, methods=['POST'], url_path='finalize-selections')
+    def finalize_selections(self, request, pk=None):
+        """Customer finalizes all selections and confirms order"""
+        try:
+            order = self.get_object()
+
+            if order.customer != request.user:
+                return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+            if order.status != 'waiting_customer_approval':
+                return Response({
+                    'error': f'Cannot finalize when order status is: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Verify all items decided
+            if not order.all_items_decided():
+                pending = order.items.filter(is_active=True, item_status='priced').count()
+                return Response({
+                    'error': f'{pending} items still need your decision'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Verify at least one item selected
+            selected_count = order.items.filter(item_status='customer_selected').count()
+            if selected_count == 0:
+                return Response({
+                    'error': 'At least one item must be selected'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Confirm order
+            order.customer_approve()
+
+            # Notifications
+            dual_result = NotificationService.send_dual_notification(
+                order=order,
+                notification_type='order_confirmed'
+            )
+
+            NotificationService.notify_admin_order_status_change(order, 'confirmed', request.user)
+
+            return Response({
+                'message': 'Order confirmed successfully',
+                'selected_items_count': selected_count,
+                'final_total': float(order.quoted_total),
+                'order': OrderDetailSerializer(order).data,
+                'notifications': {
+                    'email_sent': dual_result['email']['sent'],
+                    'sms_sent': dual_result['sms']['sent']
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error finalizing selections: {str(e)}")
+            return Response({
+                'error': f'Failed to finalize: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['DELETE'], url_path='remove-item/(?P<item_id>[^/.]+)')
+    def remove_order_item(self, request, pk=None, item_id=None):
+        """Admin removes item during pricing"""
+        if not request.user.is_staff:
+            return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            if order.status not in ['pending_pricing', 'waiting_customer_approval']:
+                return Response({
+                    'error': f'Cannot remove items when status is: {order.status}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            item = order.items.get(id=item_id, is_active=True)
+
+            # Soft delete
+            item.is_active = False
+            item.item_status = 'admin_removed'
+            item.removed_at = timezone.now()
+            item.removed_by = request.user
+            item.save()
+
+            OrderLog.objects.create(
+                order=order,
+                action='item_removed',
+                description=f"Item '{item.product.name}' removed by admin",
+                performed_by=request.user
+            )
+
+            return Response({
+                'message': 'Item removed successfully',
+                'remaining_items': order.items.filter(is_active=True).count()
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': f'Failed to remove item: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='approve')
@@ -1776,6 +2211,33 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error_type': type(e).__name__
                 }
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['DELETE'], url_path=r'remove-item/(?P<item_id>\d+)')
+    def remove_item(self, request, pk=None, item_id=None):
+        try:
+            order = self.get_object()
+            item = order.items.get(id=item_id)
+            item.delete()
+            return Response({'status': 'item removed'}, status=status.HTTP_200_OK)
+        except OrderItem.DoesNotExist:
+            return Response({'error': 'Item not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error removing item {item_id} from order {pk}: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['POST'], url_path='update-multiple-pricing')
+
+    def update_multiple_pricing(self, request, pk=None):
+        order = self.get_object()
+        if order.status not in ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded']:
+            return Response({'error': 'Cannot update pricing in this status'}, status=400)
+        serializer = OrderAdminMultiplePricingSerializer(order, data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            if request.data.get('notify_customer'):
+                NotificationService.send_dual_notification(order, 'pricing_updated')
+            return Response({'status': 'pricing updated'})
+        return Response(serializer.errors, status=400)
 
 
 class OrderItemViewSet(viewsets.ModelViewSet):

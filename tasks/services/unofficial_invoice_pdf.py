@@ -187,7 +187,7 @@ class UnofficialInvoicePDFGenerator:
 
         table_data = [[self._para(h, 'table_header') for h in headers]]
 
-        items = list(self.order.items.all())
+        items = list(self.order.items.filter(is_active=True))
         grand_total = 0
 
         for i, item in enumerate(items, 1):

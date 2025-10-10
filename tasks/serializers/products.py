@@ -71,20 +71,18 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     category_details = serializers.SerializerMethodField()
     days_since_created = serializers.SerializerMethodField()
-    price_with_tax = serializers.SerializerMethodField()
-    tax_amount = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            'id', 'name', 'description', 'base_price', 'stock', 'sku',
+            'id', 'name', 'description',  'stock', 'sku',
             'weight', 'origin', 'primary_image_url', 'thumbnail_url',
             'product_images', 'images_count',
             'category', 'category_name', 'category_details',
             'is_active', 'is_featured', 'created_at', 'updated_at',
             'meta_title', 'meta_description', 'tags',
             'stock_status', 'is_out_of_stock', 'days_since_created',
-            'tax_rate', 'price_with_tax', 'tax_amount'
+            'tax_rate'
         ]
         # REMOVE the exclude line completely - just don't include 'image' field
         read_only_fields = ['created_at', 'updated_at', 'stock_status', 'is_out_of_stock']
@@ -207,13 +205,9 @@ class ProductSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         return (timezone.now() - obj.created_at).days
 
-    def get_price_with_tax(self, obj):
-        """Get product price including tax"""
-        return float(obj.get_price_with_tax())
 
     def get_tax_amount(self, obj):
-        """Get tax amount for base price"""
-        return float(obj.get_tax_amount_for_price(obj.base_price))
+        return None
 
     def validate_image(self, value):
         """Custom validation for image field"""
@@ -260,11 +254,7 @@ class ProductSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Stock cannot be negative")
         return value
 
-    def validate_base_price(self, value):
-        """Validate base price"""
-        if value < 0:
-            raise serializers.ValidationError("Price cannot be negative")
-        return value
+
 
     def validate_category(self, value):
         """Validate category exists and is active"""
@@ -360,8 +350,6 @@ class ProductSearchSerializer(serializers.Serializer):
         choices=[
             ('name', 'Name'),
             ('-name', 'Name (desc)'),
-            ('base_price', 'Price (low to high)'),
-            ('-base_price', 'Price (high to low)'),
             ('created_at', 'Oldest first'),
             ('-created_at', 'Newest first'),
             ('stock', 'Stock (low to high)'),

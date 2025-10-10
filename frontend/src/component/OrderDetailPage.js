@@ -138,7 +138,6 @@ const InvoiceManager = ({ order, onUpdate }) => {
             </div>
         );
     }
-
     return (
         <div className="neo-invoice-card">
             <div className="neo-card-header">
@@ -352,6 +351,392 @@ const AuthenticatedImage = ({ receipt, onError }) => {
                 }}
             />
         </div>
+    );
+};
+
+const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) => {
+    const [selections, setSelections] = useState({});
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (order && order.items) {
+            const initialSelections = {};
+            order.items.forEach(item => {
+                if (item.is_active !== false && item.pricing_options && item.pricing_options.length > 0) {
+                    const selectedOption = item.pricing_options.find(opt => opt.is_selected);
+                    if (selectedOption) {
+                        initialSelections[item.id] = selectedOption.id;
+                    }
+                }
+            });
+            setSelections(initialSelections);
+        }
+    }, [order]);
+
+    const handleSelectionChange = (itemId, optionId) => {
+        if (readOnly) return; // No changes in read-only mode
+        setSelections(prev => ({
+            ...prev,
+            [itemId]: optionId
+        }));
+        setError('');
+    };
+
+    const handleRemoveItem = async (itemId, productName) => {
+        if (readOnly) return; // No deletion in read-only mode
+
+        const activeItems = order.items.filter(item => item.is_active !== false);
+        const isLastItem = activeItems.length === 1;
+
+        if (isLastItem) {
+            const confirmMessage = `این آخرین محصول در سبد خرید شماست.\n\nآیا می‌خواهید کل سفارش را رد کنید؟\n\nدر صورت تایید، سفارش به طور کامل لغو خواهد شد.`;
+            if (!window.confirm(confirmMessage)) return;
+
+            const rejectionReason = window.prompt('لطفاً دلیل رد سفارش را بنویسید:');
+            if (!rejectionReason || rejectionReason.trim() === '') {
+                alert('لطفاً دلیل رد سفارش را ذکر کنید');
+                return;
+            }
+
+            try {
+                const response = await API.delete(`/orders/${order.id}/customer-remove-item/${itemId}/`, {
+                    data: { reject_entire_order: true, rejection_reason: rejectionReason.trim() }
+                });
+                if (response.status === 200) {
+                    alert('سفارش با موفقیت رد شد');
+                    onUpdate();
+                }
+            } catch (err) {
+                console.error('Error rejecting order:', err);
+                alert(err.response?.data?.error || 'خطا در رد سفارش');
+            }
+        } else {
+            if (!window.confirm(`آیا از حذف "${productName}" از سبد خرید اطمینان دارید؟`)) return;
+
+            try {
+                const response = await API.delete(`/orders/${order.id}/customer-remove-item/${itemId}/`);
+                if (response.status === 200) {
+                    alert('محصول با موفقیت حذف شد');
+                    onUpdate();
+                }
+            } catch (err) {
+                console.error('Error removing item:', err);
+                alert(err.response?.data?.error || 'خطا در حذف محصول');
+            }
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (readOnly) return; // No submission in read-only mode
+
+        const unselectedItems = order.items.filter(item =>
+            item.is_active !== false && item.pricing_options?.length > 0 && !selections[item.id]
+        );
+        if (unselectedItems.length > 0) {
+            setError('لطفاً برای تمام محصولات یک گزینه قیمت انتخاب کنید');
+            return;
+        }
+
+        setSubmitting(true);
+        setError('');
+        try {
+            for (const [itemId, optionId] of Object.entries(selections)) {
+                await API.post(`/orders/${order.id}/customer-select-option/`, {
+                    item_id: parseInt(itemId),
+                    action: 'select_option',
+                    selected_option_id: optionId
+                });
+            }
+            const response = await API.post(`/orders/${order.id}/finalize-selections/`);
+            if (response.status === 200) {
+                alert('انتخاب‌های شما با موفقیت ثبت شد! اکنون می‌توانید پیش‌فاکتور را دانلود کنید.');
+                onUpdate();
+            }
+        } catch (err) {
+            console.error('Error submitting selections:', err);
+            setError(err.response?.data?.error || 'خطا در ثبت انتخاب‌ها');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const formatPrice = (price) => {
+        if (!price && price !== 0) return '۰';
+        return new Intl.NumberFormat('fa-IR').format(price);
+    };
+
+    const getSelectedOption = (item) => {
+        if (!selections[item.id]) return null;
+        return item.pricing_options?.find(opt => opt.id === selections[item.id]);
+    };
+
+    const calculateOrderTotal = () => {
+        let subtotal = 0;
+        let tax = 0;
+        order.items.filter(item => item.is_active !== false).forEach(item => {
+            const selectedOption = getSelectedOption(item);
+            if (selectedOption) {
+                subtotal += parseFloat(selectedOption.total_price || 0);
+                if (order.business_invoice_type === 'official') {
+                    tax += parseFloat(selectedOption.tax_amount || 0);
+                }
+            }
+        });
+        return { subtotal, tax, total: subtotal + tax };
+    };
+
+    const activeItems = order?.items?.filter(item => item.is_active !== false) || [];
+    const hasPricingOptions = activeItems.some(item =>
+        item.pricing_options && item.pricing_options.length > 0
+    );
+
+    // Only render if we have pricing options
+    if (!hasPricingOptions) return null;
+
+    const totals = calculateOrderTotal();
+    const allSelected = readOnly ? true : activeItems.every(item =>
+        !item.pricing_options?.length || selections[item.id]
+    );
+
+    return (
+        <NeoBrutalistCard className="neo-pricing-selection-card" style={{ borderLeft: '6px solid #f59e0b' }}>
+            <div className="neo-card-header">
+                <h2 className="neo-card-title">{readOnly ? 'گزینه‌های انتخاب شده' : 'انتخاب گزینه قیمت'}</h2>
+            </div>
+
+            {order.admin_comment && (
+                <div style={{
+                    backgroundColor: '#f0f9ff',
+                    border: '3px solid #0ea5e9',
+                    boxShadow: '4px 4px #0ea5e9',
+                    padding: '1.5rem',
+                    margin: '1.5rem',
+                    borderRadius: '8px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <span style={{ fontSize: '1.5rem' }}>💬</span>
+                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 'bold', color: '#0369a1' }}>
+                            پیام از مدیریت
+                        </h3>
+                    </div>
+                    <p style={{ margin: 0, lineHeight: '1.6', color: '#1e40af', fontSize: '1rem' }}>
+                        {order.admin_comment}
+                    </p>
+                </div>
+            )}
+
+            {!readOnly && (
+                <div className="neo-pricing-info-box">
+                    <strong>راهنما:</strong>
+                    <ul style={{ margin: '0.5rem 0 0 0', paddingRight: '1.5rem', lineHeight: '1.8' }}>
+                        <li>برای هر محصول، یک گزینه قیمت انتخاب کنید</li>
+                        <li>قیمت‌ها بر اساس شرایط پرداخت متفاوت است</li>
+                        <li>می‌توانید محصولات نامطلوب را حذف کنید</li>
+                        <li>پس از انتخاب، پیش‌فاکتور برای شما صادر می‌شود</li>
+                    </ul>
+                </div>
+            )}
+
+            {error && !readOnly && (
+                <div className="neo-status-message neo-error">
+                    <span className="neo-status-icon">⚠️</span>
+                    <span>{error}</span>
+                </div>
+            )}
+
+            <div className="neo-pricing-table-wrapper">
+                <table className="neo-pricing-table">
+                    <thead>
+                    <tr>
+                        <th>محصول</th>
+                        <th>تعداد</th>
+                        <th>یادداشت شما</th>
+                        <th>گزینه قیمت انتخاب شده</th>
+                        {!readOnly && <th>عملیات</th>}
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {activeItems.map((item) => {
+                        const selectedOption = item.pricing_options?.find(opt => opt.is_selected);
+                        return (
+                            <tr key={item.id}>
+                                <td className="product-cell">
+                                    <div className="product-info">
+                                        <div className="product-name">{item.product_name}</div>
+                                        {item.product_code && (
+                                            <div className="product-code">کد: {item.product_code}</div>
+                                        )}
+                                    </div>
+                                </td>
+                                <td className="quantity-cell">
+                                    {formatPrice(item.final_quantity || item.requested_quantity)}
+                                </td>
+                                <td className="notes-cell">
+                                    {item.customer_notes || '-'}
+                                </td>
+                                <td className="options-cell">
+                                    {item.pricing_options && item.pricing_options.length > 0 ? (
+                                        readOnly ? (
+                                            selectedOption ? (
+                                                <div className="price-option-card selected">
+                                                    <div className="option-header">
+                                                            <span className="option-term">
+                                                                {selectedOption.custom_term_label || selectedOption.term_display || selectedOption.payment_term}
+                                                            </span>
+                                                        {selectedOption.discount_percentage > 0 && (
+                                                            <span className="discount-badge">
+                                                                    {formatPrice(selectedOption.discount_percentage)}% تخفیف
+                                                                </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="option-details">
+                                                        <div className="price-line">
+                                                            <span>قیمت واحد:</span>
+                                                            <span>{formatPrice(selectedOption.unit_price)} ریال</span>
+                                                        </div>
+                                                        <div className="price-line">
+                                                            <span>جمع:</span>
+                                                            <span>{formatPrice(selectedOption.total_price)} ریال</span>
+                                                        </div>
+                                                        {order.business_invoice_type === 'official' && (
+                                                            <div className="price-line total-line">
+                                                                <span>با مالیات:</span>
+                                                                <span className="total-price">{formatPrice(selectedOption.total_with_tax)} ریال</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span style={{ color: '#666' }}>هیچ گزینه‌ای انتخاب نشده</span>
+                                            )
+                                        ) : (
+                                            <div className="pricing-options-grid">
+                                                {item.pricing_options.map((option) => {
+                                                    const isSelected = selections[item.id] === option.id;
+                                                    return (
+                                                        <label
+                                                            key={option.id}
+                                                            className={`price-option-card ${isSelected ? 'selected' : ''}`}
+                                                        >
+                                                            <input
+                                                                type="radio"
+                                                                name={`item-${item.id}`}
+                                                                checked={isSelected}
+                                                                onChange={() => handleSelectionChange(item.id, option.id)}
+                                                                className="price-radio"
+                                                            />
+                                                            <div className="option-header">
+                                                                    <span className="option-term">
+                                                                        {option.custom_term_label || option.term_display || option.payment_term}
+                                                                    </span>
+                                                                {option.discount_percentage > 0 && (
+                                                                    <span className="discount-badge">
+                                                                            {formatPrice(option.discount_percentage)}% تخفیف
+                                                                        </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="option-details">
+                                                                <div className="price-line">
+                                                                    <span>قیمت واحد:</span>
+                                                                    <span>{formatPrice(option.unit_price)} ریال</span>
+                                                                </div>
+                                                                <div className="price-line">
+                                                                    <span>جمع:</span>
+                                                                    <span>{formatPrice(option.total_price)} ریال</span>
+                                                                </div>
+                                                                {order.business_invoice_type === 'official' && (
+                                                                    <div className="price-line total-line">
+                                                                        <span>با مالیات:</span>
+                                                                        <span className="total-price">{formatPrice(option.total_with_tax)} ریال</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        )
+                                    ) : (
+                                        <span style={{ color: '#666' }}>در انتظار قیمت‌گذاری</span>
+                                    )}
+                                </td>
+                                {!readOnly && (
+                                    <td style={{ textAlign: 'center' }}>
+                                        <button
+                                            onClick={() => handleRemoveItem(item.id, item.product_name)}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                backgroundColor: '#ef4444',
+                                                color: 'white',
+                                                border: '2px solid #000',
+                                                borderRadius: '4px',
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.85rem',
+                                                boxShadow: '2px 2px #000',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.target.style.transform = 'translate(-1px, -1px)';
+                                                e.target.style.boxShadow = '3px 3px #000';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.target.style.transform = 'translate(0, 0)';
+                                                e.target.style.boxShadow = '2px 2px #000';
+                                            }}
+                                        >
+                                            🗑️ حذف
+                                        </button>
+                                    </td>
+                                )}
+                            </tr>
+                        );
+                    })}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="neo-order-summary">
+                <h3>خلاصه سفارش</h3>
+                <div className="summary-lines">
+                    <div className="summary-line">
+                        <span>جمع کل (بدون مالیات):</span>
+                        <span>{formatPrice(totals.subtotal)} ریال</span>
+                    </div>
+                    {order.business_invoice_type === 'official' && (
+                        <>
+                            <div className="summary-line">
+                                <span>مالیات:</span>
+                                <span>{formatPrice(totals.tax)} ریال</span>
+                            </div>
+                            <div className="summary-line final-total">
+                                <span>مبلغ نهایی:</span>
+                                <span>{formatPrice(totals.total)} ریال</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {!readOnly && (
+                <div className="neo-submit-section">
+                    <NeoBrutalistButton
+                        text={submitting ? 'در حال ثبت...' : 'تایید و صدور پیش‌فاکتور'}
+                        color="yellow-400"
+                        textColor="black"
+                        onClick={handleSubmit}
+                        disabled={submitting || !allSelected}
+                        className="submit-selection-btn"
+                    />
+                    {!allSelected && (
+                        <div className="submit-hint">
+                            لطفاً برای تمام محصولات یک گزینه انتخاب کنید
+                        </div>
+                    )}
+                </div>
+            )}
+        </NeoBrutalistCard>
     );
 };
 
@@ -658,6 +1043,83 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
         fetchOrder();
     };
 
+    // Update handleRemoveItem function (around line 850)
+    const handleRemoveItem = async (itemId, productName) => {
+        // Count ACTIVE items only
+        const activeItems = order.items.filter(item => item.is_active !== false);
+        const isLastItem = activeItems.length === 1;
+
+        if (isLastItem) {
+            // Show custom confirmation for last item
+            const confirmMessage = `این آخرین محصول در سبد خرید شماست.\n\nآیا می‌خواهید کل سفارش را رد کنید؟\n\nدر صورت تایید، سفارش به طور کامل لغو خواهد شد.`;
+
+            if (!window.confirm(confirmMessage)) {
+                return;
+            }
+
+            // Get rejection reason
+            const rejectionReason = window.prompt('لطفاً دلیل رد سفارش را بنویسید:');
+
+            if (!rejectionReason || rejectionReason.trim() === '') {
+                alert('لطفاً دلیل رد سفارش را ذکر کنید');
+                return;
+            }
+
+            try {
+                const response = await API.delete(`/orders/${orderId}/customer-remove-item/${itemId}/`, {
+                    data: {
+                        reject_entire_order: true,
+                        rejection_reason: rejectionReason.trim()
+                    }
+                });
+
+                if (response.status === 200) {
+                    alert('سفارش با موفقیت رد شد');
+
+                    // Redirect or update UI
+                    if (onOrderUpdated) {
+                        onOrderUpdated();
+                    } else {
+                        fetchOrder();
+                    }
+                }
+            } catch (err) {
+                console.error('Error rejecting order:', err);
+
+                if (err.response?.data?.error) {
+                    alert(`خطا: ${err.response.data.error}`);
+                } else {
+                    alert('خطا در رد سفارش');
+                }
+            }
+        } else {
+            // Normal item removal confirmation
+            if (!window.confirm(`آیا از حذف "${productName}" از سبد خرید اطمینان دارید؟`)) {
+                return;
+            }
+
+            try {
+                const response = await API.delete(`/orders/${orderId}/customer-remove-item/${itemId}/`);
+
+                if (response.status === 200) {
+                    alert('محصول با موفقیت حذف شد');
+                    fetchOrder(); // Refresh order data
+                }
+            } catch (err) {
+                console.error('Error removing item:', err);
+
+                if (err.response?.data?.error) {
+                    alert(`خطا: ${err.response.data.error}`);
+                } else if (err.response?.status === 404) {
+                    alert('این محصول قبلاً حذف شده است');
+                    fetchOrder(); // Refresh to show current state
+                } else {
+                    alert('خطا در حذف محصول');
+                }
+            }
+        }
+    };
+
     // Status and formatting functions
     const getStatusColor = (status) => {
         if (!status) return 'gray-400';
@@ -930,59 +1392,50 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     <div className="neo-info-item">
                         <span className="neo-info-label">تاریخ ایجاد</span>
                         <span className="neo-info-value">
-                            {order.created_at ? new Date(order.created_at).toLocaleDateString('fa-IR') : 'نامشخص'}
-                        </span>
+                        {order.created_at ? new Date(order.created_at).toLocaleDateString('fa-IR') : 'نامشخص'}
+                    </span>
                     </div>
                     <div className="neo-info-item">
                         <span className="neo-info-label">وضعیت</span>
                         <span className="neo-info-value">{formatStatus(order.status)}</span>
                     </div>
-
                     <div className="neo-info-item">
                         <span className="neo-info-label">نوع فاکتور</span>
                         <span className={`neo-info-value ${isOfficialInvoice() ? 'neo-official-invoice' : 'neo-unofficial-invoice'}`}>
-                            {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور شخصی')}
+                        {order.business_invoice_type_display || (isOfficialInvoice() ? 'فاکتور رسمی' : 'فاکتور شخصی')}
                             {isOfficialInvoice() && (
                                 <span className="neo-tax-badge">دارای مالیات</span>
                             )}
-                        </span>
+                    </span>
                     </div>
-
                     {order.quoted_total > 0 && (
                         <div className="neo-info-item">
                             <span className="neo-info-label">مبلغ کل</span>
                             <span className="neo-info-value neo-payable-amount">
-                                {formatPrice(order.quoted_total)}
-                            </span>
+                            {formatPrice(order.quoted_total)}
+                        </span>
                         </div>
                     )}
-
-                    {/* Show pricing information if available */}
                     {order.pricing_date && (
                         <div className="neo-info-item">
                             <span className="neo-info-label">تاریخ قیمت‌گذاری</span>
                             <span className="neo-info-value">
-                                {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
-                            </span>
+                            {new Date(order.pricing_date).toLocaleDateString('fa-IR')}
+                        </span>
                         </div>
                     )}
-
                     {order.priced_by_name && (
                         <div className="neo-info-item">
                             <span className="neo-info-label">قیمت‌گذاری شده توسط</span>
                             <span className="neo-info-value">{order.priced_by_name}</span>
                         </div>
                     )}
-
-                    {/* Show dealer information if assigned */}
                     {order.assigned_dealer_name && (
                         <div className="neo-info-item">
                             <span className="neo-info-label">نماینده فروش</span>
                             <span className="neo-info-value">{order.assigned_dealer_name}</span>
                         </div>
                     )}
-
-                    {/* Customer comment */}
                     {order.customer_comment && (
                         <div className="neo-info-item full-width">
                             <span className="neo-info-label">توضیحات شما</span>
@@ -992,7 +1445,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </div>
             </NeoBrutalistCard>
 
-            {/* Admin Comment Section - Enhanced */}
+            {/* Admin Comment Section */}
             {order.admin_comment && order.admin_comment.trim() && (
                 <NeoBrutalistCard className="neo-admin-reply-card" style={{ borderLeft: '6px solid #10b981' }}>
                     <div className="neo-card-header">
@@ -1028,8 +1481,26 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
+
+
+            {/* Customer Pricing Selection Section */}
+            {(order.status === 'waiting_customer_approval' ||
+                order.status === 'confirmed' ||
+                order.status === 'payment_uploaded' ||
+                order.status === 'completed') && (
+                <CustomerPricingSelectionSection
+                    order={order}
+                    onUpdate={fetchOrder}
+                    readOnly={order.status !== 'waiting_customer_approval'}
+                />
+            )}
+
             {/* Invoice Manager Component */}
-            {(order.status === 'waiting_customer_approval' || order.status === 'confirmed' || order.status === 'payment_uploaded' || order.status === 'completed' || (typeof window !== 'undefined' && window.userRole === 'admin')) && (
+            {(order.status === 'waiting_customer_approval' ||
+                order.status === 'confirmed' ||
+                order.status === 'payment_uploaded' ||
+                order.status === 'completed' ||
+                (typeof window !== 'undefined' && window.userRole === 'admin')) && (
                 <InvoiceManager order={order} onUpdate={fetchOrder} />
             )}
 
@@ -1091,7 +1562,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                         <span className="neo-info-value">{customerInfo?.complete_address || 'ثبت نشده'}</span>
                                     </div>
                                 </div>
-
                                 <div className="invoice-readiness" style={{ marginTop: '1rem' }}>
                                     {isCustomerInfoComplete() ? (
                                         <div className="readiness-indicator ready" style={{
@@ -1128,7 +1598,7 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                 </NeoBrutalistCard>
             )}
 
-            {/* Payment receipts section */}
+            {/* Payment Receipts Section */}
             {(order.has_payment_receipts || paymentReceipts.length > 0) && (
                 <NeoBrutalistCard className="neo-payment-status-card">
                     <div className="neo-card-header">
@@ -1137,13 +1607,11 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                         </h2>
                         {loadingReceipts && <span>📄 در حال بارگیری...</span>}
                     </div>
-
                     {receiptsError && (
                         <div className="neo-error-message">
                             <span>⚠️ {receiptsError}</span>
                         </div>
                     )}
-
                     <div className="neo-payment-receipts-content">
                         {order.status === 'confirmed' && (
                             <div className="neo-add-more-receipts">
@@ -1156,22 +1624,20 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 />
                             </div>
                         )}
-
                         <div className="neo-receipts-grid">
                             {paymentReceipts.map((receipt, index) => (
                                 <div key={receipt.id} className="neo-receipt-item" data-file-type={receipt.file_type}>
                                     <div className="neo-receipt-header">
                                         <h4>رسید {index + 1}</h4>
                                         <div className="neo-receipt-meta">
-                                            <span className="neo-receipt-type">
-                                                {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
-                                            </span>
+                                        <span className="neo-receipt-type">
+                                            {receipt.file_type === 'pdf' ? '📄 PDF' : '🖼️ تصویر'}
+                                        </span>
                                             <span className="neo-receipt-size">
-                                                {formatFileSize(receipt.file_size)}
-                                            </span>
+                                            {formatFileSize(receipt.file_size)}
+                                        </span>
                                         </div>
                                     </div>
-
                                     <div className="neo-receipt-info">
                                         <div className="neo-receipt-details">
                                             <div className="neo-info-item">
@@ -1181,22 +1647,20 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             <div className="neo-info-item">
                                                 <span className="neo-info-label">تاریخ آپلود:</span>
                                                 <span className="neo-info-value">
-                                                    {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
-                                                </span>
+                                                {new Date(receipt.uploaded_at).toLocaleDateString('fa-IR')}
+                                            </span>
                                             </div>
                                             <div className="neo-info-item">
                                                 <span className="neo-info-label">وضعیت:</span>
                                                 <span className={`neo-info-value ${
                                                     receipt.is_verified ? 'neo-receipt-verified' : 'neo-receipt-pending'
                                                 }`}>
-                                                    {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
-                                                </span>
+                                                {receipt.is_verified ? '✅ تایید شده' : '⏳ در انتظار بررسی'}
+                                            </span>
                                             </div>
                                         </div>
-
                                         {renderReceiptPreview(receipt, index)}
                                     </div>
-
                                     <div className="neo-receipt-actions">
                                         <NeoBrutalistButton
                                             text="📥 دانلود"
@@ -1205,7 +1669,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                             onClick={() => handleDownloadReceipt(receipt)}
                                             className="neo-download-receipt-btn"
                                         />
-
                                         {order.status === 'confirmed' && (
                                             <NeoBrutalistButton
                                                 text="🗑️ حذف"
@@ -1219,7 +1682,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 </div>
                             ))}
                         </div>
-
                         <div className="neo-payment-summary">
                             <div className="neo-summary-stats">
                                 <div className="neo-stat-item">
@@ -1229,209 +1691,16 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                                 <div className="neo-stat-item">
                                     <span className="neo-stat-label">تایید شده:</span>
                                     <span className="neo-stat-value">
-                                        {paymentReceipts.filter(r => r.is_verified).length}
-                                    </span>
+                                    {paymentReceipts.filter(r => r.is_verified).length}
+                                </span>
                                 </div>
                                 <div className="neo-stat-item">
                                     <span className="neo-stat-label">در انتظار:</span>
                                     <span className="neo-stat-value">
-                                        {paymentReceipts.filter(r => !r.is_verified).length}
-                                    </span>
+                                    {paymentReceipts.filter(r => !r.is_verified).length}
+                                </span>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </NeoBrutalistCard>
-            )}
-
-            {/* Order Items Table - Enhanced */}
-            <NeoBrutalistCard className="neo-items-card">
-                <div className="neo-card-header">
-                    <h2 className="neo-card-title">اقلام سفارش</h2>
-                    <div className="neo-items-summary">
-                        <span>تعداد کل: {order.items?.length || 0} قلم</span>
-                    </div>
-                </div>
-                <div className="neo-items-table-container">
-                    <table
-                        className="neo-items-table"
-                        ref={tableRef}
-                        data-invoice-type={order.business_invoice_type || 'unofficial'}
-                    >
-                        <thead>
-                        <tr>
-                            <th>نام محصول</th>
-                            <th>تعداد درخواستی</th>
-                            <th>یادداشت شما</th>
-                            <th>قیمت واحد</th>
-                            <th>تعداد نهایی</th>
-                            {order.business_invoice_type === 'official' && (
-                                <>
-                                    <th>نرخ مالیات</th>
-                                    <th>مبلغ مالیات</th>
-                                </>
-                            )}
-                            <th>مبلغ کل</th>
-                            <th>یادداشت مدیر</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {order.items?.map((item, index) => (
-                            <tr key={index}>
-                                <td title={item.product_name} data-pending={!item.product_name}>
-                                    <div className="product-info">
-                                        <div className="product-name">{item.product_name || 'نامشخص'}</div>
-                                        {item.product_code && (
-                                            <div className="product-code" style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                                                کد: {item.product_code}
-                                            </div>
-                                        )}
-                                    </div>
-                                </td>
-                                <td>{formatQuantity(item.requested_quantity)}</td>
-                                <td title={item.customer_notes} data-pending={!item.customer_notes}>
-                                    {truncateText(item.customer_notes) || '-'}
-                                </td>
-                                <td data-pending={!item.quoted_unit_price}>
-                                    {formatPrice(item.quoted_unit_price)}
-                                </td>
-                                <td data-pending={!item.final_quantity}>
-                                    {formatQuantity(item.final_quantity)}
-                                </td>
-
-                                {order.business_invoice_type === 'official' && (
-                                    <>
-                                        <td>
-                                            {item.product_tax_rate ? `${parseFloat(item.product_tax_rate).toFixed(1)}%` : '0%'}
-                                        </td>
-                                        <td>
-                                            {item.quoted_unit_price && item.final_quantity && item.product_tax_rate ?
-                                                formatPrice(calculateItemTax(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
-                                                'در انتظار'
-                                            }
-                                        </td>
-                                    </>
-                                )}
-
-                                <td data-pending={!item.quoted_unit_price || !item.final_quantity}>
-                                    {order.business_invoice_type === 'official' && item.product_tax_rate ?
-                                        formatPrice(calculateItemTotal(item.quoted_unit_price, item.final_quantity, item.product_tax_rate)) :
-                                        calculateTotal(item.quoted_unit_price, item.final_quantity)
-                                    }
-                                </td>
-
-                                <td className="admin-notes" title={item.admin_notes}>
-                                    {item.admin_notes ? (
-                                        <div className="admin-note-content" style={{
-                                            padding: '0.5rem',
-                                            borderRadius: '4px',
-                                            border: '1px solid #f59e0b',
-                                            fontSize: '0.85rem'
-                                        }}>
-                                            {truncateText(item.admin_notes, 50)}
-                                        </div>
-                                    ) : (
-                                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>-</span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Order Total Summary */}
-                {order.quoted_total > 0 && (
-                    <div className="neo-order-total-summary" style={{
-                        marginTop: '1rem',
-                        padding: '1rem',
-                        backgroundColor: '#f9fafb',
-                        borderRadius: '8px',
-                        border: '2px solid #e5e7eb'
-                    }}>
-                        <div className="total-breakdown">
-                            <div className="total-item">
-                                <span className="total-label">مجموع بدون مالیات:</span>
-                                <span className="total-value">{formatPrice(order.quoted_total)}</span>
-                            </div>
-                            {order.business_invoice_type === 'official' && (
-                                <>
-                                    <div className="total-item">
-                                        <span className="total-label">مالیات:</span>
-                                        <span className="total-value">محاسبه می‌شود</span>
-                                    </div>
-                                    <div className="total-item total-final" style={{
-                                        borderTop: '2px solid #374151',
-                                        paddingTop: '0.5rem',
-                                        fontWeight: 'bold',
-                                        fontSize: '1.1rem'
-                                    }}>
-                                        <span className="total-label">مبلغ نهایی:</span>
-                                        <span className="total-value">در فاکتور نهایی</span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </NeoBrutalistCard>
-
-            {/* Customer Approval Section */}
-            {order.status === 'waiting_customer_approval' && (
-                <NeoBrutalistCard className="neo-approval-section">
-                    <h2 className="neo-approval-title">تأیید سفارش و صدور فاکتور</h2>
-                    <p className="neo-phara-text">با تایید این سفارش، فاکتور نهایی صادر خواهد شد و قابل دانلود می‌باشد.</p>
-
-                    <div className="neo-approval-form">
-                        <div className="neo-radio-group">
-                            <label className="neo-radio-label">
-                                <input
-                                    type="radio"
-                                    name="approval"
-                                    value="approve"
-                                    checked={approvalDecision === 'approve'}
-                                    onChange={(e) => setApprovalDecision(e.target.value)}
-                                    className="neo-radio-input"
-                                />
-                                <span className="neo-radio-text">تایید و صدور فاکتور</span>
-                            </label>
-                            <label className="neo-radio-label">
-                                <input
-                                    type="radio"
-                                    name="approval"
-                                    value="reject"
-                                    checked={approvalDecision === 'reject'}
-                                    onChange={(e) => setApprovalDecision(e.target.value)}
-                                    className="neo-radio-input"
-                                />
-                                <span className="neo-radio-text">رد سفارش</span>
-                            </label>
-                        </div>
-
-                        {approvalDecision === 'reject' && (
-                            <div className="neo-rejection-reason">
-                                <NeoBrutalistInput
-                                    type="text"
-                                    placeholder="لطفا دلیل رد را ذکر کنید..."
-                                    value={rejectionReason}
-                                    onChange={(e) => setRejectionReason(e.target.value)}
-                                />
-                            </div>
-                        )}
-
-                        <div className="neo-approval-actions">
-                            <NeoBrutalistButton
-                                text={
-                                    generatingInvoice ? "در حال صدور فاکتور..." :
-                                        submitting ? "در حال ارسال..." :
-                                            "ارسال تصمیم"
-                                }
-                                color="yellow-400"
-                                textColor="black"
-                                onClick={handleApprovalSubmit}
-                                disabled={submitting || generatingInvoice}
-                                className="neo-approval-submit-btn"
-                            />
                         </div>
                     </div>
                 </NeoBrutalistCard>
@@ -1449,23 +1718,20 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
                             text="📤 آپلود رسید پرداخت"
                             color="green-400"
                             textColor="black"
-                            onClick={() => {
-                                console.log('Button clicked, opening modal'); // Debug log
-                                setIsPaymentModalOpen(true);
-                            }}
+                            onClick={() => setIsPaymentModalOpen(true)}
                             className="neo-upload-payment-btn"
                         />
                     </div>
                 </NeoBrutalistCard>
             )}
 
-            {/* Fixed Modal - Make sure all props are correct */}
+            {/* Modals */}
             {isPaymentModalOpen && (
                 <PaymentReceiptUploadModal
                     orderId={orderId}
                     isOpen={isPaymentModalOpen}
                     onClose={() => {
-                        console.log('Closing modal'); // Debug log
+                        console.log('Closing modal');
                         setIsPaymentModalOpen(false);
                     }}
                     onUploadSuccess={handlePaymentUploadSuccess}
@@ -1481,6 +1747,6 @@ const OrderDetailPage = ({ orderId, onOrderUpdated }) => {
             )}
         </div>
     );
-};
+}
 
 export default OrderDetailPage;

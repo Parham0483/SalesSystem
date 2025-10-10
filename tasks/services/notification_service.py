@@ -1252,6 +1252,45 @@ class NotificationService:
             )
             return False
 
+    @staticmethod
+    def notify_admin_item_removed_by_customer(order, removed_item, customer):
+        """Notify admin when customer removes item from pending order"""
+        try:
+            subject = f'محصول حذف شد - سفارش #{order.id}'
+
+            message = f"""
+            مشتری محصولی از سفارش خود حذف کرد:
+
+            سفارش: #{order.id}
+            مشتری: {customer.name}
+            تلفن: {customer.phone}
+
+            محصول حذف شده:
+            - نام: {removed_item.product.name}
+            - کد: {removed_item.product.code if removed_item.product.code else 'ندارد'}
+            - تعداد: {removed_item.requested_quantity}
+
+            تعداد محصولات باقیمانده: {order.items.filter(is_active=True).count()}
+
+            لطفاً در صورت نیاز بررسی کنید.
+            """
+
+            admin_email = settings.ADMIN_EMAIL
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[admin_email],
+                fail_silently=False
+            )
+
+            logger.info(f"Admin notified about item removal from order {order.id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send admin notification for item removal: {str(e)}")
+            return False
+
 
 
 

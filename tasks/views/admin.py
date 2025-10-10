@@ -666,7 +666,6 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         return Response(categories_data)
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
-    """Admin order management"""
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
     serializer_class = OrderDetailSerializer
@@ -674,7 +673,10 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Order.objects.all().select_related(
             'customer', 'assigned_dealer', 'priced_by'
-        ).prefetch_related('items__product').order_by('-created_at')
+        ).prefetch_related(
+            'items__product',
+            'items__pricing_options'  # Add this to prefetch pricing options
+        ).order_by('-created_at')
 
     def list(self, request, *args, **kwargs):
         """List orders with filtering"""

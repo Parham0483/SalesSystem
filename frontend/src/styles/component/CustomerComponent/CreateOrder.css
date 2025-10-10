@@ -1,3 +1,5 @@
+/* Updated CreateOrder.css with smoother transitions and dropdown enhancements */
+
 /* CreateOrder.css - Updated with unified styling */
 
 .neo-create-order {
@@ -347,56 +349,118 @@
 .neo-item-card {
     background-color: #fff;
     position: relative;
+    padding: 1rem !important; /* Reduced padding for smaller cards */
+    transition: transform 0.2s ease, box-shadow 0.2s ease; /* Added smooth transition */
 }
 
+.neo-item-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 8px 8px 0px #000; /* Enhanced hover effect for smoothness */
+}
+
+/* Reduced header margin and padding for compactness */
 .neo-item-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
+    margin-bottom: 1rem; /* Reduced from 1.5rem */
+    padding-bottom: 0.75rem; /* Reduced from 1rem */
     border-bottom: 3px solid #000;
 }
 
 .neo-item-number {
     font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.5rem;
-    letter-spacing: 2px;
+    font-size: 1.25rem; /* Reduced from 1.5rem */
+    letter-spacing: 1px; /* Reduced spacing */
     margin: 0;
     color: #1a1a1a;
     text-transform: uppercase;
 }
 
 .neo-remove-btn {
-    padding: 8px 16px !important;
-    font-size: 12px !important;
+    padding: 6px 12px !important; /* Smaller padding */
+    font-size: 11px !important; /* Smaller font */
     font-weight: bold !important;
     text-transform: uppercase;
+    transition: transform 0.1s ease; /* Smooth button press */
 }
 
+.neo-remove-btn:active {
+    transform: scale(0.98);
+}
+
+/* Adjusted fields for smaller layout */
 .neo-item-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
+    display: grid; /* Changed to grid for better packing */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Responsive columns */
+    gap: 1rem; /* Reduced from 1.5rem */
 }
 
 .neo-field-group {
     display: flex;
     flex-direction: column;
-    min-height: 80px;
+    min-height: 70px; /* Slightly reduced height */
+    position: relative; /* Ensure positioning for dropdown */
 }
 
-/* Ensure consistent dropdown and input sizing */
+/* Smaller dropdown and input sizing with transitions */
 .neo-field-group .neo-brutalist-dropdown-container,
 .neo-field-group .neo-brutalist-input-container {
     width: 100%;
+    transition: box-shadow 0.2s ease;
+}
+
+.neo-field-group:focus-within .neo-brutalist-dropdown-container,
+.neo-field-group:focus-within .neo-brutalist-input-container {
+    box-shadow: 4px 4px 0px #3b82f6;
 }
 
 .neo-field-group .neo-brutalist-dropdown-select,
 .neo-field-group .neo-brutalist-input {
     width: 100% !important;
-    height: 50px !important;
+    height: 40px !important; /* Reduced from 50px */
+    font-size: 0.9rem !important; /* Slightly smaller font */
     box-sizing: border-box;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.neo-field-group .neo-brutalist-dropdown-select:focus,
+.neo-field-group .neo-brutalist-input:focus {
+    border-color: #3b82f6;
+    transform: translateY(-1px);
+}
+
+/* Assuming dropdown menu class - add if needed in component */
+.neo-brutalist-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background-color: #fff;
+    border: 3px solid #000;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100; /* High z-index for menu */
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.2s ease, transform 0.2s ease; /* Smooth appearance */
+    pointer-events: none;
+}
+
+.neo-brutalist-dropdown-container.open .neo-brutalist-dropdown-menu {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.neo-brutalist-dropdown-menu option {
+    padding: 0.5rem 1rem;
+    transition: background-color 0.1s ease;
+}
+
+.neo-brutalist-dropdown-menu option:hover {
+    background-color: #f3f4f6;
 }
 
 /* Comment Section */
@@ -428,6 +492,12 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     min-width: 200px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.neo-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 8px 8px 0px #000;
 }
 
 .neo-submit-btn:disabled {
@@ -512,6 +582,22 @@
         gap: 0.5rem;
         align-items: flex-start;
     }
+
+    /* Further reduce card sizes for mobile */
+    .neo-item-card {
+        padding: 0.75rem !important;
+    }
+
+    .neo-item-fields {
+        grid-template-columns: 1fr; /* Stack fields vertically on small screens */
+        gap: 0.75rem;
+    }
+
+    .neo-field-group .neo-brutalist-dropdown-select,
+    .neo-field-group .neo-brutalist-input {
+        height: 38px !important;
+        font-size: 0.85rem !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -561,6 +647,25 @@
 
     .neo-radio-text small {
         font-size: 0.8rem;
+    }
+
+    /* Even smaller adjustments */
+    .neo-item-card {
+        padding: 0.5rem !important;
+    }
+
+    .neo-item-header {
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .neo-item-number {
+        font-size: 1.1rem;
+    }
+
+    .neo-remove-btn {
+        padding: 4px 8px !important;
+        font-size: 10px !important;
     }
 }
 
@@ -953,5 +1058,16 @@
 
     .neo-field-error {
         animation: none;
+    }
+
+    .neo-item-card,
+    .neo-item-card:hover,
+    .neo-remove-btn,
+    .neo-submit-btn,
+    .neo-submit-btn:hover,
+    .neo-field-group .neo-brutalist-dropdown-select,
+    .neo-field-group .neo-brutalist-input,
+    .neo-brutalist-dropdown-menu {
+        transition: none;
     }
 }
