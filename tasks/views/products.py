@@ -445,8 +445,7 @@ class ProductViewSet(viewsets.ModelViewSet):
                 'product_id': product.id,
                 'product_name': product.name,
                 'old_tax_rate': float(old_tax_rate),
-                'new_tax_rate': new_tax_rate,
-                'price_with_tax': product.get_price_with_tax()
+                'new_tax_rate': new_tax_rate
             })
 
         except ValueError:

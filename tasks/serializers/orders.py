@@ -4,7 +4,7 @@ from django.utils import timezone
 from decimal import Decimal
 
 from mysite import settings
-from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer, OrderPaymentReceipt
+from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer, OrderPaymentReceipt, OrderItemPricingOption
 from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
 class OrderItemCreateSerializer(serializers.Serializer):
@@ -102,28 +102,30 @@ class OrderCreateSerializer(serializers.Serializer):
         customer = self.context['request'].user
         invoice_type = validated_data.get('business_invoice_type')
 
-        # Update customer info if provided
+        # Update customer info if provided (BEFORE creating order)
         if invoice_type == 'official' and customer_info_data:
             # Use the serializer to validate the incoming data
-            customer_serializer = CustomerInvoiceInfoUpdateSerializer(instance=customer, data=customer_info_data,
-                                                                      partial=True)
+            customer_serializer = CustomerInvoiceInfoUpdateSerializer(
+                instance=customer,
+                data=customer_info_data,
+                partial=True
+            )
             customer_serializer.is_valid(raise_exception=True)
 
-            # --- FIX: Manually update the customer instead of calling .save() on the serializer ---
+            # Manually update the customer instead of calling .save() on the serializer
             for field, value in customer_serializer.validated_data.items():
                 setattr(customer, field, value)
             customer.save()
-            # --- END FIX ---
 
         # Validate customer for official invoice AFTER potential update
-        if validated_data.get('business_invoice_type') == 'official':
+        if invoice_type == 'official':
             is_valid, missing_fields = customer.validate_for_official_invoice()
             if not is_valid:
                 raise serializers.ValidationError({
                     'customer_info': f"Required fields are incomplete: {', '.join(missing_fields)}"
                 })
 
-        # Create the Order instance
+        # Create the Order instance (ONLY ONCE)
         order = Order.objects.create(customer=customer, **validated_data)
 
         # Create OrderItem instances
@@ -132,6 +134,7 @@ class OrderCreateSerializer(serializers.Serializer):
                 order=order,
                 product_id=item_data['product_id'],
                 requested_quantity=item_data['requested_quantity'],
+                final_quantity=item_data['requested_quantity'],  # Initialize final_quantity
                 customer_notes=item_data.get('customer_notes', '')
             )
 
@@ -185,34 +188,149 @@ class OrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class OrderDetailSerializer(OrderSerializer):
-    """Detailed order serializer with items"""
+class OrderItemPricingOptionSerializer(serializers.ModelSerializer):
+    total_price = serializers.SerializerMethodField()
+    tax_amount = serializers.SerializerMethodField()
+    total_with_tax = serializers.SerializerMethodField()
+    term_display = serializers.SerializerMethodField()
 
-    items = OrderItemSerializer(many=True, read_only=True)
+    class Meta:
+        model = OrderItemPricingOption
+        fields = ['id', 'payment_term', 'unit_price', 'discount_percentage',
+                  'custom_term_label', 'admin_notes', 'total_price',
+                  'tax_amount', 'total_with_tax', 'term_display', 'display_order',
+                  'is_selected']
 
-    # Customer details for official invoices
-    customer_details = serializers.SerializerMethodField()
+    def get_total_price(self, obj):
+        return float(obj.total_price)
 
-    class Meta(OrderSerializer.Meta):
-        fields = OrderSerializer.Meta.fields + ['items', 'customer_details']
+    def get_tax_amount(self, obj):
+        return float(obj.tax_amount)
 
-    def get_customer_details(self, obj):
-        """Get customer details needed for invoice generation"""
-        customer = obj.customer
-        return {
-            'name': customer.name,
-            'phone': customer.phone,
-            'company_name': customer.company_name,
-            'national_id': customer.national_id,
-            'economic_id': customer.economic_id,
-            'complete_address': customer.complete_address,
-            'postal_code': customer.postal_code,
-            'city': customer.city,
-            'province': customer.province,
-            'business_type': customer.business_type,
-            'full_address': customer.get_full_address(),
-            'display_name': customer.get_display_name(),
-        }
+    def get_total_with_tax(self, obj):
+        return float(obj.total_with_tax)
+
+    def get_term_display(self, obj):
+        return obj.term_display
+
+
+class OrderItemPricingOptionCreateSerializer(serializers.Serializer):
+    PAYMENT_TERM_CHOICES = [
+        ('instant', 'نقدی'),
+        ('1_month', '1 ماهه'),
+        ('2_month', '2 ماهه'),
+        ('3_month', '3 ماهه'),
+        ('custom', 'سفارشی'),
+    ]
+    payment_term = serializers.ChoiceField(choices=PAYMENT_TERM_CHOICES)
+    unit_price = serializers.DecimalField(max_digits=18, decimal_places=2)
+    discount_percentage = serializers.DecimalField(max_digits=5, decimal_places=2, default=0)
+    custom_term_label = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    admin_notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        if data.get('payment_term') == 'custom' and not data.get('custom_term_label'):
+            raise serializers.ValidationError('Custom term requires custom_term_label')
+        return data
+
+
+class OrderItemAdminPricingSerializer(serializers.Serializer):
+    """Admin provides pricing for an item with multiple options"""
+    item_id = serializers.IntegerField()
+    final_quantity = serializers.IntegerField(min_value=1)
+    pricing_options = serializers.ListField(
+        child=OrderItemPricingOptionCreateSerializer(),
+        min_length=2,  # At least 2 pricing options required
+        max_length=10  # Maximum 10 options
+    )
+    admin_notes = serializers.CharField(required=False, allow_blank=True)
+
+class OrderItemAdminMultiplePricingItemSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField()
+    final_quantity = serializers.IntegerField(min_value=1)
+    admin_notes = serializers.CharField(required=False, allow_blank=True)
+    pricing_options = OrderItemPricingOptionCreateSerializer(many=True, min_length=2, max_length=10)
+
+    def validate_pricing_options(self, value):
+        for opt in value:
+            if 'payment_term' not in opt or 'unit_price' not in opt:
+                raise serializers.ValidationError('Each pricing option must have payment_term and unit_price')
+            if opt.get('payment_term') == 'custom' and 'custom_term_label' not in opt:
+                raise serializers.ValidationError('Custom term requires custom_term_label')
+        return value
+
+class OrderAdminMultiplePricingSerializer(serializers.Serializer):
+    items = OrderItemAdminMultiplePricingItemSerializer(many=True, min_length=1)
+    admin_comment = serializers.CharField(required=False, allow_blank=True)
+    notify_customer = serializers.BooleanField(default=False)
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        instance.admin_comment = validated_data.get('admin_comment', instance.admin_comment)
+        instance.save(update_fields=['admin_comment'])
+
+        for item_data in validated_data['items']:
+            item = OrderItem.objects.get(id=item_data['item_id'], order=instance)
+            item.final_quantity = item_data['final_quantity']
+            item.admin_notes = item_data.get('admin_notes', '')
+            item.save(update_fields=['final_quantity', 'admin_notes'])
+
+            item.pricing_options.all().delete()
+            for opt_data in item_data['pricing_options']:
+                OrderItemPricingOption.objects.create(
+                    order_item=item,
+                    payment_term=opt_data['payment_term'],
+                    custom_term_label=opt_data.get('custom_term_label'),
+                    unit_price=opt_data['unit_price'],
+                    discount_percentage=opt_data.get('discount_percentage', 0),
+                    admin_notes=opt_data.get('admin_notes', '')
+                )
+
+        total = Decimal('0')
+        for item in instance.items.all():
+            if item.pricing_options.exists():
+                first_opt = item.pricing_options.first()
+                item_total = first_opt.unit_price * item.final_quantity * (1 - first_opt.discount_percentage / 100)
+                total += item_total
+        instance.quoted_total = total
+        instance.save(update_fields=['quoted_total'])
+        return instance
+
+
+class CustomerItemSelectionSerializer(serializers.Serializer):
+    """Customer selects pricing option for an item"""
+    item_id = serializers.IntegerField()
+    action = serializers.ChoiceField(choices=['select_option', 'reject'])
+    selected_option_id = serializers.IntegerField(required=False)
+    rejection_reason = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, data):
+        if data['action'] == 'select_option' and not data.get('selected_option_id'):
+            raise serializers.ValidationError({
+                'selected_option_id': 'Option ID required when selecting'
+            })
+        if data['action'] == 'reject' and not data.get('rejection_reason'):
+            raise serializers.ValidationError({
+                'rejection_reason': 'Reason required when rejecting'
+            })
+        return data
+
+
+class OrderItemDetailSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.code', read_only=True)
+    pricing_options = OrderItemPricingOptionSerializer(many=True, read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'id', 'product', 'product_name', 'product_code', 'requested_quantity', 'quoted_unit_price',
+            'final_quantity', 'customer_notes', 'admin_notes', 'product_tax_rate', 'unit_tax_amount',
+            'total_tax_amount', 'subtotal', 'total_with_tax', 'pricing_options','is_active'
+        ]
+
+
 
 class OrderItemAdminUpdateSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -446,67 +564,28 @@ class OrderAdminUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class OrderDetailSerializer(serializers.ModelSerializer):
+    items = OrderItemDetailSerializer(many=True, read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_phone = serializers.CharField(source='customer.phone', read_only=True)
-
-    # ENHANCED: Pricing information
-    priced_by_name = serializers.CharField(source='priced_by.name', read_only=True)
-    priced_by_email = serializers.CharField(source='priced_by.email', read_only=True)
-
-    # ENHANCED: Dealer fields with commission details
-    assigned_dealer_name = serializers.CharField(source='assigned_dealer.name', read_only=True)
-    assigned_dealer_email = serializers.CharField(source='assigned_dealer.email', read_only=True)
-    assigned_dealer_id = serializers.IntegerField(source='assigned_dealer.id', read_only=True)
-    assigned_dealer_code = serializers.CharField(source='assigned_dealer.dealer_code', read_only=True)
-
-    # Commission information
-    dealer_commission_amount = serializers.ReadOnlyField()
-    effective_commission_rate = serializers.ReadOnlyField()
-    has_custom_commission = serializers.SerializerMethodField()
-    dealer_default_rate = serializers.SerializerMethodField()
-
-    has_dealer = serializers.ReadOnlyField()
-
-    items = OrderItemAdminUpdateSerializer(many=True)
-
-    # Invoice fields
-    business_invoice_type_display = serializers.CharField(source='get_business_invoice_type_display', read_only=True)
-    is_official_invoice = serializers.BooleanField(read_only=True)
-    invoice_id = serializers.SerializerMethodField()
-    invoice_number = serializers.SerializerMethodField()
-    invoice_date = serializers.SerializerMethodField()
-
-    has_payment_receipts = serializers.BooleanField(read_only=True)
-    payment_receipts_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
             'id', 'customer', 'customer_name', 'customer_phone', 'status', 'customer_comment',
-            'admin_comment', 'pricing_date', 'quoted_total', 'items',
-            'created_at', 'updated_at', 'completion_date', 'completed_by',
-            'customer_response_date', 'customer_rejection_reason',
-
-            # ENHANCED: Pricing info
-            'priced_by_name', 'priced_by_email',
-
-            # ENHANCED: Dealer fields with commission
-            'assigned_dealer_name', 'assigned_dealer_email', 'assigned_dealer_id',
-            'assigned_dealer_code', 'dealer_assigned_at', 'dealer_notes',
-            'dealer_commission_amount', 'effective_commission_rate',
-            'has_custom_commission', 'dealer_default_rate',
-            'custom_commission_rate', 'has_dealer',
-
-            # Invoice
-            'invoice_id', 'invoice_number', 'invoice_date',
-            'business_invoice_type', 'business_invoice_type_display', 'is_official_invoice',
-
-            # Payment fields
-            'payment_receipt', 'payment_receipt_uploaded_at',
-            'payment_verified', 'payment_verified_at', 'payment_notes',
-            'has_payment_receipts', 'payment_receipts_count',
+            'admin_comment', 'pricing_date', 'quoted_total', 'items', 'created_at', 'updated_at',
+            'completion_date', 'completed_by', 'customer_response_date', 'customer_rejection_reason',
+            'priced_by_name', 'priced_by_email', 'dealer_assigned_at', 'dealer_notes', 'dealer_commission_amount',
+            'effective_commission_rate', 'has_custom_commission', 'dealer_default_rate', 'custom_commission_rate',
+            'has_dealer', 'invoice_id', 'invoice_number', 'invoice_date', 'business_invoice_type',
+            'business_invoice_type_display', 'payment_receipt', 'payment_receipt_uploaded_at', 'payment_verified',
+            'payment_verified_at', 'payment_notes', 'has_payment_receipts', 'payment_receipts_count'
         ]
         read_only_fields = fields
+
+    def get_items(self, obj):
+        """Return only active items"""
+        active_items = obj.items.filter(is_active=True)
+        return OrderItemDetailSerializer(active_items, many=True).data
 
     def get_has_custom_commission(self, obj):
         """Check if this order has a custom commission rate"""

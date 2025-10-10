@@ -1164,3 +1164,351 @@
     text-align: right;
     direction: rtl;
 }
+
+/* ===================================
+   MULTIPLE PRICING TABLE STYLES
+   Replace the old pricing styles in AdminOrderDetail.css with these
+   =================================== */
+
+/* Main Card */
+.admin-multiple-pricing-card {
+    margin-bottom: 2rem;
+}
+
+.admin-multiple-pricing-card .admin-pricing-form {
+    padding: 1.5rem;
+}
+
+.admin-multiple-pricing-card .admin-comment-section {
+    margin-bottom: 2rem;
+}
+
+/* Multi-Pricing Table Container */
+.multi-pricing-table-container {
+    overflow-x: auto;
+    margin-bottom: 2rem;
+}
+
+.multi-pricing-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 3px solid #000;
+    background-color: #fff;
+    font-family: 'Tahoma', sans-serif;
+    direction: rtl;
+}
+
+.multi-pricing-table th {
+    background-color: #000;
+    color: #fff;
+    padding: 0.75rem;
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border: 2px solid #666;
+}
+
+.multi-pricing-table thead tr:first-child th {
+    font-size: 1rem;
+}
+
+.pricing-options-header {
+    background-color: #f59e0b !important;
+    color: #000 !important;
+    font-size: 1.1rem !important;
+}
+
+.payment-term-header {
+    background-color: #333 !important;
+    font-size: 0.85rem !important;
+    min-width: 140px;
+}
+
+.multi-pricing-table td {
+    padding: 0.75rem;
+    text-align: center;
+    border: 2px solid #ddd;
+    vertical-align: middle;
+}
+
+.multi-pricing-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.multi-pricing-table tbody tr:hover {
+    background-color: #e3f2fd;
+}
+
+/* Table Cell Styles */
+.product-name-cell {
+    text-align: right !important;
+    font-weight: bold;
+    max-width: 200px;
+    word-wrap: break-word;
+}
+
+.quantity-cell {
+    font-weight: bold;
+    color: #666;
+}
+
+.final-quantity-cell input {
+    width: 80px;
+    text-align: center;
+}
+
+/* Input fields styling */
+.quantity-input-field {
+    width: 80px;
+    padding: 0.5rem;
+    border: 2px solid #000;
+    box-shadow: 2px 2px 0 #000;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.9rem;
+    text-align: center;
+    background-color: #fff;
+}
+
+.quantity-input-field:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+/* Pricing Option Cell */
+.pricing-option-cell {
+    background-color: #f8fafc;
+    min-width: 140px;
+    padding: 0.5rem !important;
+}
+
+.pricing-option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.pricing-radio-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    background-color: #e2e8f0;
+    border-radius: 3px;
+}
+
+.pricing-radio-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.custom-label-input,
+.price-input,
+.discount-input {
+    width: 100%;
+    padding: 0.4rem;
+    border: 2px solid #000;
+    box-shadow: 2px 2px 0 #000;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.85rem;
+    text-align: center;
+    background-color: #fff;
+}
+
+.custom-label-input:focus,
+.price-input:focus,
+.discount-input:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+.option-total {
+    padding: 0.4rem;
+    background-color: #d1fae5;
+    border: 2px solid #059669;
+    font-weight: bold;
+    color: #047857;
+    font-size: 0.85rem;
+    border-radius: 3px;
+    text-align: center;
+}
+
+/* Notes Cell */
+.notes-cell {
+    min-width: 150px;
+}
+
+.item-notes-input {
+    width: 100%;
+    min-width: 140px;
+    padding: 0.5rem;
+    border: 2px solid #000;
+    box-shadow: 2px 2px 0 #000;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.85rem;
+    text-align: right;
+    direction: rtl;
+    resize: vertical;
+}
+
+.item-notes-input:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 1px;
+}
+
+/* Action Cell */
+.action-cell {
+    min-width: 60px;
+}
+
+.remove-item-btn {
+    padding: 0.5rem;
+    border: 2px solid #dc2626;
+    background-color: #fee2e2;
+    color: #dc2626;
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 2px 2px 0 #dc2626;
+    border-radius: 4px;
+}
+
+.remove-item-btn:hover {
+    background-color: #fecaca;
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #dc2626;
+}
+
+/* Info Box */
+.pricing-info-box {
+    margin-top: 1rem;
+    padding: 1rem 1.5rem;
+    background-color: #fef3c7;
+    border: 3px solid #f59e0b;
+    box-shadow: 4px 4px 0 #f59e0b;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 0.9rem;
+    direction: rtl;
+    text-align: right;
+}
+
+.pricing-info-box strong {
+    display: block;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    color: #92400e;
+}
+
+.pricing-info-box ul {
+    margin: 0;
+    padding-right: 1.5rem;
+    list-style-type: disc;
+}
+
+.pricing-info-box li {
+    margin-bottom: 0.5rem;
+    color: #78350f;
+    line-height: 1.5;
+}
+
+/* Mobile Responsive */
+@media (max-width: 1024px) {
+    .multi-pricing-table {
+        font-size: 0.8rem;
+    }
+
+    .multi-pricing-table th,
+    .multi-pricing-table td {
+        padding: 0.5rem;
+    }
+
+    .payment-term-header {
+        min-width: 120px;
+    }
+
+    .pricing-option-cell {
+        min-width: 120px;
+    }
+}
+
+@media (max-width: 768px) {
+    .multi-pricing-table-container {
+        border: none;
+    }
+
+    .multi-pricing-table,
+    .multi-pricing-table thead,
+    .multi-pricing-table tbody,
+    .multi-pricing-table tr,
+    .multi-pricing-table th,
+    .multi-pricing-table td {
+        display: block;
+    }
+
+    .multi-pricing-table thead {
+        display: none;
+    }
+
+    .multi-pricing-table tr {
+        border: 3px solid #000;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        box-shadow: 4px 4px 0 #000;
+    }
+
+    .multi-pricing-table td {
+        border: none;
+        border-bottom: 1px solid #ddd;
+        text-align: right !important;
+        padding: 0.75rem 0.5rem;
+        position: relative;
+        padding-right: 45%;
+    }
+
+    .multi-pricing-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        right: 0.5rem;
+        width: 40%;
+        font-weight: bold;
+        color: #666;
+        text-align: right;
+    }
+
+    .multi-pricing-table td:last-child {
+        border-bottom: none;
+    }
+}
+
+.option-total {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 2px solid #e5e7eb;
+}
+
+.option-total .total-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.option-total .total-value {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #1e293b;
+}
+
+/* Highlight official invoice totals */
+.admin-order-detail[data-invoice-type="official"] .option-total .total-value {
+    color: #dc2626;
+}
+
+.option-total .tax-info {
+    font-style: italic;
+}

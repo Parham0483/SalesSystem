@@ -41,7 +41,6 @@ const AdminProductsPage = () => {
         description: '',
         category: null,
         origin: '',
-        base_price: 0,
         tax_price: 10.00,
         stock: 0,
         is_active: true,
@@ -1108,7 +1107,7 @@ const AdminProductsPage = () => {
                                 <div className="admin-products-detail-row">
                                     <span className="admin-products-detail-label">قیمت پایه:</span>
                                     <span className="admin-products-detail-value admin-products-price">
-                                        {product.base_price.toLocaleString('fa-IR')} ریال
+                                        {product.toLocaleString('fa-IR')} ریال
                                     </span>
                                 </div>
                                 <div className="admin-products-detail-row">

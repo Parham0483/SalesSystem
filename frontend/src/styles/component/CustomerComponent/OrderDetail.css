@@ -1457,4 +1457,267 @@
     }
 }
 
+/* Customer Pricing Selection Styles */
+.neo-pricing-selection-card {
+    border-left: 6px solid #f59e0b !important;
+}
+
+.neo-pricing-info-box {
+    padding: 1rem 1.5rem;
+    background-color: #fef3c7;
+    border: 3px solid #f59e0b;
+    margin: 1.5rem;
+    border-radius: 8px;
+    font-family: 'Tahoma', sans-serif;
+}
+
+.neo-pricing-table-wrapper {
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+.neo-pricing-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 3px solid #000;
+    background-color: #fff;
+    direction: rtl;
+}
+
+.neo-pricing-table th {
+    background-color: #000;
+    color: #fff;
+    padding: 1rem;
+    text-align: center;
+    font-weight: bold;
+    border-left: 2px solid #666;
+}
+
+.neo-pricing-table th:last-child {
+    border-left: none;
+}
+
+.neo-pricing-table td {
+    padding: 1rem;
+    border-bottom: 2px solid #000;
+    border-left: 2px solid #ddd;
+    vertical-align: top;
+}
+
+.neo-pricing-table td:last-child {
+    border-left: none;
+}
+
+.neo-pricing-table tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.product-cell {
+    text-align: right;
+    min-width: 200px;
+}
+
+.quantity-cell {
+    text-align: center;
+    font-weight: bold;
+    color: #059669;
+    min-width: 100px;
+}
+
+.notes-cell {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+    min-width: 150px;
+}
+
+.options-cell {
+    background-color: #f8f9fa;
+    padding: 0.5rem !important;
+}
+
+.pricing-options-grid {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    min-width: 400px;
+}
+
+.price-option-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border: 3px solid #d1d5db;
+    background-color: #fff;
+    cursor: pointer;
+    min-width: 180px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.price-option-card:hover {
+    border-color: #f59e0b;
+    box-shadow: 2px 2px #f59e0b;
+}
+
+.price-option-card.selected {
+    border-color: #059669;
+    background-color: #ecfdf5;
+    box-shadow: 4px 4px #059669;
+}
+
+.price-radio {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    align-self: center;
+}
+
+.option-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.option-term {
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #1a1a1a;
+}
+
+.discount-badge {
+    padding: 0.25rem 0.5rem;
+    background-color: #fef3c7;
+    border: 2px solid #f59e0b;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border-radius: 4px;
+    color: #92400e;
+}
+
+.option-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.price-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+
+.price-line span:first-child {
+    color: #666;
+}
+
+.price-line span:last-child {
+    font-weight: bold;
+}
+
+.price-line.total-line {
+    padding-top: 0.5rem;
+    border-top: 2px solid #e5e7eb;
+    margin-top: 0.25rem;
+}
+
+.total-price {
+    color: #059669 !important;
+    font-size: 1rem !important;
+}
+
+.neo-order-summary {
+    margin: 1.5rem;
+    padding: 1.5rem;
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 6px 6px #000;
+}
+
+.neo-order-summary h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+    border-bottom: 2px solid #000;
+    padding-bottom: 0.5rem;
+}
+
+.summary-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.summary-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.1rem;
+}
+
+.summary-line span:first-child {
+    color: #666;
+    font-weight: 600;
+}
+
+.summary-line span:last-child {
+    font-weight: bold;
+}
+
+.summary-line.final-total {
+    padding-top: 0.75rem;
+    border-top: 2px solid #000;
+    margin-top: 0.5rem;
+    font-size: 1.25rem;
+}
+
+.summary-line.final-total span:last-child {
+    color: #dc2626;
+}
+
+.neo-submit-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+}
+
+.submit-hint {
+    color: #f59e0b;
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .neo-pricing-table-wrapper {
+        padding: 0.5rem;
+        overflow-x: auto;
+    }
+
+    .pricing-options-grid {
+        flex-direction: column;
+        min-width: auto;
+    }
+
+    .price-option-card {
+        min-width: auto;
+        width: 100%;
+    }
+
+    .neo-pricing-table {
+        font-size: 0.85rem;
+    }
+
+    .neo-pricing-table th,
+    .neo-pricing-table td {
+        padding: 0.5rem;
+    }
+}
+
 
