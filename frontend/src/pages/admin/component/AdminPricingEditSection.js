@@ -118,8 +118,8 @@ const AdminPricingEditSection = ({ order, onUpdate, onOrderListRefresh, onMajorS
 
             const enabledOptions = PAYMENT_TERM_OPTIONS.filter(opt => item[opt.value].enabled);
 
-            if (enabledOptions.length < 2) {
-                setError(`حداقل 2 گزینه قیمت برای ${item.product_name} الزامی است`);
+            if (enabledOptions.length < 1) {
+                setError(`لطفاً حداقل یک گزینه قیمت برای ${item.product_name} انتخاب کنید`);
                 return false;
             }
 
@@ -272,9 +272,6 @@ const AdminPricingEditSection = ({ order, onUpdate, onOrderListRefresh, onMajorS
         <NeoBrutalistCard className="admin-multiple-pricing-card" style={{ borderLeft: '6px solid #3b82f6' }}>
             <div className="admin-card-header">
                 <h2 className="admin-card-title">{readOnly || !editing ? 'نمایش قیمت‌گذاری چندگانه' : 'ویرایش قیمت‌گذاری چندگانه'}</h2>
-                <div style={{ fontSize: '0.9rem', color: '#666', fontFamily: 'Tahoma, sans-serif' }}>
-                    حداقل 2 و حداکثر 5 گزینه قیمت برای هر محصول
-                </div>
             </div>
 
             {error && (
@@ -733,7 +730,7 @@ const AdminPricingEditSection = ({ order, onUpdate, onOrderListRefresh, onMajorS
                 <div className="pricing-info-box">
                     <strong>💡 راهنما:</strong>
                     <ul>
-                        <li>{editing && !readOnly ? 'گزینه‌های موجود را ویرایش کنید یا با تیک "فعال" گزینه‌های جدید اضافه کنید (حداقل 2)' : 'فقط گزینه‌های انتخاب‌شده نمایش داده می‌شوند'}</li>
+                        <li>{editing && !readOnly ? 'گزینه‌های موجود را ویرایش کنید یا با تیک "فعال" گزینه‌های جدید اضافه کنید (حداقل 1)' : 'فقط گزینه‌های انتخاب‌شده نمایش داده می‌شوند'}</li>
                         <li>{editing && !readOnly ? 'برای حذف گزینه، تیک "فعال" را بردارید' : 'برای ویرایش، روی دکمه ویرایش کلیک کنید'}</li>
                         <li>گزینه‌های با پس‌زمینه آبی = انتخاب مشتری</li>
                         <li>محصولات با پس‌زمینه قرمز = حذف شده توسط مشتری</li>

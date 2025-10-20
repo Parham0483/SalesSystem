@@ -208,7 +208,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['POST'], url_path='submit-multiple-pricing')
     def submit_multiple_pricing(self, request, pk=None):
-        """Admin submits pricing with multiple options per item"""
+        """Admin submits pricing with one or more options per item"""
         if not request.user.is_staff:
             return Response({
                 'error': 'Permission denied. Admin access required.'
@@ -217,25 +217,35 @@ class OrderViewSet(viewsets.ModelViewSet):
         try:
             order = self.get_object()
 
-            if order.status != 'pending_pricing':
+            logger.info(f"🔍 Submitting pricing for Order #{order.id}, current status: {order.status}")
+
+            if order.status not in ['pending_pricing', 'waiting_customer_approval']:
                 return Response({
-                    'error': f'Cannot price order with status: {order.status}'
+                    'error': f'Cannot price order with status: {order.status}',
+                    'current_status': order.status
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             serializer = OrderAdminMultiplePricingSerializer(data=request.data)
             if not serializer.is_valid():
+                logger.error(f"❌ Validation failed: {serializer.errors}")
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
             items_data = serializer.validated_data['items']
             admin_comment = serializer.validated_data.get('admin_comment', '')
+            notify_customer = serializer.validated_data.get('notify_customer', True)
+
+            logger.info(f"📊 Processing {len(items_data)} items for pricing submission")
 
             with transaction.atomic():
+                total_options_count = 0
+
                 for item_data in items_data:
                     item_id = item_data['item_id']
 
                     try:
                         item = order.items.get(id=item_id, is_active=True)
                     except OrderItem.DoesNotExist:
+                        logger.warning(f"⚠️ Item {item_id} not found or inactive, skipping")
                         continue
 
                     # Update item quantity and notes
@@ -257,36 +267,67 @@ class OrderViewSet(viewsets.ModelViewSet):
                             admin_notes=option_data.get('admin_notes', ''),
                             display_order=option_data.get('display_order', idx)
                         )
+                        total_options_count += 1
+                        logger.info(
+                            f"✅ Created pricing option: {option_data['payment_term']} @ {option_data['unit_price']}")
 
                     item.save()
+                    logger.info(f"💾 Saved item {item_id} with {len(item_data['pricing_options'])} pricing options")
 
-                # Update order
+                # Calculate total based on first pricing option for each item
+                total = Decimal('0.00')
+                for item in order.items.filter(is_active=True):
+                    first_option = item.pricing_options.order_by('display_order').first()
+                    if first_option:
+                        total += first_option.total_price
+                        logger.info(f"💰 Item {item.id} contributes {first_option.total_price} to total")
+
+                logger.info(f"💵 Calculated total: {total}")
+
+                # CRITICAL: Update order and change status
                 order.status = 'waiting_customer_approval'
                 order.pricing_date = timezone.now()
                 order.priced_by = request.user
+                order.quoted_total = total
+
                 if admin_comment:
                     order.admin_comment = admin_comment
+
                 order.save()
+                logger.info(f"💾 Order saved - Status: {order.status}, Total: {order.quoted_total}")
 
                 # Create log
                 OrderLog.objects.create(
                     order=order,
                     action='pricing_submitted',
-                    description=f"Pricing with multiple options submitted by {request.user.name}",
+                    description=f"Pricing submitted by {request.user.name} with {total_options_count} pricing options - Status changed to waiting_customer_approval",
                     performed_by=request.user
                 )
 
             # Send notification
-            dual_result = NotificationService.send_dual_notification(
-                order=order,
-                notification_type='pricing_ready'
-            )
+            dual_result = {'email': {'sent': False}, 'sms': {'sent': False}}
+            if notify_customer:
+                try:
+                    dual_result = NotificationService.send_dual_notification(
+                        order=order,
+                        notification_type='pricing_ready'
+                    )
+                    logger.info(
+                        f"📧 Notifications sent - Email: {dual_result['email']['sent']}, SMS: {dual_result['sms']['sent']}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send notifications: {str(e)}")
 
-            logger.info(f"Pricing with multiple options submitted for Order #{order.id}")
+            logger.info(f"✅ Pricing submitted successfully for Order #{order.id}")
 
             return Response({
-                'message': 'Pricing submitted successfully with multiple options',
+                'message': 'Pricing submitted successfully',
                 'order': OrderDetailSerializer(order).data,
+                'summary': {
+                    'total_options_created': total_options_count,
+                    'items_priced': len(items_data),
+                    'new_status': order.status,
+                    'total_amount': float(order.quoted_total)
+                },
                 'notifications': {
                     'email_sent': dual_result['email']['sent'],
                     'sms_sent': dual_result['sms']['sent']
@@ -294,10 +335,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error submitting multiple pricing: {str(e)}")
+            logger.error(f"❌ Pricing submission failed for Order #{pk}: {str(e)}")
+            logger.exception("Full traceback:")
             return Response({
                 'error': f'Failed to submit pricing: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @action(detail=True, methods=['POST'], url_path='customer-select-option')
     def customer_select_option(self, request, pk=None):
@@ -2225,18 +2268,186 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['POST'], url_path='update-multiple-pricing')
-
+    @action(detail=True, methods=['POST'], url_path='update-multiple-pricing')
     def update_multiple_pricing(self, request, pk=None):
-        order = self.get_object()
-        if order.status not in ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded']:
-            return Response({'error': 'Cannot update pricing in this status'}, status=400)
-        serializer = OrderAdminMultiplePricingSerializer(order, data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            if request.data.get('notify_customer'):
-                NotificationService.send_dual_notification(order, 'pricing_updated')
-            return Response({'status': 'pricing updated'})
-        return Response(serializer.errors, status=400)
+        """Admin updates pricing with one or more options per item"""
+        if not request.user.is_staff:
+            return Response({
+                'error': 'Permission denied. Admin access required.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            order = self.get_object()
+
+            logger.info(f"🔍 Updating pricing for Order #{order.id}, current status: {order.status}")
+
+            # Allow pricing updates for these statuses
+            allowed_statuses = ['pending_pricing', 'waiting_customer_approval', 'confirmed', 'payment_uploaded']
+            if order.status not in allowed_statuses:
+                return Response({
+                    'error': f'Cannot update pricing for order with status: {order.status}',
+                    'current_status': order.status,
+                    'allowed_statuses': allowed_statuses
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate request data
+            serializer = OrderAdminMultiplePricingSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"❌ Validation failed: {serializer.errors}")
+                return Response({
+                    'error': 'Invalid data',
+                    'details': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            items_data = serializer.validated_data['items']
+            admin_comment = serializer.validated_data.get('admin_comment', '')
+            notify_customer = serializer.validated_data.get('notify_customer', False)
+
+            # Store old values for comparison
+            old_total = order.quoted_total
+            old_status = order.status
+
+            logger.info(f"📊 Processing {len(items_data)} items for pricing update")
+
+            with transaction.atomic():
+                updated_items_count = 0
+                total_options_count = 0
+
+                for item_data in items_data:
+                    item_id = item_data['item_id']
+
+                    try:
+                        item = order.items.get(id=item_id, is_active=True)
+                    except OrderItem.DoesNotExist:
+                        logger.warning(f"⚠️ Item {item_id} not found or inactive, skipping")
+                        continue
+
+                    # Update item
+                    item.final_quantity = item_data['final_quantity']
+                    item.admin_notes = item_data.get('admin_notes', '')
+                    item.item_status = 'priced'
+
+                    # Clear existing pricing options
+                    old_options_count = item.pricing_options.count()
+                    item.pricing_options.all().delete()
+                    logger.info(f"🗑️ Deleted {old_options_count} old pricing options for item {item_id}")
+
+                    # Create new pricing options
+                    for idx, option_data in enumerate(item_data['pricing_options']):
+                        option = OrderItemPricingOption.objects.create(
+                            order_item=item,
+                            payment_term=option_data['payment_term'],
+                            custom_term_label=option_data.get('custom_term_label', ''),
+                            unit_price=option_data['unit_price'],
+                            discount_percentage=option_data.get('discount_percentage', 0),
+                            admin_notes=option_data.get('admin_notes', ''),
+                            display_order=option_data.get('display_order', idx)
+                        )
+                        total_options_count += 1
+                        logger.info(f"✅ Created pricing option {idx + 1}: {option.payment_term} @ {option.unit_price}")
+
+                    item.save()
+                    updated_items_count += 1
+                    logger.info(f"💾 Saved item {item_id} with status: {item.item_status}")
+
+                logger.info(f"✅ Updated {updated_items_count} items with {total_options_count} total pricing options")
+
+                # Recalculate total based on first pricing option
+                total = Decimal('0.00')
+                for item in order.items.filter(is_active=True):
+                    first_option = item.pricing_options.order_by('display_order').first()
+                    if first_option:
+                        item_total = first_option.total_price
+                        total += item_total
+                        logger.info(f"💰 Item {item.id} contributes {item_total} to total")
+
+                logger.info(f"💵 Calculated new total: {total} (old total: {old_total})")
+
+                # Determine if pricing actually changed
+                pricing_changed = old_total != total
+
+                # Update order fields
+                order.pricing_date = timezone.now()
+                order.quoted_total = total
+                order.priced_by = request.user
+
+                if admin_comment:
+                    order.admin_comment = admin_comment
+
+                # CRITICAL: Change status based on conditions
+                if old_status == 'pending_pricing':
+                    # First time pricing - always go to waiting_customer_approval
+                    order.status = 'waiting_customer_approval'
+                    logger.info(f"🔄 Changed status: pending_pricing → waiting_customer_approval")
+                elif old_status == 'confirmed' and pricing_changed:
+                    # Pricing changed after confirmation - send back to approval
+                    order.status = 'waiting_customer_approval'
+                    logger.info(f"🔄 Pricing changed on confirmed order, sending back to approval")
+                elif old_status == 'waiting_customer_approval':
+                    # Already waiting for approval - keep the same status
+                    logger.info(f"ℹ️ Order already waiting for customer approval, keeping status")
+
+                # Save the order with all updates
+                order.save()
+                logger.info(f"💾 Order saved - Status: {order.status}, Total: {order.quoted_total}")
+
+                # Create audit log
+                log_description = f"Pricing updated by {request.user.name}"
+                if pricing_changed:
+                    log_description += f" - Total changed from {old_total} to {total}"
+                if old_status != order.status:
+                    log_description += f" - Status changed from {old_status} to {order.status}"
+
+                OrderLog.objects.create(
+                    order=order,
+                    action='pricing_updated',
+                    description=log_description,
+                    performed_by=request.user
+                )
+
+            # Send notification if requested and pricing changed
+            dual_result = {'email': {'sent': False}, 'sms': {'sent': False}}
+            if notify_customer and (pricing_changed or old_status == 'pending_pricing'):
+                try:
+                    dual_result = NotificationService.send_dual_notification(
+                        order=order,
+                        notification_type='pricing_ready'
+                    )
+                    logger.info(
+                        f"📧 Notifications sent - Email: {dual_result['email']['sent']}, SMS: {dual_result['sms']['sent']}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send notifications: {str(e)}")
+
+            # Prepare response
+            response_data = {
+                'message': 'Pricing updated successfully',
+                'order': OrderDetailSerializer(order).data,
+                'changes': {
+                    'old_status': old_status,
+                    'new_status': order.status,
+                    'status_changed': old_status != order.status,
+                    'old_total': float(old_total) if old_total else 0,
+                    'new_total': float(total),
+                    'pricing_changed': pricing_changed,
+                    'items_updated': updated_items_count,
+                    'total_options_created': total_options_count
+                },
+                'notifications': {
+                    'email_sent': dual_result['email']['sent'],
+                    'sms_sent': dual_result['sms']['sent']
+                }
+            }
+
+            logger.info(f"✅ Pricing update completed successfully for Order #{order.id}")
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"❌ Pricing update failed for Order #{pk}: {str(e)}")
+            logger.exception("Full traceback:")
+            return Response({
+                'error': f'Failed to update pricing: {str(e)}',
+                'order_id': pk
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class OrderItemViewSet(viewsets.ModelViewSet):

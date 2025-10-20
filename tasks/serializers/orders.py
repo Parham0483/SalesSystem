@@ -246,16 +246,17 @@ class OrderItemAdminPricingSerializer(serializers.Serializer):
     final_quantity = serializers.IntegerField(min_value=1)
     pricing_options = serializers.ListField(
         child=OrderItemPricingOptionCreateSerializer(),
-        min_length=2,  # At least 2 pricing options required
-        max_length=10  # Maximum 10 options
+        min_length=1,  # Changed from 2 to 1
+        max_length=10
     )
     admin_notes = serializers.CharField(required=False, allow_blank=True)
+
 
 class OrderItemAdminMultiplePricingItemSerializer(serializers.Serializer):
     item_id = serializers.IntegerField()
     final_quantity = serializers.IntegerField(min_value=1)
     admin_notes = serializers.CharField(required=False, allow_blank=True)
-    pricing_options = OrderItemPricingOptionCreateSerializer(many=True, min_length=2, max_length=10)
+    pricing_options = OrderItemPricingOptionCreateSerializer(many=True, min_length=1, max_length=10)  # Changed from min_length=2 to 1
 
     def validate_pricing_options(self, value):
         for opt in value:

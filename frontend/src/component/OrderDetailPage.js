@@ -353,7 +353,6 @@ const AuthenticatedImage = ({ receipt, onError }) => {
         </div>
     );
 };
-
 const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) => {
     const [selections, setSelections] = useState({});
     const [submitting, setSubmitting] = useState(false);
@@ -367,6 +366,9 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                     const selectedOption = item.pricing_options.find(opt => opt.is_selected);
                     if (selectedOption) {
                         initialSelections[item.id] = selectedOption.id;
+                    } else if (item.pricing_options.length === 1) {
+                        // Auto-select if only one option
+                        initialSelections[item.id] = item.pricing_options[0].id;
                     }
                 }
             });
@@ -375,7 +377,7 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
     }, [order]);
 
     const handleSelectionChange = (itemId, optionId) => {
-        if (readOnly) return; // No changes in read-only mode
+        if (readOnly) return;
         setSelections(prev => ({
             ...prev,
             [itemId]: optionId
@@ -384,7 +386,7 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
     };
 
     const handleRemoveItem = async (itemId, productName) => {
-        if (readOnly) return; // No deletion in read-only mode
+        if (readOnly) return;
 
         const activeItems = order.items.filter(item => item.is_active !== false);
         const isLastItem = activeItems.length === 1;
@@ -428,7 +430,7 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
     };
 
     const handleSubmit = async () => {
-        if (readOnly) return; // No submission in read-only mode
+        if (readOnly) return;
 
         const unselectedItems = order.items.filter(item =>
             item.is_active !== false && item.pricing_options?.length > 0 && !selections[item.id]
@@ -491,7 +493,6 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
         item.pricing_options && item.pricing_options.length > 0
     );
 
-    // Only render if we have pricing options
     if (!hasPricingOptions) return null;
 
     const totals = calculateOrderTotal();
@@ -531,6 +532,7 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                     <strong>راهنما:</strong>
                     <ul style={{ margin: '0.5rem 0 0 0', paddingRight: '1.5rem', lineHeight: '1.8' }}>
                         <li>برای هر محصول، یک گزینه قیمت انتخاب کنید</li>
+                        <li>اگر فقط یک گزینه موجود است، به صورت خودکار انتخاب می‌شود</li>
                         <li>قیمت‌ها بر اساس شرایط پرداخت متفاوت است</li>
                         <li>می‌توانید محصولات نامطلوب را حذف کنید</li>
                         <li>پس از انتخاب، پیش‌فاکتور برای شما صادر می‌شود</li>
@@ -558,7 +560,10 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                     </thead>
                     <tbody>
                     {activeItems.map((item) => {
-                        const selectedOption = item.pricing_options?.find(opt => opt.is_selected);
+                        const selectedOption = item.pricing_options?.find(opt => opt.is_selected) ||
+                            (item.pricing_options?.length === 1 ? item.pricing_options[0] : null);
+                        const hasSingleOption = item.pricing_options?.length === 1;
+
                         return (
                             <tr key={item.id}>
                                 <td className="product-cell">
@@ -581,13 +586,13 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                                             selectedOption ? (
                                                 <div className="price-option-card selected">
                                                     <div className="option-header">
-                                                            <span className="option-term">
-                                                                {selectedOption.custom_term_label || selectedOption.term_display || selectedOption.payment_term}
-                                                            </span>
+                                                        <span className="option-term">
+                                                            {selectedOption.custom_term_label || selectedOption.term_display || selectedOption.payment_term}
+                                                        </span>
                                                         {selectedOption.discount_percentage > 0 && (
                                                             <span className="discount-badge">
-                                                                    {formatPrice(selectedOption.discount_percentage)}% تخفیف
-                                                                </span>
+                                                                {formatPrice(selectedOption.discount_percentage)}% تخفیف
+                                                            </span>
                                                         )}
                                                     </div>
                                                     <div className="option-details">
@@ -610,7 +615,34 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                                             ) : (
                                                 <span style={{ color: '#666' }}>هیچ گزینه‌ای انتخاب نشده</span>
                                             )
+                                        ) : hasSingleOption ? (
+                                            // Single option - show as info box with auto-selection indicator
+                                            <div className="price-option-card selected single-option">
+                                                <div className="option-header">
+                                                    <span className="option-term">
+                                                        {item.pricing_options[0].custom_term_label || item.pricing_options[0].term_display || item.pricing_options[0].payment_term}
+                                                    </span>
+                                                    <span className="auto-selected-badge">✓ انتخاب خودکار</span>
+                                                </div>
+                                                <div className="option-details">
+                                                    <div className="price-line">
+                                                        <span>قیمت واحد:</span>
+                                                        <span>{formatPrice(item.pricing_options[0].unit_price)} ریال</span>
+                                                    </div>
+                                                    <div className="price-line">
+                                                        <span>جمع:</span>
+                                                        <span>{formatPrice(item.pricing_options[0].total_price)} ریال</span>
+                                                    </div>
+                                                    {order.business_invoice_type === 'official' && (
+                                                        <div className="price-line total-line">
+                                                            <span>با مالیات:</span>
+                                                            <span className="total-price">{formatPrice(item.pricing_options[0].total_with_tax)} ریال</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         ) : (
+                                            // Multiple options - show selection grid
                                             <div className="pricing-options-grid">
                                                 {item.pricing_options.map((option) => {
                                                     const isSelected = selections[item.id] === option.id;
@@ -627,13 +659,13 @@ const CustomerPricingSelectionSection = ({ order, onUpdate, readOnly = false }) 
                                                                 className="price-radio"
                                                             />
                                                             <div className="option-header">
-                                                                    <span className="option-term">
-                                                                        {option.custom_term_label || option.term_display || option.payment_term}
-                                                                    </span>
+                                                                <span className="option-term">
+                                                                    {option.custom_term_label || option.term_display || option.payment_term}
+                                                                </span>
                                                                 {option.discount_percentage > 0 && (
                                                                     <span className="discount-badge">
-                                                                            {formatPrice(option.discount_percentage)}% تخفیف
-                                                                        </span>
+                                                                        {formatPrice(option.discount_percentage)}% تخفیف
+                                                                    </span>
                                                                 )}
                                                             </div>
                                                             <div className="option-details">
