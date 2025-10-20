@@ -400,7 +400,6 @@ class OrderViewSet(viewsets.ModelViewSet):
                     'error': 'دسترسی غیرمجاز'
                 }, status=status.HTTP_403_FORBIDDEN)
 
-            # ✅ FIXED: Allow removal during both pending_pricing AND waiting_customer_approval
             if order.status not in ['pending_pricing', 'waiting_customer_approval']:
                 return Response({
                     'error': 'امکان حذف محصولات در این مرحله وجود ندارد',

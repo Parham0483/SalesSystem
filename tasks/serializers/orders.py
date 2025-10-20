@@ -7,9 +7,14 @@ from mysite import settings
 from ..models import Order, OrderItem, Product, STATUS_CHOICES, Customer, OrderPaymentReceipt, OrderItemPricingOption
 from ..serializers.customers import CustomerInvoiceInfoUpdateSerializer
 
+
 class OrderItemCreateSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
-    quantity = serializers.IntegerField(source='requested_quantity', min_value=1)
+    quantity = serializers.IntegerField(
+        source='requested_quantity',
+        min_value=1,
+        max_value=2147483647
+    )
     customer_notes = serializers.CharField(required=False, allow_blank=True)
 
     def validate_product_id(self, value):
@@ -20,6 +25,13 @@ class OrderItemCreateSerializer(serializers.Serializer):
             return value
         except Product.DoesNotExist:
             raise serializers.ValidationError("Product not found.")
+
+    def validate_quantity(self, value):
+        if value > 100000000:
+            raise serializers.ValidationError(
+                "برای سفارش بیش از 1 میلیون واحد، لطفاً با پشتیبانی تماس بگیرید"
+            )
+        return value
 
 
 
@@ -102,9 +114,7 @@ class OrderCreateSerializer(serializers.Serializer):
         customer = self.context['request'].user
         invoice_type = validated_data.get('business_invoice_type')
 
-        # Update customer info if provided (BEFORE creating order)
         if invoice_type == 'official' and customer_info_data:
-            # Use the serializer to validate the incoming data
             customer_serializer = CustomerInvoiceInfoUpdateSerializer(
                 instance=customer,
                 data=customer_info_data,
@@ -112,12 +122,10 @@ class OrderCreateSerializer(serializers.Serializer):
             )
             customer_serializer.is_valid(raise_exception=True)
 
-            # Manually update the customer instead of calling .save() on the serializer
             for field, value in customer_serializer.validated_data.items():
                 setattr(customer, field, value)
             customer.save()
 
-        # Validate customer for official invoice AFTER potential update
         if invoice_type == 'official':
             is_valid, missing_fields = customer.validate_for_official_invoice()
             if not is_valid:
@@ -125,16 +133,14 @@ class OrderCreateSerializer(serializers.Serializer):
                     'customer_info': f"Required fields are incomplete: {', '.join(missing_fields)}"
                 })
 
-        # Create the Order instance (ONLY ONCE)
         order = Order.objects.create(customer=customer, **validated_data)
 
-        # Create OrderItem instances
         for item_data in items_data:
             OrderItem.objects.create(
                 order=order,
                 product_id=item_data['product_id'],
                 requested_quantity=item_data['requested_quantity'],
-                final_quantity=item_data['requested_quantity'],  # Initialize final_quantity
+                final_quantity=0,  # Admin will set during pricing
                 customer_notes=item_data.get('customer_notes', '')
             )
 

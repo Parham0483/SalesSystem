@@ -342,12 +342,6 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                 if (!product) {
                     throw new Error(`محصول مورد نظر یافت نشد`);
                 }
-                if (product.stock === 0) {
-                    throw new Error(`محصول ${product.name} در حال حاضر موجود نیست`);
-                }
-                if (parseInt(item.requested_quantity) > product.stock) {
-                    throw new Error(`تعداد درخواستی برای ${product.name} (${item.requested_quantity}) بیش از موجودی (${product.stock}) است`);
-                }
             }
 
             // ADD CUSTOMER INFO FOR OFFICIAL INVOICES
