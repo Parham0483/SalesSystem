@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { debounce } from 'lodash';
 import {
     Package, Search, Filter, Eye, Edit, ShoppingCart, TrendingUp,
     AlertTriangle, CheckCircle, XCircle, Plus, Download, Star,
@@ -19,6 +20,7 @@ const AdminProductsPage = () => {
     const [products, setProducts] = useState([]);
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchLoading, setSearchLoading] = useState(false);
     const [error, setError] = useState('');
 
     // Modal State
@@ -56,6 +58,7 @@ const AdminProductsPage = () => {
 
     // Filtering and Sorting State
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [stockFilter, setStockFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -98,22 +101,38 @@ const AdminProductsPage = () => {
         return `${parseFloat(price).toLocaleString('fa-IR')} ریال`;
     };
 
+    // Debounce the search term update
+    const debouncedSetSearch = useCallback(
+        debounce((value) => {
+            setDebouncedSearchTerm(value);
+        }, 500),
+        []
+    );
+
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+        setSearchTerm(value);
+        debouncedSetSearch(value);
+    };
+
     const fetchProducts = useCallback(async (page = 1, limit = 12) => {
         setLoading(true);
+        setSearchLoading(true);
+        const controller = new AbortController();
         try {
             const response = await API.get('/admin/products/', {
                 params: {
                     page,
                     limit,
-                    search: searchTerm,
+                    search: debouncedSearchTerm,
                     status: statusFilter !== 'all' ? statusFilter : undefined,
                     stock_filter: stockFilter !== 'all' ? stockFilter : undefined,
                     category: categoryFilter !== 'all' ? categoryFilter : undefined,
                     ordering: sortBy
-                }
+                },
+                signal: controller.signal
             });
 
-            // Handle paginated response structure
             const responseData = response.data;
             const productsData = responseData.results || responseData;
 
@@ -136,23 +155,29 @@ const AdminProductsPage = () => {
 
             setError('');
         } catch (err) {
+            if (err.name === 'AbortError') return;
             console.error('Error fetching products:', err);
             setProducts([]);
             if (err.response?.status === 401) {
                 setError('نشست شما منقضی شده است. در حال انتقال به صفحه ورود...');
                 setTimeout(() => handleLogout(), 2000);
+            } else if (err.response?.status === 500) {
+                setError('خطای سرور رخ داده است. لطفاً بعداً تلاش کنید.');
             } else {
                 setError('خطا در بارگیری لیست محصولات');
             }
         } finally {
             setLoading(false);
+            setSearchLoading(false);
         }
-    }, [searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
+
+        return () => controller.abort();
+    }, [debouncedSearchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
 
     useEffect(() => {
         fetchProducts(1);
         fetchCategories();
-    }, [searchTerm, statusFilter, stockFilter, categoryFilter, sortBy]);
+    }, [debouncedSearchTerm, statusFilter, stockFilter, categoryFilter, sortBy, fetchProducts]);
 
     const calculateStats = (productsList) => {
         if (!Array.isArray(productsList)) {
@@ -238,6 +263,7 @@ const AdminProductsPage = () => {
 
     const clearFilters = () => {
         setSearchTerm('');
+        setDebouncedSearchTerm('');
         setStatusFilter('all');
         setStockFilter('all');
         setCategoryFilter('all');
@@ -947,9 +973,14 @@ const AdminProductsPage = () => {
                         <NeoBrutalistInput
                             placeholder="جستجو در نام، توضیحات یا دسته..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={handleSearchChange}
                             className="admin-products-search-input"
                         />
+                        {searchLoading && (
+                            <div className="admin-products-search-spinner">
+                                <RefreshCw size={16} className="animate-spin" />
+                            </div>
+                        )}
                     </div>
 
                     <NeoBrutalistDropdown
@@ -1028,6 +1059,7 @@ const AdminProductsPage = () => {
                                         alt={product.name}
                                         className="admin-products-image"
                                         onClick={() => openImageModal(product)}
+                                        loading="lazy"
                                     />
 
                                     {/* Image Navigation Controls */}
@@ -1107,7 +1139,7 @@ const AdminProductsPage = () => {
                                 <div className="admin-products-detail-row">
                                     <span className="admin-products-detail-label">قیمت پایه:</span>
                                     <span className="admin-products-detail-value admin-products-price">
-                                        {product.toLocaleString('fa-IR')} ریال
+                                        {formatPrice(product.base_price)}
                                     </span>
                                 </div>
                                 <div className="admin-products-detail-row">
@@ -1120,7 +1152,7 @@ const AdminProductsPage = () => {
                                     <div className="admin-products-detail-row">
                                         <span className="admin-products-detail-label">قیمت با مالیات:</span>
                                         <span className="admin-products-detail-value admin-products-price-with-tax">
-                                            {(product.base_price * (1 + product.tax_rate / 100)).toLocaleString('fa-IR')} ریال
+                                            {formatPrice(product.base_price * (1 + product.tax_rate / 100))}
                                         </span>
                                     </div>
                                 )}
@@ -1180,10 +1212,12 @@ const AdminProductsPage = () => {
                         <p>
                             {paginationInfo.count === 0
                                 ? 'هنوز محصولی ثبت نشده است.'
-                                : 'بر اساس فیلترهای انتخاب شده، محصولی یافت نشد.'
+                                : searchTerm
+                                    ? `هیچ محصولی برای جستجوی "${searchTerm}" یافت نشد.`
+                                    : 'بر اساس فیلترهای انتخاب شده، محصولی یافت نشد.'
                             }
                         </p>
-                        {paginationInfo.count > 0 && (
+                        {(paginationInfo.count > 0 || searchTerm) && (
                             <NeoBrutalistButton
                                 text="پاک کردن فیلترها"
                                 color="blue-400"

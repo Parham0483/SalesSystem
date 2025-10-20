@@ -8,7 +8,7 @@ import NeoBrutalistInput from '../../component/NeoBrutalist/NeoBrutalistInput';
 import NeoBrutalistModal from '../../component/NeoBrutalist/NeoBrutalistModal';
 import NeoBrutalistDropdown from '../../component/NeoBrutalist/NeoBrutalistDropdown';
 import '../../styles/component/CustomerComponent/ProductsPage.css';
-import { Filter, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {Filter, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw} from 'lucide-react';
 
 const ProductsPage = () => {
     // State declarations
@@ -407,12 +407,13 @@ const ProductsPage = () => {
                     </div>
                 </div>
                 <div className="filters-grid" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
-                    <div className="search-wrapper">
-                        <Search className="search-icon" />
+                    <div className="admin-products-search-wrapper">
+                        <Search className="admin-products-search-icon" />
                         <NeoBrutalistInput
                             placeholder="جستجو در نام، توضیحات یا دسته..."
                             value={searchTerm || ''}
                             onChange={(e) => setSearchTerm(e.target.value)}
+                            className="admin-products-search-input"
                         />
                     </div>
                     <NeoBrutalistDropdown
@@ -639,7 +640,7 @@ const ProductsPage = () => {
                                 <div className="detail-item">
                                     <span className="detail-label">مبدا:</span>
                                     <span className="detail-value">
-                                        {selectedProduct.origin_country || 'نامشخص'}
+                                        {selectedProduct.origin || 'نامشخص'}
                                     </span>
                                 </div>
 

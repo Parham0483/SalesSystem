@@ -194,7 +194,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
                 Q(name__icontains=search) |
                 Q(description__icontains=search) |
                 Q(category__name__icontains=search) |
-                Q(category__display_name__icontains=search)
+                Q(category__name_fa__icontains=search)  # Use name_fa instead of display_name
             )
 
         # Status filter
@@ -239,7 +239,6 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             queryset = queryset.order_by('-created_at')
 
         return queryset
-
 
     def create(self, request, *args, **kwargs):
         """Create new product with multiple images support"""

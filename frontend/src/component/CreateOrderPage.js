@@ -530,14 +530,14 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                                         onChange={(e) => handleCustomerInfoChange('national_id', e.target.value)}
                                         error={customerInfoErrors.national_id}
                                         placeholder="کد ملی یا شناسه ملی"
-                                        maxLength="10"
+                                        maxLength="11"
                                         className={`${customerInfoErrors.national_id ? 'neo-required-field' : ''}`}
                                     />
                                     <div className="neo-field-tooltip" data-field="national_id">
                                         <div className="neo-tooltip-content">
                                             <div className="neo-tooltip-text">
                                                 <strong>کد ملی</strong>
-                                                <p>کد ملی 10 رقمی یا شناسه ملی</p>
+                                                <p>کد ملی 11 رقمی یا شناسه ملی</p>
                                                 <p>برای ثبت در سامانه مالیاتی</p>
                                             </div>
                                         </div>
@@ -764,16 +764,17 @@ const CreateOrderPage = ({ onOrderCreated }) => {
                                                 onChange={(e) => updateOrderItem(index, 'requested_quantity', e.target.value)}
                                                 min="1"
                                                 required
+                                                placeholder="وزن"
                                             />
                                         </div>
 
                                         <div className="neo-field-group">
                                             <NeoBrutalistInput
-                                                label="وزن درخواستی (اختیاری)"
+                                                label="توتیحات (اختیاری)"
                                                 type="text"
                                                 value={item.customer_notes}
                                                 onChange={(e) => updateOrderItem(index, 'customer_notes', e.target.value)}
-                                                placeholder="مثال: 500 گرم"
+                                                placeholder="توتیحات(اختباری)"
                                             />
                                         </div>
                                     </div>

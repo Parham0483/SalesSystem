@@ -607,7 +607,9 @@ const AdminOrderDetailPage = ({ orderId, onOrderUpdated }) => {
                     </div>
                     <div className="admin-info-item full-width">
                         <span className="admin-info-label">یادداشت مشتری</span>
-                        <span className="admin-info-value">{order.customer_notes || 'بدون یادداشت'}</span>
+                        {order.customer_comment && (
+                            <p> {order.customer_comment}</p>
+                        )}
                     </div>
                 </div>
             </NeoBrutalistCard>
